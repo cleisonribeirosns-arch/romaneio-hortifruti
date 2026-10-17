@@ -17,9 +17,32 @@ from reportlab.platypus import (
 import sqlite3
 import streamlit as st
 
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DA PÁGINA E CSS PARA OCULTAR BOTÃO DO GITHUB
+# ---------------------------------------------------------
+st.set_page_config(
+    page_title="Romaneio Hortifruti", page_icon="🥦", layout="wide"
+)
+
+# Oculta o ícone do GitHub e o cabeçalho padrão do Streamlit
+st.markdown(
+    """
+    <style>
+    /* Esconde o ícone do GitHub na barra superior */
+    [data-testid="stHeader"] a[href*="github.com"] {
+        display: none !important;
+    }
+    /* Esconde o menu de ações do Streamlit na barra superior caso necessário */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA DINÂMICA AO CENTRO)
+# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA PERFEITAMENTE CENTRALIZADA)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -65,13 +88,12 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     if logo_path:
       canvas.saveState()
       canvas.setFillAlpha(0.08)
-      # Largura Letter: 612 -> Centro X = (612 - 380) / 2 = 116
-      # Altura Y centralizada para acompanhar a tabela
+      # Centralizado geometricamente na folha considerando o corpo inteiro
       canvas.drawImage(
           logo_path,
-          116,
-          380,
-          width=380,
+          126,
+          320,
+          width=360,
           height=220,
           preserveAspectRatio=True,
           mask="auto",
@@ -236,13 +258,8 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
 
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO E INICIALIZAÇÃO DA BASE DE DADOS
+# INICIALIZAÇÃO DA BASE DE DADOS
 # ---------------------------------------------------------
-st.set_page_config(
-    page_title="Romaneio Hortifruti", page_icon="🥦", layout="wide"
-)
-
-
 def init_db():
   conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
   cursor = conn.cursor()
