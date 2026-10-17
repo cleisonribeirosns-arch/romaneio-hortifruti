@@ -107,23 +107,17 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (MÚLTIPLOS NÚMEROS)
+# FUNÇÃO DE NOTIFICAÇÃO EXCLUSIVA PARA O GRUPO DO WHATSAPP
 # ---------------------------------------------------------
 def enviar_notificacao_whatsapp(
     num_romaneio, loja, fornecedor, total, conferente
 ):
-  telefones_str = st.session_state.get("zap_telefones", "")
-  apikey = st.session_state.get("zap_apikey", "")
+  # Pega o ID do grupo configurado na sessão (ex: 559299998888-1612345678@g.us)
+  id_grupo = st.session_state.get("zap_id_grupo", "").strip()
+  apikey = st.session_state.get("zap_apikey", "").strip()
 
-  if not telefones_str or not apikey:
+  if not id_grupo or not apikey:
     return
-
-  # Separa os telefones por vírgula, ponto e vírgula ou espaço
-  lista_telefones = [
-      t.strip()
-      for t in telefones_str.replace(";", ",").replace(" ", ",").split(",")
-      if t.strip()
-  ]
 
   texto_msg = (
       f"🚨 *NOVO ROMANEIO HORTIFRÚTI* 🚨\n\n"
@@ -135,13 +129,12 @@ def enviar_notificacao_whatsapp(
   )
 
   texto_codificado = urllib.parse.quote(texto_msg)
+  url = f"https://api.callmebot.com/whatsapp.php?phone={id_grupo}&text={texto_codificado}&apikey={apikey}"
 
-  for tel in lista_telefones:
-    url = f"https://api.callmebot.com/whatsapp.php?phone={tel}&text={texto_codificado}&apikey={apikey}"
-    try:
-      requests.get(url, timeout=5)
-    except Exception:
-      pass
+  try:
+    requests.get(url, timeout=5)
+  except Exception:
+    pass
 
 
 # ---------------------------------------------------------
@@ -756,7 +749,7 @@ else:
         conn.commit()
         conn.close()
 
-        # Dispara notificação para todos os telefones cadastrados
+        # Dispara notificação exclusivamente para o grupo do WhatsApp
         enviar_notificacao_whatsapp(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
@@ -1002,18 +995,18 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("⚙️ Configurações WhatsApp")
-    with st.sidebar.expander("Configurar Alertas WhatsApp"):
-      st.session_state["zap_telefones"] = st.text_area(
-          "Telefones (separe por vírgula)\nEx: 5592999998888, 5592988887777", 
-          value=st.session_state.get("zap_telefones", "")
+    st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
+    with st.sidebar.expander("Configurar Grupo 'Logística Hortifruti-Nova Cidade'"):
+      st.session_state["zap_id_grupo"] = st.text_input(
+          "ID do Grupo (Ex: 559299998888-1612345678@g.us)", 
+          value=st.session_state.get("zap_id_grupo", "")
       )
       st.session_state["zap_apikey"] = st.text_input(
           "API Key (CallMeBot)", 
           value=st.session_state.get("zap_apikey", ""), 
           type="password"
       )
-      st.success("Configurações salvas em sessão!")
+      st.success("Configuração do grupo salva em sessão!")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
