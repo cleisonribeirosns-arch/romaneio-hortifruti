@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime
 import io
+import json
 import os
 import pandas as pd
 import reportlab
@@ -33,12 +34,60 @@ for ext in ["png", "jpg", "jpeg"]:
     break
 
 st.set_page_config(
-    page_title="Romaneio Hortifruti",
+    page_title="Romaneio hortifruti",
     page_icon=logo_page_icon if logo_page_icon else "🥦",
     layout="wide",
 )
 
-# Procura dinamicamente pela imagem de fundo de login na pasta
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DE ÍCONE E NOME AUTOMÁTICO DO ATALHO (PWA)
+# ---------------------------------------------------------
+icon_base64 = ""
+for img_nome in [
+    "Tela de login.jpeg",
+    "Tela de login.jpg",
+    "tela_de_login.jpeg",
+    "tela_de_login.jpg",
+    "logo_romaneio.png",
+    "logo.png",
+]:
+  if os.path.exists(img_nome):
+    with open(img_nome, "rb") as f:
+      icon_base64 = (
+          f"data:image/jpeg;base64,{base64.b64encode(f.read()).decode()}"
+      )
+    break
+
+manifest_data = {
+    "name": "Romaneio hortifruti",
+    "short_name": "Romaneio hortifruti",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#1A365D",
+    "theme_color": "#1A365D",
+    "icons": [
+        {"src": icon_base64, "sizes": "192x192", "type": "image/png"},
+        {"src": icon_base64, "sizes": "512x512", "type": "image/png"},
+    ],
+}
+
+manifest_json = json.dumps(manifest_data)
+manifest_base64 = base64.b64encode(manifest_json.encode()).decode()
+
+st.markdown(
+    f"""
+    <head>
+        <title>Romaneio hortifruti</title>
+        <link rel="manifest" href="data:application/manifest+json;base64,{manifest_base64}">
+        <link rel="icon" href="{icon_base64}">
+        <link rel="apple-touch-icon" href="{icon_base64}">
+        <meta name="apple-mobile-web-app-title" content="Romaneio hortifruti">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+    </head>
+""",
+    unsafe_allow_html=True,
+)
+
 bg_login_path = None
 for nome_possivel in [
     "Tela de login.jpeg",
@@ -69,36 +118,27 @@ if bg_login_path:
 st.markdown(
     f"""
     <style>
-    /* Oculta totalmente o cabeçalho superior do Streamlit */
     header[data-testid="stHeader"] {{
         display: none !important;
         visibility: hidden !important;
     }}
-    
-    /* Oculta rodapé padrão */
     footer {{
         visibility: hidden !important;
     }}
-
-    /* Oculta os botões flutuantes e widgets de feedback/deploy do Streamlit Cloud */
     .stApp > div:first-child {{
         background: transparent !important;
     }}
-    
     iframe[title="streamlit_feedback.feedback"] {{
         display: none !important;
     }}
-    
     div[data-testid="stToolbar"], button[kind="header"] {{
         display: none !important;
         visibility: hidden !important;
     }}
-    
     .viewerBadge_container__1QSob, .styles_viewerBadge__1yG5_, [data-testid="stStatusWidget"] {{
         display: none !important;
         visibility: hidden !important;
     }}
-
     {css_fundo}
     </style>
 """,
@@ -107,16 +147,16 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO EXCLUSIVA PARA O GRUPO DO WHATSAPP
+# FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (GRUPO LOGÍSTICA)
 # ---------------------------------------------------------
 def enviar_notificacao_whatsapp(
     num_romaneio, loja, fornecedor, total, conferente
 ):
-  # Pega o ID do grupo configurado na sessão (ex: 559299998888-1612345678@g.us)
+  api_url = st.session_state.get("zap_api_url", "").strip()
+  api_token = st.session_state.get("zap_token", "").strip()
   id_grupo = st.session_state.get("zap_id_grupo", "").strip()
-  apikey = st.session_state.get("zap_apikey", "").strip()
 
-  if not id_grupo or not apikey:
+  if not api_url or not id_grupo:
     return
 
   texto_msg = (
@@ -128,17 +168,26 @@ def enviar_notificacao_whatsapp(
       f"• *Conferente:* {conferente}"
   )
 
-  texto_codificado = urllib.parse.quote(texto_msg)
-  url = f"https://api.callmebot.com/whatsapp.php?phone={id_grupo}&text={texto_codificado}&apikey={apikey}"
+  headers = {"Content-Type": "application/json"}
+  if api_token:
+    headers["apikey"] = api_token
+    headers["token"] = api_token
+
+  payload = {
+      "number": id_grupo,
+      "group": id_grupo,
+      "message": texto_msg,
+      "text": texto_msg,
+  }
 
   try:
-    requests.get(url, timeout=5)
+    requests.post(api_url, json=payload, headers=headers, timeout=5)
   except Exception:
     pass
 
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA CENTRALIZADA NO MEIO DA PÁGINA)
+# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA CENTRALIZADA)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -493,7 +542,6 @@ else:
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
-  # --- NOTIFICAÇÃO VISUAL NO PAINEL DO GESTOR ---
   if user_info["perfil"] == "Gestor":
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
@@ -749,7 +797,6 @@ else:
         conn.commit()
         conn.close()
 
-        # Dispara notificação exclusivamente para o grupo do WhatsApp
         enviar_notificacao_whatsapp(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
@@ -996,27 +1043,41 @@ else:
       and user_info["perfil"] == "Gestor"
   ):
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
-    with st.sidebar.expander("Configurar Grupo 'Logística Hortifruti-Nova Cidade'"):
-      st.session_state["zap_id_grupo"] = st.text_input(
-          "ID do Grupo (Ex: 559299998888-1612345678@g.us)", 
-          value=st.session_state.get("zap_id_grupo", "")
+    with st.sidebar.expander(
+        "Configurar Grupo 'Logística Hortifruti-Nova Cidade'"
+    ):
+      st.session_state["zap_api_url"] = st.text_input(
+          "URL da API / Webhook", value=st.session_state.get("zap_api_url", "")
       )
-      st.session_state["zap_apikey"] = st.text_input(
-          "API Key (CallMeBot)", 
-          value=st.session_state.get("zap_apikey", ""), 
-          type="password"
+      st.session_state["zap_token"] = st.text_input(
+          "Token / Chave da API",
+          value=st.session_state.get("zap_token", ""),
+          type="password",
+      )
+      st.session_state["zap_id_grupo"] = st.text_input(
+          "ID do Grupo (Ex: 120363...@g.us)",
+          value=st.session_state.get("zap_id_grupo", ""),
       )
       st.success("Configuração do grupo salva em sessão!")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
-    
+
     arquivos_logos = [
-        f for f in os.listdir() 
-        if f.lower().endswith((".png", ".jpg", ".jpeg")) 
-        and f not in ["Tela de login.jpeg", "Tela de login.jpg", "tela_de_login.jpeg", "tela_de_login.jpg", "login_bg.jpg", "login_bg.png"]
+        f
+        for f in os.listdir()
+        if f.lower().endswith((".png", ".jpg", ".jpeg"))
+        and f
+        not in [
+            "Tela de login.jpeg",
+            "Tela de login.jpg",
+            "tela_de_login.jpeg",
+            "tela_de_login.jpg",
+            "login_bg.jpg",
+            "login_bg.png",
+        ]
     ]
-    
+
     if arquivos_logos:
       st.sidebar.markdown("---")
       st.sidebar.write("**Logotipos Ativos:**")
@@ -1025,7 +1086,9 @@ else:
         with col_lg1:
           st.image(logo_nome, caption=logo_nome, width=80)
         with col_lg2:
-          if st.button("🗑️", key=f"del_logo_{logo_nome}", help=f"Excluir {logo_nome}"):
+          if st.button(
+              "🗑️", key=f"del_logo_{logo_nome}", help=f"Excluir {logo_nome}"
+          ):
             try:
               os.remove(logo_nome)
               st.sidebar.success(f"Logo '{logo_nome}' excluída!")
@@ -1044,9 +1107,7 @@ else:
       for logo_file in logo_files:
         with open(logo_file.name, "wb") as f:
           f.write(logo_file.getbuffer())
-      st.sidebar.success(
-          f"{len(logo_files)} arquivo(s) salvo(s) com sucesso!"
-      )
+      st.sidebar.success(f"{len(logo_files)} arquivo(s) salvo(s) com sucesso!")
       st.rerun()
 
     st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
@@ -1186,7 +1247,9 @@ else:
           if st.button("🗑️ Excluir Produto", type="secondary"):
             conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM produtos WHERE id = ?", (prod_dados_sel[0],))
+            cursor.execute(
+                "DELETE FROM produtos WHERE id = ?", (prod_dados_sel[0],)
+            )
             conn.commit()
             conn.close()
             st.success(f"Produto '{prod_dados_sel[3]}' excluído com sucesso!")
@@ -1324,7 +1387,9 @@ else:
             else:
               conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
               cursor = conn.cursor()
-              cursor.execute("DELETE FROM usuarios WHERE id = ?", (user_dados[0],))
+              cursor.execute(
+                  "DELETE FROM usuarios WHERE id = ?", (user_dados[0],)
+              )
               conn.commit()
               conn.close()
               st.success(f"Usuário '{user_dados[1]}' excluído com sucesso!")
