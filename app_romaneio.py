@@ -988,29 +988,44 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("🖼️ Logotipo(s) da Empresa (PDF)")
+    st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
     
-    # Lista e exibe separadamente todos os arquivos de imagem já salvos na pasta
-    arquivos_logos = [f for f in os.listdir() if f.lower().endswith((".png", ".jpg", ".jpeg")) and f not in ["Tela de login.jpeg", "Tela de login.jpg", "tela_de_login.jpeg", "tela_de_login.jpg", "login_bg.jpg", "login_bg.png"]]
+    # Lista arquivos de imagem salvos na pasta (excluindo o fundo de login)
+    arquivos_logos = [
+        f for f in os.listdir() 
+        if f.lower().endswith((".png", ".jpg", ".jpeg")) 
+        and f not in ["Tela de login.jpeg", "Tela de login.jpg", "tela_de_login.jpeg", "tela_de_login.jpg", "login_bg.jpg", "login_bg.png"]
+    ]
     
     if arquivos_logos:
-      st.sidebar.success(f"✅ {len(arquivos_logos)} logo(s) ativa(s) na pasta:")
+      st.sidebar.markdown("---")
+      st.sidebar.write("**Logotipos Ativos:**")
       for logo_nome in arquivos_logos:
-        st.sidebar.image(logo_nome, caption=logo_nome, width=100)
+        col_lg1, col_lg2 = st.sidebar.columns([3, 1])
+        with col_lg1:
+          st.image(logo_nome, caption=logo_nome, width=80)
+        with col_lg2:
+          if st.button("🗑️", key=f"del_logo_{logo_nome}", help=f"Excluir {logo_nome}"):
+            try:
+              os.remove(logo_nome)
+              st.sidebar.success(f"Logo '{logo_nome}' excluída!")
+              st.rerun()
+            except Exception as e:
+              st.sidebar.error(f"Erro ao excluir: {e}")
+      st.sidebar.markdown("---")
 
     logo_files = st.sidebar.file_uploader(
-        "Enviar/Adicionar Logo(s) (PNG/JPG)",
+        "Enviar Nova(s) Logo(s) (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="logo_upload",
     )
     if logo_files:
       for logo_file in logo_files:
-        # Salva cada arquivo com o seu nome original separadamente
         with open(logo_file.name, "wb") as f:
           f.write(logo_file.getbuffer())
       st.sidebar.success(
-          f"{len(logo_files)} arquivo(s) salvo(s) separadamente com sucesso!"
+          f"{len(logo_files)} arquivo(s) salvo(s) com sucesso!"
       )
       st.rerun()
 
