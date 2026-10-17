@@ -1,7 +1,7 @@
+import base64
 from datetime import datetime
 import io
 import os
-import base64
 import pandas as pd
 import reportlab
 from reportlab.lib import colors
@@ -316,6 +316,11 @@ def init_db():
         )
     """)
 
+  cursor.execute("PRAGMA table_info(romaneios)")
+  col_rom = [column[1] for column in cursor.fetchall()]
+  if "caminho_foto" not in col_rom:
+    cursor.execute("ALTER TABLE romaneios ADD COLUMN caminho_foto TEXT")
+
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneio_itens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -512,7 +517,6 @@ def fazer_login(login, senha):
 
 # --- TELA DE LOGIN ---
 if st.session_state["usuario_logado"] is None:
-  # Procura pela nova imagem de fundo de login na pasta
   bg_login_path = None
   for ext in ["png", "jpg", "jpeg"]:
     if os.path.exists(f"Tela de login.{ext}"):
@@ -723,8 +727,10 @@ else:
         st.rerun()
 
     st.subheader("3. Anexo de Comprovante / Foto")
-    foto_upload = st.file_uploader(
-        "Anexar foto da Nota / Canhoto / Mercadoria", type=["jpg", "jpeg", "png"]
+    fotos_upload = st.file_uploader(
+        "Anexar fotos da Nota / Canhoto / Mercadoria",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,
     )
 
     if st.button("✅ Finalizar e Salvar Romaneio", type="primary"):
@@ -736,17 +742,22 @@ else:
         st.error(
             "Adicione pelo menos um item ao romaneio antes de salvar."
         )
-      elif not foto_upload:
+      elif not fotos_upload:
         st.error(
-            "É obrigatório anexar a foto da Nota / Canhoto / Mercadoria antes"
-            " de finalizar o romaneio."
+            "É obrigatório anexar pelo menos uma foto da Nota / Canhoto /"
+            " Mercadoria antes de finalizar o romaneio."
         )
       else:
-        caminho_foto = os.path.join(
-            "uploads", f"{num_romaneio}_{foto_upload.name}"
-        )
-        with open(caminho_foto, "wb") as f:
-          f.write(foto_upload.getbuffer())
+        caminhos_salvos = []
+        for foto_upload in fotos_upload:
+          caminho_foto = os.path.join(
+              "uploads", f"{num_romaneio}_{foto_upload.name}"
+          )
+          with open(caminho_foto, "wb") as f:
+            f.write(foto_upload.getbuffer())
+          caminhos_salvos.append(caminho_foto)
+
+        caminhos_str = ",".join(caminhos_salvos)
 
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
@@ -769,7 +780,7 @@ else:
                     if data_pagamento
                     else None
                 ),
-                caminho_foto,
+                caminhos_str,
             ),
         )
 
@@ -794,7 +805,10 @@ else:
         conn.commit()
         conn.close()
 
-        st.success(f"Romaneio {num_romaneio} salvo com sucesso!")
+        st.success(
+            f"Romaneio {num_romaneio} e {len(fotos_upload)} foto(s) salvos com"
+            " sucesso!"
+        )
         st.session_state["itens_romaneio"] = []
 
   # --- MÓDULO 2: CONSULTAR ROMANEIOS ---
@@ -860,10 +874,16 @@ else:
           total_geral = df_det["valor_total"].sum() if not df_det.empty else 0.0
           st.markdown(f"### **Total Geral: R$ {total_geral:,.2f}**")
 
-          if cabecalho[10] and os.path.exists(cabecalho[10]):
-            st.image(
-                cabecalho[10], caption="Foto Anexada do Recebimento", width=400
-            )
+          if cabecalho[10]:
+            caminhos_fotos = cabecalho[10].split(",")
+            st.write("### Fotos / Comprovantes Anexados")
+            cols_img = st.columns(len(caminhos_fotos))
+            for idx, c_foto in enumerate(caminhos_fotos):
+              if os.path.exists(c_foto):
+                with cols_img[idx]:
+                  st.image(
+                      c_foto, caption=f"Foto {idx+1}", use_column_width=True
+                  )
 
           pdf_bytes = gerar_pdf_romaneio(cabecalho, df_det)
           st.download_button(
@@ -898,15 +918,20 @@ else:
       and user_info["perfil"] == "Gestor"
   ):
     st.sidebar.subheader("🖼️ Logotipo da Empresa")
-    logo_file = st.sidebar.file_uploader(
-        "Enviar Logo da Empresa (PNG/JPG)",
+    # Permite enviar múltiplos arquivos de logotipo se desejar
+    logo_files = st.sidebar.file_uploader(
+        "Enviar Logo(s) da Empresa (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
         key="logo_upload",
     )
-    if logo_file:
-      with open("logo.png", "wb") as f:
-        f.write(logo_file.getbuffer())
-      st.sidebar.success("Logotipo guardado com sucesso!")
+    if logo_files:
+      for logo_file in logo_files:
+        with open(logo_file.name, "wb") as f:
+          f.write(logo_file.getbuffer())
+      st.sidebar.success(
+          f"{len(logo_files)} Logotipo(s) guardado(s) com sucesso!"
+      )
 
     st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
 
