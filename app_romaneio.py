@@ -18,23 +18,37 @@ import sqlite3
 import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E CSS PARA OCULTAR BOTÃO DO GITHUB
+# CONFIGURAÇÃO DA PÁGINA E CSS (OCULTAR GITHUB/TOPO + LOGO LOGIN)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Romaneio Hortifruti", page_icon="🥦", layout="wide"
 )
 
-# Oculta o ícone do GitHub e o cabeçalho padrão do Streamlit
 st.markdown(
     """
     <style>
-    /* Esconde o ícone do GitHub na barra superior */
-    [data-testid="stHeader"] a[href*="github.com"] {
+    /* Oculta totalmente o cabeçalho superior do Streamlit (incluindo o gatinho/GitHub e menu de 3 pontos) */
+    header[data-testid="stHeader"] {
         display: none !important;
+        visibility: hidden !important;
     }
-    /* Esconde o menu de ações do Streamlit na barra superior caso necessário */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    
+    /* Oculta rodapé padrão do Streamlit */
+    footer {
+        visibility: hidden !important;
+    }
+
+    /* Marca d'água com a logo da empresa no fundo da tela de login */
+    .login-background {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 380px;
+        opacity: 0.06;
+        z-index: 0;
+        pointer-events: none;
+    }
     </style>
 """,
     unsafe_allow_html=True,
@@ -88,7 +102,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     if logo_path:
       canvas.saveState()
       canvas.setFillAlpha(0.08)
-      # Centralizado geometricamente na folha considerando o corpo inteiro
       canvas.drawImage(
           logo_path,
           126,
@@ -503,6 +516,32 @@ def fazer_login(login, senha):
 
 # --- TELA DE LOGIN ---
 if st.session_state["usuario_logado"] is None:
+  # Exibe a logo da empresa ao fundo se existir
+  logo_login_path = None
+  for ext in ["png", "jpg", "jpeg"]:
+    if os.path.exists(f"logo.{ext}"):
+      logo_login_path = f"logo.{ext}"
+      break
+    elif os.path.exists(f"logo_empresa.{ext}"):
+      logo_login_path = f"logo_empresa.{ext}"
+      break
+
+  if logo_login_path:
+    st.markdown(
+        f'<img src="app/static/{logo_login_path}" class="login-background">',
+        unsafe_allow_html=True,
+    )
+    # Alternativa segura para carregar imagem local em HTML no Streamlit se necessário:
+    import base64
+
+    with open(logo_login_path, "rb") as image_file:
+      encoded_string = base64.b64encode(image_file.read()).decode()
+    st.markdown(
+        f'<img src="data:image/png;base64,{encoded_string}"'
+        ' class="login-background">',
+        unsafe_allow_html=True,
+    )
+
   st.title("🥦 Sistema de Recebimento Hortifrúti")
   st.subheader("Acesso ao Sistema")
 
