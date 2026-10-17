@@ -111,10 +111,9 @@ st.markdown(
 def enviar_notificacao_google_chat(
     num_romaneio, loja, fornecedor, total, conferente
 ):
-  # Cole aqui a URL do Webhook do seu espaço/canal do Google Chat (se configurado)
   webhook_url = os.environ.get("GOOGLE_CHAT_WEBHOOK_URL", "")
   if not webhook_url:
-    return  # Se não houver webhook configurado, apenas ignora sem travar a aplicação
+    return
 
   mensagem = {
       "text": (
@@ -744,7 +743,6 @@ else:
         conn.commit()
         conn.close()
 
-        # Dispara notificação no Google Chat
         enviar_notificacao_google_chat(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
@@ -991,19 +989,36 @@ else:
       and user_info["perfil"] == "Gestor"
   ):
     st.sidebar.subheader("🖼️ Logotipo(s) da Empresa (PDF)")
+    
+    # Verifica se já existe logo salva para exibir status persistente
+    logo_existente = None
+    for ext in ["png", "jpg", "jpeg"]:
+      if os.path.exists(f"logo_romaneio.{ext}"):
+        logo_existente = f"logo_romaneio.{ext}"
+        break
+      elif os.path.exists(f"logo.{ext}"):
+        logo_existente = f"logo.{ext}"
+        break
+
+    if logo_existente:
+      st.sidebar.success(f"✅ Logo ativa: `{logo_existente}`")
+      st.sidebar.image(logo_existente, width=120)
+
     logo_files = st.sidebar.file_uploader(
-        "Enviar Logo(s) do Romaneio (PNG/JPG)",
+        "Enviar/Atualizar Logo(s) (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="logo_upload",
     )
     if logo_files:
       for logo_file in logo_files:
-        with open(logo_file.name, "wb") as f:
+        caminho_logo = "logo_romaneio.png" # Salva sempre com nome padronizado persistente
+        with open(caminho_logo, "wb") as f:
           f.write(logo_file.getbuffer())
       st.sidebar.success(
-          f"{len(logo_files)} arquivo(s) de imagem guardado(s) com sucesso!"
+          f"{len(logo_files)} arquivo(s) salvo(s) e aplicado(s) com sucesso!"
       )
+      st.rerun()
 
     st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
 
