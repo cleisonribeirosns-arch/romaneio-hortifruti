@@ -21,9 +21,11 @@ import streamlit as st
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO)
 # ---------------------------------------------------------
-logo_page_icon = "logo_romaneio.png" if os.path.exists("logo_romaneio.png") else "logo.png"
+logo_page_icon = (
+    "logo_romaneio.png" if os.path.exists("logo_romaneio.png") else "logo.png"
+)
 if not os.path.exists(logo_page_icon):
-    logo_page_icon = "🛒" # Ícone coringa caso a logo ainda não esteja na pasta
+  logo_page_icon = "🛒"
 
 st.set_page_config(
     page_title="Romaneio Hortifruti", page_icon=logo_page_icon, layout="wide"
@@ -31,7 +33,14 @@ st.set_page_config(
 
 # Procura dinamicamente pela imagem de fundo de login na pasta
 bg_login_path = None
-for nome_possivel in ["Tela de login.jpeg", "Tela de login.jpg", "tela_de_login.jpeg", "tela_de_login.jpg", "login_bg.jpg", "login_bg.png"]:
+for nome_possivel in [
+    "Tela de login.jpeg",
+    "Tela de login.jpg",
+    "tela_de_login.jpeg",
+    "tela_de_login.jpg",
+    "login_bg.jpg",
+    "login_bg.png",
+]:
   if os.path.exists(nome_possivel):
     bg_login_path = nome_possivel
     break
@@ -913,16 +922,21 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("🖼️ Logotipo da Empresa (PDF)")
-    logo_file = st.sidebar.file_uploader(
-        "Enviar Logo do Romaneio (PNG/JPG)",
+    st.sidebar.subheader("🖼️ Logotipo(s) da Empresa (PDF)")
+    # accept_multiple_files=True ativado para permitir enviar mais de uma logo/imagem na barra lateral
+    logo_files = st.sidebar.file_uploader(
+        "Enviar Logo(s) do Romaneio (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
+        accept_multiple_files=True,
         key="logo_upload",
     )
-    if logo_file:
-      with open(f"logo_romaneio.{logo_file.name.split('.')[-1]}", "wb") as f:
-        f.write(logo_file.getbuffer())
-      st.sidebar.success("Logotipo guardado com sucesso!")
+    if logo_files:
+      for logo_file in logo_files:
+        with open(logo_file.name, "wb") as f:
+          f.write(logo_file.getbuffer())
+      st.sidebar.success(
+          f"{len(logo_files)} arquivo(s) de imagem guardado(s) com sucesso!"
+      )
 
     st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
 
