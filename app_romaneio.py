@@ -22,22 +22,17 @@ import streamlit as st
 import urllib.parse
 
 # ---------------------------------------------------------
-# PROCURA DINÂMICA PELA LOGO / ÍCONE
+# PROCURA DINÂMICA PELA LOGO / ÍCONE SUPERNOVA
 # ---------------------------------------------------------
 logo_path = None
 for nome in [
     "logo.png",
     "logo_romaneio.png",
-    "logo.jpg",
-    "logo.jpeg",
-    "logo_romaneio.jpg",
-    "logo_romaneio.jpeg",
     "Tela de login.png",
     "Tela de login.jpeg",
     "Tela de login.jpg",
-    "tela_de_login.png",
-    "tela_de_login.jpeg",
-    "tela_de_login.jpg",
+    "logo.jpg",
+    "logo.jpeg",
 ]:
   if os.path.exists(nome):
     logo_path = nome
@@ -679,7 +674,7 @@ else:
           st.rerun()
         else:
           st.warning(
-              "A quantidade/peso do produto é obrigatoria e deve ser maior"
+              "A quantidade/peso do produto é obrigatória e deve ser maior"
               " que zero."
           )
 
