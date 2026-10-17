@@ -15,13 +15,11 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
-import requests
 import sqlite3
 import streamlit as st
-import urllib.parse
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E CSS (CORES IDENTIDADE VISUAL: VERDE, VERMELHO, AMARELO E BRANCO)
+# CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg"]:
@@ -90,8 +88,7 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* --- ESTILIZAÇÃO CORES EMPRESA --- */
-    /* Botões Primários (Verde Institucional) */
+    /* Estilização padrão (Cores da empresa: Verde, Vermelho, Amarelo e Branco) */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -104,7 +101,6 @@ st.markdown(
         border-color: #2E7D32 !important;
     }}
 
-    /* Botões Secundários / Excluir / Destaque (Vermelho Institucional) */
     button[kind="secondary"], .stButton > button[kind="secondary"] {{
         background-color: #C62828 !important;
         color: #FFFFFF !important;
@@ -117,18 +113,15 @@ st.markdown(
         border-color: #D32F2F !important;
     }}
 
-    /* Títulos e Cabeçalhos */
     h1, h2, h3 {{
         color: #1B5E20 !important;
     }}
 
-    /* Destaques em Amarelo / Alertas de Métricas */
     div[data-testid="stMetricValue"] {{
         color: #F57F17 !important;
         font-weight: bold !important;
     }}
 
-    /* Detalhes de navegação ativa na barra lateral */
     section[data-testid="stSidebar"] {{
         background-color: #F4F6F4 !important;
         border-right: 3px solid #1B5E20 !important;
@@ -142,47 +135,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (GRUPO LOGÍSTICA)
-# ---------------------------------------------------------
-def enviar_notificacao_whatsapp(
-    num_romaneio, loja, fornecedor, total, conferente
-):
-  api_url = st.session_state.get("zap_api_url", "").strip()
-  api_token = st.session_state.get("zap_token", "").strip()
-  id_grupo = st.session_state.get("zap_id_grupo", "").strip()
-
-  if not api_url or not id_grupo:
-    return
-
-  texto_msg = (
-      f"🚨 *NOVO ROMANEIO HORTIFRÚTI* 🚨\n\n"
-      f"• *Romaneio:* {num_romaneio}\n"
-      f"• *Loja:* {loja}\n"
-      f"• *Fornecedor:* {fornecedor}\n"
-      f"• *Valor Total:* R$ {total:,.2f}\n"
-      f"• *Conferente:* {conferente}"
-  )
-
-  headers = {"Content-Type": "application/json"}
-  if api_token:
-    headers["apikey"] = api_token
-    headers["token"] = api_token
-
-  payload = {
-      "number": id_grupo,
-      "group": id_grupo,
-      "message": texto_msg,
-      "text": texto_msg,
-  }
-
-  try:
-    requests.post(api_url, json=payload, headers=headers, timeout=5)
-  except Exception:
-    pass
-
-
-# ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (CORES COERENTES + MARCA D'ÁGUA)
+# FUNÇÃO GERADORA DE PDF
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -534,6 +487,20 @@ if st.session_state["usuario_logado"] is None:
 
 else:
   user_info = st.session_state["usuario_logado"]
+
+  # Exibição da Logo na Barra Lateral caso exista
+  logo_sidebar_path = None
+  for ext in ["png", "jpg", "jpeg"]:
+    if os.path.exists(f"logo_romaneio.{ext}"):
+      logo_sidebar_path = f"logo_romaneio.{ext}"
+      break
+    elif os.path.exists(f"logo.{ext}"):
+      logo_sidebar_path = f"logo.{ext}"
+      break
+
+  if logo_sidebar_path:
+    st.sidebar.image(logo_sidebar_path, width=140)
+
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
@@ -565,21 +532,7 @@ else:
         "Gerenciar Usuários & Permissões",
     ])
 
-  # --- NAVEGAÇÃO PRINCIPAL (BARRA LATERAL) ---
   menu = st.sidebar.radio("Navegação", opcoes_menu)
-
-  # --- MENU RÁPIDO ALTERNATIVO NO RODAPÉ PARA GESTORES ---
-  if user_info["perfil"] == "Gestor":
-    st.markdown("---")
-    with st.expander("⚙️ Menu Rápido de Gestão (Rodapé)", expanded=False):
-      menu_rodape = st.radio(
-          "Navegar para:",
-          opcoes_menu,
-          index=opcoes_menu.index(menu) if menu in opcoes_menu else 0,
-          key="radio_rodape",
-      )
-      if menu_rodape != menu:
-        menu = menu_rodape
 
   # --- MÓDULO 1: NOVO ROMANEIO ---
   if menu == "Novo Romaneio (Recebimento)":
@@ -785,9 +738,7 @@ else:
 
         romaneio_id = cursor.lastrowid
 
-        total_romaneio_valor = 0.0
         for item in st.session_state["itens_romaneio"]:
-          total_romaneio_valor += item["valor_total"]
           cursor.execute(
               """
                         INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total)
@@ -805,10 +756,6 @@ else:
 
         conn.commit()
         conn.close()
-
-        enviar_notificacao_whatsapp(
-            num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
-        )
 
         st.success(
             f"Romaneio {num_romaneio} e {len(fotos_upload)} foto(s) salvos com"
@@ -1051,25 +998,6 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
-    with st.sidebar.expander(
-        "Configurar Grupo 'Logística Hortifruti-Nova Cidade'"
-    ):
-      st.session_state["zap_api_url"] = st.text_input(
-          "URL da API / Webhook", value=st.session_state.get("zap_api_url", "")
-      )
-      st.session_state["zap_token"] = st.text_input(
-          "Token / Chave da API",
-          value=st.session_state.get("zap_token", ""),
-          type="password",
-      )
-      st.session_state["zap_id_grupo"] = st.text_input(
-          "ID do Grupo (Ex: 120363...@g.us)",
-          value=st.session_state.get("zap_id_grupo", ""),
-      )
-      st.success("Configuração do grupo salva em sessão!")
-
-    st.sidebar.markdown("---")
     st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
 
     arquivos_logos = [
@@ -1096,7 +1024,10 @@ else:
           st.image(logo_nome, caption=logo_nome, width=80)
         with col_lg2:
           if st.button(
-              "🗑️", key=f"del_logo_{logo_nome}", help=f"Excluir {logo_nome}", type="secondary"
+              "🗑️",
+              key=f"del_logo_{logo_nome}",
+              help=f"Excluir {logo_nome}",
+              type="secondary",
           ):
             try:
               os.remove(logo_nome)
