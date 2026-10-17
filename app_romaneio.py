@@ -19,16 +19,21 @@ import sqlite3
 import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO)
+# CONFIGURAÇÃO DA PÁGINA E LOGOTIPO NA ABA DO NAVEGADOR
 # ---------------------------------------------------------
-logo_page_icon = (
-    "logo_romaneio.png" if os.path.exists("logo_romaneio.png") else "logo.png"
-)
-if not os.path.exists(logo_page_icon):
-  logo_page_icon = "🛒"
+logo_page_icon = None
+for ext in ["png", "jpg", "jpeg"]:
+  if os.path.exists(f"logo_romaneio.{ext}"):
+    logo_page_icon = f"logo_romaneio.{ext}"
+    break
+  elif os.path.exists(f"logo.{ext}"):
+    logo_page_icon = f"logo.{ext}"
+    break
 
 st.set_page_config(
-    page_title="Romaneio Hortifruti", page_icon=logo_page_icon, layout="wide"
+    page_title="Romaneio Hortifruti",
+    page_icon=logo_page_icon if logo_page_icon else "🛒",
+    layout="wide",
 )
 
 # Procura dinamicamente pela imagem de fundo de login na pasta
@@ -80,7 +85,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA PERFEITAMENTE CENTRALIZADA)
+# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA CENTRALIZADA NO MEIO DA PÁGINA)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -126,12 +131,14 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     if logo_path:
       canvas.saveState()
       canvas.setFillAlpha(0.08)
+      # Coordenadas ajustadas para centralizar perfeitamente no meio da página (onde fica o círculo)
+      # Largura da página letter = 612 pt. X = (612 - 360) / 2 = 126. Altura = 792 pt. Y centralizada em ~420.
       canvas.drawImage(
           logo_path,
           126,
-          320,
+          420,
           width=360,
-          height=220,
+          height=200,
           preserveAspectRatio=True,
           mask="auto",
       )
@@ -923,7 +930,6 @@ else:
       and user_info["perfil"] == "Gestor"
   ):
     st.sidebar.subheader("🖼️ Logotipo(s) da Empresa (PDF)")
-    # accept_multiple_files=True ativado para permitir enviar mais de uma logo/imagem na barra lateral
     logo_files = st.sidebar.file_uploader(
         "Enviar Logo(s) do Romaneio (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
@@ -1100,7 +1106,7 @@ else:
         login_user = st.text_input("Login de Acesso")
         senha_user = st.text_input("Senha", type="password")
         perfil_user = st.selectbox(
-            "Perfil de Acesso", ["Operador", "Gestor"]
+            "Perfil de Access", ["Operador", "Gestor"]
         )
 
         if st.button("Salvar Usuário"):
