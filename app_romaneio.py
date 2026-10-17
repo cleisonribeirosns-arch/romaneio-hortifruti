@@ -21,30 +21,49 @@ import streamlit as st
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO)
 # ---------------------------------------------------------
+logo_page_icon = "logo_romaneio.png" if os.path.exists("logo_romaneio.png") else "logo.png"
+if not os.path.exists(logo_page_icon):
+    logo_page_icon = "🛒" # Ícone coringa caso a logo ainda não esteja na pasta
+
 st.set_page_config(
-    page_title="Romaneio Hortifruti", page_icon="🥦", layout="wide"
+    page_title="Romaneio Hortifruti", page_icon=logo_page_icon, layout="wide"
 )
 
-st.markdown(
-    """
-    <style>
-    /* Oculta totalmente o cabeçalho superior do Streamlit */
-    header[data-testid="stHeader"] {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    
-    /* Oculta rodapé padrão */
-    footer {
-        visibility: hidden !important;
-    }
+# Procura dinamicamente pela imagem de fundo de login na pasta
+bg_login_path = None
+for nome_possivel in ["Tela de login.jpeg", "Tela de login.jpg", "tela_de_login.jpeg", "tela_de_login.jpg", "login_bg.jpg", "login_bg.png"]:
+  if os.path.exists(nome_possivel):
+    bg_login_path = nome_possivel
+    break
 
-    /* Estilo para a imagem de fundo da tela de login com escurecimento para leitura */
-    .stApp {
+css_fundo = ""
+if bg_login_path:
+  with open(bg_login_path, "rb") as image_file:
+    encoded_string = base64.b64encode(image_file.read()).decode()
+  css_fundo = f"""
+    .stApp {{
+        background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{encoded_string}");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
-    }
+    }}
+  """
+
+st.markdown(
+    f"""
+    <style>
+    /* Oculta totalmente o cabeçalho superior do Streamlit */
+    header[data-testid="stHeader"] {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    /* Oculta rodapé padrão */
+    footer {{
+        visibility: hidden !important;
+    }}
+
+    {css_fundo}
     </style>
 """,
     unsafe_allow_html=True,
@@ -87,11 +106,11 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
 
   logo_path = None
   for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo.{ext}"):
-      logo_path = f"logo.{ext}"
+    if os.path.exists(f"logo_romaneio.{ext}"):
+      logo_path = f"logo_romaneio.{ext}"
       break
-    elif os.path.exists(f"logo_empresa.{ext}"):
-      logo_path = f"logo_empresa.{ext}"
+    elif os.path.exists(f"logo.{ext}"):
+      logo_path = f"logo.{ext}"
       break
 
   def desenhar_marca_dagua(canvas, doc_obj):
@@ -517,30 +536,7 @@ def fazer_login(login, senha):
 
 # --- TELA DE LOGIN ---
 if st.session_state["usuario_logado"] is None:
-  bg_login_path = None
-  for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"Tela de login.{ext}"):
-      bg_login_path = f"Tela de login.{ext}"
-      break
-    elif os.path.exists(f"tela_de_login.{ext}"):
-      bg_login_path = f"tela_de_login.{ext}"
-      break
-
-  if bg_login_path:
-    with open(bg_login_path, "rb") as image_file:
-      encoded_string = base64.b64encode(image_file.read()).decode()
-    st.markdown(
-        f"""
-        <style>
-        .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{encoded_string}");
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-  st.title("🥦 Sistema de Recebimento Hortifrúti")
+  st.title("🛒 Sistema de Recebimento Hortifrúti")
   st.subheader("Acesso ao Sistema")
 
   with st.form("form_login"):
@@ -917,21 +913,16 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("🖼️ Logotipo da Empresa")
-    # Permite enviar múltiplos arquivos de logotipo se desejar
-    logo_files = st.sidebar.file_uploader(
-        "Enviar Logo(s) da Empresa (PNG/JPG)",
+    st.sidebar.subheader("🖼️ Logotipo da Empresa (PDF)")
+    logo_file = st.sidebar.file_uploader(
+        "Enviar Logo do Romaneio (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
-        accept_multiple_files=True,
         key="logo_upload",
     )
-    if logo_files:
-      for logo_file in logo_files:
-        with open(logo_file.name, "wb") as f:
-          f.write(logo_file.getbuffer())
-      st.sidebar.success(
-          f"{len(logo_files)} Logotipo(s) guardado(s) com sucesso!"
-      )
+    if logo_file:
+      with open(f"logo_romaneio.{logo_file.name.split('.')[-1]}", "wb") as f:
+        f.write(logo_file.getbuffer())
+      st.sidebar.success("Logotipo guardado com sucesso!")
 
     st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
 
