@@ -565,8 +565,21 @@ else:
         "Gerenciar Usuários & Permissões",
     ])
 
-  # --- BARRA LATERAL ---
+  # --- NAVEGAÇÃO PRINCIPAL (BARRA LATERAL) ---
   menu = st.sidebar.radio("Navegação", opcoes_menu)
+
+  # --- MENU RÁPIDO ALTERNATIVO NO RODAPÉ PARA GESTORES ---
+  if user_info["perfil"] == "Gestor":
+    st.markdown("---")
+    with st.expander("⚙️ Menu Rápido de Gestão (Rodapé)", expanded=False):
+      menu_rodape = st.radio(
+          "Navegar para:",
+          opcoes_menu,
+          index=opcoes_menu.index(menu) if menu in opcoes_menu else 0,
+          key="radio_rodape",
+      )
+      if menu_rodape != menu:
+        menu = menu_rodape
 
   # --- MÓDULO 1: NOVO ROMANEIO ---
   if menu == "Novo Romaneio (Recebimento)":
@@ -1390,11 +1403,3 @@ else:
               conn.close()
               st.success(f"Usuário '{user_dados[1]}' excluído com sucesso!")
               st.rerun()
-
-  # --- MENU RÁPIDO ALTERNATIVO NO RODAPÉ PARA GESTORES ---
-  if user_info["perfil"] == "Gestor":
-    st.markdown("---")
-    with st.expander("⚙️ Menu Rápido de Gestão (Rodapé)", expanded=False):
-      menu_rodape = st.radio(
-          "Navegar para:", opcoes_menu, index=opcoes_menu.index(menu) if menu in opcoes_menu else 0, key="radio_rodape"
-      )
