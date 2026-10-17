@@ -19,7 +19,7 @@ import streamlit as st
 
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (COM MARCA D'ÁGUA DE FUNDO)
+# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA DINÂMICA AO CENTRO)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -65,12 +65,14 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     if logo_path:
       canvas.saveState()
       canvas.setFillAlpha(0.08)
+      # Largura Letter: 612 -> Centro X = (612 - 380) / 2 = 116
+      # Altura Y centralizada para acompanhar a tabela
       canvas.drawImage(
           logo_path,
-          150,
-          250,
-          width=300,
-          height=200,
+          116,
+          380,
+          width=380,
+          height=220,
           preserveAspectRatio=True,
           mask="auto",
       )
@@ -226,7 +228,9 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
 
   story.append(t_ass)
 
-  doc.build(story, onFirstPage=desenhar_marca_dagua, onLaterPages=desenhar_marca_dagua)
+  doc.build(
+      story, onFirstPage=desenhar_marca_dagua, onLaterPages=desenhar_marca_dagua
+  )
   buffer.seek(0)
   return buffer.getvalue()
 
@@ -819,7 +823,6 @@ else:
               mime="application/pdf",
           )
 
-          # Botão de exclusão exclusivo para Gestor
           if user_info["perfil"] == "Gestor":
             st.write("")
             if st.button(
