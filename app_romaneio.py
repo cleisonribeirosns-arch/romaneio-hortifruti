@@ -1,6 +1,7 @@
-import io
 from datetime import datetime
+import io
 import os
+import base64
 import pandas as pd
 import reportlab
 from reportlab.lib import colors
@@ -18,7 +19,7 @@ import sqlite3
 import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E CSS (OCULTAR GITHUB/TOPO + LOGO LOGIN)
+# CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO)
 # ---------------------------------------------------------
 st.set_page_config(
     page_title="Romaneio Hortifruti", page_icon="🥦", layout="wide"
@@ -27,27 +28,22 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Oculta totalmente o cabeçalho superior do Streamlit (incluindo o gatinho/GitHub e menu de 3 pontos) */
+    /* Oculta totalmente o cabeçalho superior do Streamlit */
     header[data-testid="stHeader"] {
         display: none !important;
         visibility: hidden !important;
     }
     
-    /* Oculta rodapé padrão do Streamlit */
+    /* Oculta rodapé padrão */
     footer {
         visibility: hidden !important;
     }
 
-    /* Marca d'água com a logo da empresa no fundo da tela de login */
-    .login-background {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        width: 380px;
-        opacity: 0.06;
-        z-index: 0;
-        pointer-events: none;
+    /* Estilo para a imagem de fundo da tela de login com escurecimento para leitura */
+    .stApp {
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
     }
     </style>
 """,
@@ -516,29 +512,27 @@ def fazer_login(login, senha):
 
 # --- TELA DE LOGIN ---
 if st.session_state["usuario_logado"] is None:
-  # Exibe a logo da empresa ao fundo se existir
-  logo_login_path = None
+  # Procura pela nova imagem de fundo de login na pasta
+  bg_login_path = None
   for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo.{ext}"):
-      logo_login_path = f"logo.{ext}"
+    if os.path.exists(f"Tela de login.{ext}"):
+      bg_login_path = f"Tela de login.{ext}"
       break
-    elif os.path.exists(f"logo_empresa.{ext}"):
-      logo_login_path = f"logo_empresa.{ext}"
+    elif os.path.exists(f"tela_de_login.{ext}"):
+      bg_login_path = f"tela_de_login.{ext}"
       break
 
-  if logo_login_path:
-    st.markdown(
-        f'<img src="app/static/{logo_login_path}" class="login-background">',
-        unsafe_allow_html=True,
-    )
-    # Alternativa segura para carregar imagem local em HTML no Streamlit se necessário:
-    import base64
-
-    with open(logo_login_path, "rb") as image_file:
+  if bg_login_path:
+    with open(bg_login_path, "rb") as image_file:
       encoded_string = base64.b64encode(image_file.read()).decode()
     st.markdown(
-        f'<img src="data:image/png;base64,{encoded_string}"'
-        ' class="login-background">',
+        f"""
+        <style>
+        .stApp {{
+            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{encoded_string}");
+        }}
+        </style>
+        """,
         unsafe_allow_html=True,
     )
 
