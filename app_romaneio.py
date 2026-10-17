@@ -11,6 +11,9 @@ import sqlite3
 import streamlit as st
 
 
+# ---------------------------------------------------------
+# FUNÇÃO GERADORA DE PDF (COM MARCA D'ÁGUA DE FUNDO)
+# ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(
@@ -24,7 +27,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   story = []
   styles = getSampleStyleSheet()
 
-  # Estilos customizados
   title_style = ParagraphStyle(
       "TitleStyle",
       parent=styles["Heading1"],
@@ -43,7 +45,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
       textColor=colors.HexColor("#2D3748"),
   )
 
-  # Verificar se existe logo da empresa na pasta
   logo_path = None
   for ext in ["png", "jpg", "jpeg"]:
     if os.path.exists(f"logo.{ext}"):
@@ -52,6 +53,23 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     elif os.path.exists(f"logo_empresa.{ext}"):
       logo_path = f"logo_empresa.{ext}"
       break
+
+  # Função de marca d'água no fundo da página do PDF
+  def desenhar_marca_dagua(canvas, doc_obj):
+    if logo_path:
+      canvas.saveState()
+      canvas.setFillAlpha(0.08)  # Transparência suave para marca d'água
+      # Desenha a logo centralizada na página
+      canvas.drawImage(
+          logo_path,
+          150,
+          250,
+          width=300,
+          height=200,
+          preserveAspectRatio=True,
+          mask="auto",
+      )
+      canvas.restoreState()
 
   texto_empresa = Paragraph(
       "<b>SUPERMERCADO NOVA CIDADE / SUPER NOVA CIDADE</b><br/>Controle de"
@@ -77,7 +95,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   story.append(top_table)
   story.append(Spacer(1, 10))
 
-  # Tabela de Informações Gerais (Cabeçalho do Romaneio)
   dados_cabecalho = [
       [
           Paragraph(f"<b>Nº Romaneio:</b> {cabecalho[1]}", subtitle_style),
@@ -121,7 +138,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   story.append(t_cabecalho)
   story.append(Spacer(1, 15))
 
-  # Tabela de Itens
   table_data = [[
       "Produto / Descrição",
       "Qtd / Peso",
@@ -153,7 +169,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     )
     table_data.append([p_desc, q_val, u_val, vu_val, vt_val])
 
-  # Total Geral
   tot_geral = df_itens["valor_total"].sum() if not df_itens.empty else 0.0
   tot_str = (
       f"R$ {tot_geral:,.2f}"
@@ -188,7 +203,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   story.append(t_itens)
   story.append(Spacer(1, 35))
 
-  # Assinaturas
   dados_ass = [
       [
           "_______________________________________",
@@ -207,34 +221,33 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
 
   story.append(t_ass)
 
-  doc.build(story)
+  doc.build(story, onFirstPage=desenhar_marca_dagua, onLaterPages=desenhar_marca_dagua)
   buffer.seek(0)
   return buffer.getvalue()
 
 
-# Configuração da página Streamlit
+# ---------------------------------------------------------
+# CONFIGURAÇÃO E INICIALIZAÇÃO DA BASE DE DADOS
+# ---------------------------------------------------------
 st.set_page_config(
-    page_title="Recebimento Hortifrúti", page_icon="🥦", layout="wide"
+    page_title="Romaneio Hortifruti", page_icon="🥦", layout="wide"
 )
 
 
-# Inicialização do banco de dados SQLite
 def init_db():
   conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
   cursor = conn.cursor()
 
-  # Tabela de Usuários
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             login TEXT UNIQUE NOT NULL,
             senha TEXT NOT NULL,
-            perfil TEXT NOT NULL -- 'Gestor' ou 'Operador'
+            perfil TEXT NOT NULL
         )
     """)
 
-  # Tabela de Produtos
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -245,7 +258,6 @@ def init_db():
         )
     """)
 
-  # Migração automática para colunas de produtos
   cursor.execute("PRAGMA table_info(produtos)")
   columns = [column[1] for column in cursor.fetchall()]
   if "codigo_produto" not in columns:
@@ -253,7 +265,6 @@ def init_db():
   if "codigo_barras" not in columns:
     cursor.execute("ALTER TABLE produtos ADD COLUMN codigo_barras TEXT")
 
-  # Tabela de Romaneios (Cabeçalho)
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -270,7 +281,6 @@ def init_db():
         )
     """)
 
-  # Tabela de Itens do Romaneio
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneio_itens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -284,7 +294,6 @@ def init_db():
         )
     """)
 
-  # Inserir usuário Gestor padrão se não existir
   cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
   if not cursor.fetchone():
     cursor.execute(
@@ -292,7 +301,6 @@ def init_db():
         " ('Administrador', 'admin', '1234', 'Gestor')"
     )
 
-  # Atualizar/Popular a base de dados com todos os produtos do inventário
   cursor.execute(
       "SELECT COUNT(*) FROM produtos WHERE codigo_produto IS NOT NULL AND"
       " codigo_barras IS NOT NULL"
@@ -448,11 +456,9 @@ def init_db():
 
 init_db()
 
-# Diretório para salvar fotos
 if not os.path.exists("uploads"):
   os.makedirs("uploads")
 
-# Controle de Sessão de Login
 if "usuario_logado" not in st.session_state:
   st.session_state["usuario_logado"] = None
 
@@ -494,7 +500,6 @@ if st.session_state["usuario_logado"] is None:
         st.error("Usuário ou senha incorretos.")
 
 else:
-  # Usuário Logado - Barra Lateral
   user_info = st.session_state["usuario_logado"]
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
@@ -505,7 +510,7 @@ else:
 
   st.sidebar.divider()
 
-  # Navegação por Permissão
+  # Navegação restrita e blindada por perfil
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
   if user_info["perfil"] == "Gestor":
     opcoes_menu.extend([
@@ -515,7 +520,7 @@ else:
 
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
-  # --- MÓDULO 1: NOVO ROMANEIO (Lançamento Operacional) ---
+  # --- MÓDULO 1: NOVO ROMANEIO ---
   if menu == "Novo Romaneio (Recebimento)":
     st.title("📋 Novo Romaneio de Recebimento")
 
@@ -812,8 +817,12 @@ else:
     else:
       st.info("Nenhum romaneio registrado ainda.")
 
-  # --- MÓDULO 3: GERENCIAR PRODUTOS (Gestor) ---
-  if user_info["perfil"] == "Gestor":
+  # --- MÓDULO 3: GERENCIAR PRODUTOS (Gestor Apenas) ---
+  elif (
+      menu == "Gerenciar Cadastros (Produtos)"
+      and user_info["perfil"] == "Gestor"
+  ):
+    # Upload do Logotipo na barra lateral restrita a gestores
     st.sidebar.subheader("🖼️ Logotipo da Empresa")
     logo_file = st.sidebar.file_uploader(
         "Enviar Logo da Empresa (PNG/JPG)",
@@ -825,10 +834,6 @@ else:
         f.write(logo_file.getbuffer())
       st.sidebar.success("Logotipo guardado com sucesso!")
 
-  if (
-      menu == "Gerenciar Cadastros (Produtos)"
-      and user_info["perfil"] == "Gestor"
-  ):
     st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
 
     tab_p1, tab_p2 = st.tabs(
@@ -876,7 +881,6 @@ else:
         )
         conn.close()
 
-        # Proteção contra ecrã em branco se a tabela estiver vazia
         if not df_prod.empty:
           st.dataframe(df_prod, width="stretch")
         else:
@@ -973,7 +977,7 @@ else:
             st.success(f"Produto '{prod_dados_sel[3]}' excluído com sucesso!")
             st.rerun()
 
-  # --- MÓDULO 4: GERENCIAR USUÁRIOS (Gestor) ---
+  # --- MÓDULO 4: GERENCIAR USUÁRIOS (Gestor Apenas) ---
   elif (
       menu == "Gerenciar Usuários & Permissões"
       and user_info["perfil"] == "Gestor"
@@ -1022,7 +1026,6 @@ else:
         )
         conn.close()
 
-        # Proteção contra ecrã em branco se a tabela estiver vazia
         if not df_users.empty:
           st.dataframe(df_users, width="stretch")
         else:
@@ -1040,7 +1043,7 @@ else:
 
       if lista_usuarios:
         user_dict = {
-            f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_usuarios
+            f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_users
         }
         user_selecionado_label = st.selectbox(
             "Selecione o Usuário", list(user_dict.keys())
