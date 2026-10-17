@@ -123,7 +123,7 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
 
   # Tabela de Itens
   table_data = [[
-      "Produto / Description",
+      "Produto / Descrição",
       "Qtd / Peso",
       "Unidade",
       "Valor Unit. (R$)",
@@ -298,9 +298,7 @@ def init_db():
       " codigo_barras IS NOT NULL"
   )
   if cursor.fetchone()[0] == 0:
-    cursor.execute(
-        "DELETE FROM produtos"
-    )  # Limpa a tabela antiga para atualizar totalmente
+    cursor.execute("DELETE FROM produtos")
     produtos_iniciais = [
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
         ("2240", "165651", "ABACATE MARGARIDA KG", "KG"),
@@ -655,4 +653,461 @@ else:
       st.dataframe(df_itens, width="stretch")
 
       total_geral = df_itens["valor_total"].sum()
-      st.markdown(f"
+      st.markdown(f"### **Total Geral: R$ {total_geral:,.2f}**")
+
+      if st.button("🗑️ Limpar Itens"):
+        st.session_state["itens_romaneio"] = []
+        st.rerun()
+
+    st.subheader("3. Anexo de Comprovante / Foto")
+    foto_upload = st.file_uploader(
+        "Anexar foto da Nota / Canhoto / Mercadoria", type=["jpg", "jpeg", "png"]
+    )
+
+    if st.button("✅ Finalizar e Salvar Romaneio", type="primary"):
+      if not num_romaneio.strip():
+        st.error("O campo 'Número do Romaneio' é obrigatório.")
+      elif not fornecedor.strip():
+        st.error("O campo 'Fornecedor / Entregador' é obrigatório.")
+      elif not st.session_state["itens_romaneio"]:
+        st.error(
+            "Adicione pelo menos um item ao romaneio antes de salvar."
+        )
+      elif not foto_upload:
+        st.error(
+            "É obrigatório anexar a foto da Nota / Canhoto / Mercadoria antes"
+            " de finalizar o romaneio."
+        )
+      else:
+        caminho_foto = os.path.join(
+            "uploads", f"{num_romaneio}_{foto_upload.name}"
+        )
+        with open(caminho_foto, "wb") as f:
+          f.write(foto_upload.getbuffer())
+
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+                    INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+            (
+                num_romaneio,
+                loja,
+                data_rec.strftime("%d/%m/%Y"),
+                fornecedor,
+                cod_fornecedor,
+                tel_fornecedor,
+                conferente,
+                pag_vista,
+                (
+                    data_pagamento.strftime("%d/%m/%Y")
+                    if data_pagamento
+                    else None
+                ),
+                caminho_foto,
+            ),
+        )
+
+        romaneio_id = cursor.lastrowid
+
+        for item in st.session_state["itens_romaneio"]:
+          cursor.execute(
+              """
+                        INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+              (
+                  romaneio_id,
+                  item["produto"],
+                  item["quantidade"],
+                  item["unidade"],
+                  item["valor_unitario"],
+                  item["valor_total"],
+              ),
+          )
+
+        conn.commit()
+        conn.close()
+
+        st.success(f"Romaneio {num_romaneio} salvo com sucesso!")
+        st.session_state["itens_romaneio"] = []
+
+  # --- MÓDULO 2: CONSULTAR ROMANEIOS ---
+  elif menu == "Consultar Romaneios":
+    st.title("🔍 Consulta e Impressão de Romaneios")
+
+    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    df_romaneios = pd.read_sql_query(
+        "SELECT * FROM romaneios ORDER BY id DESC", conn
+    )
+    conn.close()
+
+    if not df_romaneios.empty:
+      st.dataframe(df_romaneios, width="stretch")
+
+      romaneio_sel = st.selectbox(
+          "Selecione o Romaneio para Detalhes / Impressão",
+          df_romaneios["numero_romaneio"].tolist(),
+      )
+      if romaneio_sel:
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, numero_romaneio, loja, data_recebimento, fornecedor,"
+            " codigo_fornecedor, telefone_fornecedor, conferente,"
+            " pagamento_a_vista, data_pagamento, caminho_foto FROM romaneios"
+            " WHERE numero_romaneio = ?",
+            (romaneio_sel,),
+        )
+        cabecalho = cursor.fetchone()
+
+        if cabecalho:
+          r_id = cabecalho[0]
+          df_det = pd.read_sql_query(
+              "SELECT produto, quantidade, unidade, valor_unitario,"
+              " valor_total FROM romaneio_itens WHERE romaneio_id = ?",
+              conn,
+              params=(r_id,),
+          )
+          conn.close()
+
+          st.markdown("---")
+          st.subheader(
+              f"📄 Visualização para Impressão - Romaneio: {cabecalho[1]}"
+          )
+
+          texto_detalhes = (
+              "**SUPERMERCADO NOVA CIDADE / SUPER NOVA CIDADE**<br>"
+              f"**Loja:** {cabecalho[2]} | **Data do Recebimento:**"
+              f" {cabecalho[3]}<br>**Fornecedor:** {cabecalho[4]} (Cód:"
+              f" {cabecalho[5]} | Tel: {cabecalho[6]})<br>**Responsável Rec."
+              f" Físico:** {cabecalho[7]}<br>**Pagamento à Vista:**"
+              f" {cabecalho[8]}"
+          )
+          if cabecalho[8] == "Não":
+            texto_detalhes += f" | Data Pgto: {cabecalho[9]}"
+
+          st.markdown(texto_detalhes, unsafe_allow_html=True)
+
+          st.write("### Itens Conferidos")
+          st.dataframe(df_det, width="stretch")
+
+          total_geral = df_det["valor_total"].sum() if not df_det.empty else 0.0
+          st.markdown(f"### **Total Geral: R$ {total_geral:,.2f}**")
+
+          if cabecalho[10] and os.path.exists(cabecalho[10]):
+            st.image(
+                cabecalho[10], caption="Foto Anexada do Recebimento", width=400
+            )
+
+          pdf_bytes = gerar_pdf_romaneio(cabecalho, df_det)
+          st.download_button(
+              label="📄 Baixar Romaneio em PDF (Documento Oficial)",
+              data=pdf_bytes,
+              file_name=f"{romaneio_sel}.pdf",
+              mime="application/pdf",
+          )
+    else:
+      st.info("Nenhum romaneio registrado ainda.")
+
+  # --- MÓDULO 3: GERENCIAR PRODUTOS (Gestor) ---
+  if user_info["perfil"] == "Gestor":
+    st.sidebar.subheader("🖼️ Logotipo da Empresa")
+    logo_file = st.sidebar.file_uploader(
+        "Enviar Logo da Empresa (PNG/JPG)",
+        type=["png", "jpg", "jpeg"],
+        key="logo_upload",
+    )
+    if logo_file:
+      with open("logo.png", "wb") as f:
+        f.write(logo_file.getbuffer())
+      st.sidebar.success("Logotipo guardado com sucesso!")
+
+  if (
+      menu == "Gerenciar Cadastros (Produtos)"
+      and user_info["perfil"] == "Gestor"
+  ):
+    st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
+
+    tab_p1, tab_p2 = st.tabs(
+        ["➕ Adicionar Novo Produto", "✏️ Editar ou Excluir Produto"]
+    )
+
+    with tab_p1:
+      col1, col2 = st.columns(2)
+      with col1:
+        st.subheader("Adicionar Novo Produto")
+        cod_barras = st.text_input("Código de Barras", key="cad_barras")
+        cod_prod = st.text_input(
+            "Código do Produto (ERP / Interno)", key="cad_cod"
+        )
+        novo_prod = st.text_input("Nome do Produto", key="cad_nome")
+        und_padrao = st.selectbox(
+            "Unidade Padrão", ["KG", "UNID", "GRM", "CX"], key="cad_und"
+        )
+        if st.button("Cadastrar Produto"):
+          if novo_prod:
+            try:
+              conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+              cursor = conn.cursor()
+              cursor.execute(
+                  "INSERT INTO produtos (codigo_barras, codigo_produto, nome,"
+                  " unidade_padrao) VALUES (?, ?, ?, ?)",
+                  (cod_barras, cod_prod, novo_prod, und_padrao),
+              )
+              conn.commit()
+              conn.close()
+              st.success(f"Produto '{novo_prod}' cadastrado com sucesso!")
+              st.rerun()
+            except sqlite3.IntegrityError:
+              st.error("Produto ou código já cadastrado.")
+          else:
+            st.warning("Preencha o nome do produto.")
+
+      with col2:
+        st.subheader("Produtos Cadastrados")
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        df_prod = pd.read_sql_query(
+            "SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM"
+            " produtos ORDER BY nome",
+            conn,
+        )
+        conn.close()
+
+        # Proteção contra ecrã em branco se a tabela estiver vazia
+        if not df_prod.empty:
+          st.dataframe(df_prod, width="stretch")
+        else:
+          st.info("Nenhum produto cadastrado no momento.")
+
+    with tab_p2:
+      st.subheader("Editar ou Excluir Produto Cadastrado")
+      conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+      cursor = conn.cursor()
+      cursor.execute(
+          "SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM"
+          " produtos ORDER BY nome"
+      )
+      lista_produtos_db = cursor.fetchall()
+      conn.close()
+
+      if lista_produtos_db:
+        prod_dict_db = {
+            f"{p[3]} (Cód: {p[2]} | Barras: {p[1]}) - {p[4]}": p
+            for p in lista_produtos_db
+        }
+        prod_selecionado_label = st.selectbox(
+            "Selecione o Produto", list(prod_dict_db.keys())
+        )
+        prod_dados_sel = prod_dict_db[prod_selecionado_label]
+
+        col_ep1, col_ep2 = st.columns(2)
+        with col_ep1:
+          edit_barras = st.text_input(
+              "Código de Barras",
+              value=prod_dados_sel[1] if prod_dados_sel[1] else "",
+              key="edit_prod_barras",
+          )
+          edit_cod = st.text_input(
+              "Código do Produto",
+              value=prod_dados_sel[2] if prod_dados_sel[2] else "",
+              key="edit_prod_cod",
+          )
+        with col_ep2:
+          edit_nome = st.text_input(
+              "Nome do Produto",
+              value=prod_dados_sel[3],
+              key="edit_prod_nome",
+          )
+          und_list = ["KG", "UNID", "GRM", "CX"]
+          idx_und = (
+              und_list.index(prod_dados_sel[4])
+              if prod_dados_sel[4] in und_list
+              else 0
+          )
+          edit_und = st.selectbox(
+              "Unidade Padrão",
+              und_list,
+              index=idx_und,
+              key="edit_prod_und",
+          )
+
+        st.write("")
+        col_b_p1, col_b_p2 = st.columns([1, 1])
+        with col_b_p1:
+          if st.button("💾 Salvar Alterações no Produto"):
+            if edit_nome:
+              try:
+                conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?,"
+                    " nome = ?, unidade_padrao = ? WHERE id = ?",
+                    (
+                        edit_barras,
+                        edit_cod,
+                        edit_nome,
+                        edit_und,
+                        prod_dados_sel[0],
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success("Produto atualizado com sucesso!")
+                st.rerun()
+              except sqlite3.IntegrityError:
+                st.error(
+                    "Este nome ou código já está em uso por outro produto."
+                )
+            else:
+              st.warning("O nome do produto não pode ficar em branco.")
+        with col_b_p2:
+          if st.button("🗑️ Excluir Produto", type="secondary"):
+            conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM produtos WHERE id = ?", (prod_dados_sel[0],))
+            conn.commit()
+            conn.close()
+            st.success(f"Produto '{prod_dados_sel[3]}' excluído com sucesso!")
+            st.rerun()
+
+  # --- MÓDULO 4: GERENCIAR USUÁRIOS (Gestor) ---
+  elif (
+      menu == "Gerenciar Usuários & Permissões"
+      and user_info["perfil"] == "Gestor"
+  ):
+    st.title("👥 Controle de Usuários e Permissões")
+
+    tab1, tab2 = st.tabs(
+        ["➕ Cadastrar Novo Usuário", "🔑 Alterar Senha / Permissões"]
+    )
+
+    with tab1:
+      col1, col2 = st.columns(2)
+      with col1:
+        st.subheader("Cadastrar Novo Usuário")
+        nome_user = st.text_input("Nome Completo")
+        login_user = st.text_input("Login de Acesso")
+        senha_user = st.text_input("Senha", type="password")
+        perfil_user = st.selectbox(
+            "Perfil de Acesso", ["Operador", "Gestor"]
+        )
+
+        if st.button("Salvar Usuário"):
+          if nome_user and login_user and senha_user:
+            try:
+              conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+              cursor = conn.cursor()
+              cursor.execute(
+                  "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
+                  " (?, ?, ?, ?)",
+                  (nome_user, login_user, senha_user, perfil_user),
+              )
+              conn.commit()
+              conn.close()
+              st.success(f"Usuário '{login_user}' cadastrado com sucesso!")
+              st.rerun()
+            except sqlite3.IntegrityError:
+              st.error("Login já está em uso por outro usuário.")
+          else:
+            st.warning("Preencha todos os campos obrigatórios.")
+
+      with col2:
+        st.subheader("Usuários Cadastrados")
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        df_users = pd.read_sql_query(
+            "SELECT id, nome, login, perfil FROM usuarios", conn
+        )
+        conn.close()
+
+        # Proteção contra ecrã em branco se a tabela estiver vazia
+        if not df_users.empty:
+          st.dataframe(df_users, width="stretch")
+        else:
+          st.info("Nenhum usuário cadastrado.")
+
+    with tab2:
+      st.subheader("Editar, Alterar Senha ou Excluir Usuário")
+      conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+      cursor = conn.cursor()
+      cursor.execute(
+          "SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY nome"
+      )
+      lista_usuarios = cursor.fetchall()
+      conn.close()
+
+      if lista_usuarios:
+        user_dict = {
+            f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_usuarios
+        }
+        user_selecionado_label = st.selectbox(
+            "Selecione o Usuário", list(user_dict.keys())
+        )
+        user_dados = user_dict[user_selecionado_label]
+
+        col_e1, col_e2 = st.columns(2)
+        with col_e1:
+          novo_nome = st.text_input(
+              "Nome Completo", value=user_dados[1], key="edit_nome"
+          )
+          novo_login = st.text_input(
+              "Login de Acesso", value=user_dados[2], key="edit_login"
+          )
+        with col_e2:
+          novo_perfil = st.selectbox(
+              "Perfil de Acesso",
+              ["Operador", "Gestor"],
+              index=0 if user_dados[4] == "Operador" else 1,
+              key="edit_perfil",
+          )
+          nova_senha = st.text_input(
+              "Nova Senha",
+              value=user_dados[3],
+              type="password",
+              key="edit_senha",
+          )
+
+        st.write("")
+        col_btn1, col_btn2 = st.columns([1, 1])
+        with col_btn1:
+          if st.button("💾 Salvar Alterações"):
+            if novo_nome and novo_login and nova_senha:
+              try:
+                conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil"
+                    " = ? WHERE id = ?",
+                    (
+                        novo_nome,
+                        novo_login,
+                        nova_senha,
+                        novo_perfil,
+                        user_dados[0],
+                    ),
+                )
+                conn.commit()
+                conn.close()
+                st.success("Usuário atualizado com sucesso!")
+                st.rerun()
+              except sqlite3.IntegrityError:
+                st.error("Este login já está em uso por outro usuário.")
+            else:
+              st.warning("Preencha todos os campos obrigatórios.")
+        with col_btn2:
+          if st.button("🗑️ Excluir Usuário", type="secondary"):
+            if user_dados[0] == user_info["id"]:
+              st.error(
+                  "Você não pode excluir o seu próprio usuário enquanto está"
+                  " logado!"
+              )
+            else:
+              conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+              cursor = conn.cursor()
+              cursor.execute("DELETE FROM usuarios WHERE id = ?", (user_dados[0],))
+              conn.commit()
+              conn.close()
+              st.success(f"Usuário '{user_dados[1]}' excluído com sucesso!")
+              st.rerun()
