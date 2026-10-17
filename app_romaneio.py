@@ -21,7 +21,7 @@ import streamlit as st
 import urllib.parse
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO/BOTÕES)
+# CONFIGURAÇÃO DA PÁGINA E CSS (CORES IDENTIDADE VISUAL: VERDE, VERMELHO, AMARELO E BRANCO)
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg"]:
@@ -89,6 +89,51 @@ st.markdown(
         display: none !important;
         visibility: hidden !important;
     }}
+
+    /* --- ESTILIZAÇÃO CORES EMPRESA --- */
+    /* Botões Primários (Verde Institucional) */
+    button[kind="primary"], .stButton > button[kind="primary"] {{
+        background-color: #1B5E20 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #1B5E20 !important;
+        font-weight: bold !important;
+        border-radius: 6px !important;
+    }}
+    button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
+        background-color: #2E7D32 !important;
+        border-color: #2E7D32 !important;
+    }}
+
+    /* Botões Secundários / Excluir / Destaque (Vermelho Institucional) */
+    button[kind="secondary"], .stButton > button[kind="secondary"] {{
+        background-color: #C62828 !important;
+        color: #FFFFFF !important;
+        border: 1px solid #C62828 !important;
+        font-weight: bold !important;
+        border-radius: 6px !important;
+    }}
+    button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
+        background-color: #D32F2F !important;
+        border-color: #D32F2F !important;
+    }}
+
+    /* Títulos e Cabeçalhos */
+    h1, h2, h3 {{
+        color: #1B5E20 !important;
+    }}
+
+    /* Destaques em Amarelo / Alertas de Métricas */
+    div[data-testid="stMetricValue"] {{
+        color: #F57F17 !important;
+        font-weight: bold !important;
+    }}
+
+    /* Detalhes de navegação ativa na barra lateral */
+    section[data-testid="stSidebar"] {{
+        background-color: #F4F6F4 !important;
+        border-right: 3px solid #1B5E20 !important;
+    }}
+
     {css_fundo}
     </style>
 """,
@@ -137,7 +182,7 @@ def enviar_notificacao_whatsapp(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA CENTRALIZADA)
+# FUNÇÃO GERADORA DE PDF (CORES COERENTES + MARCA D'ÁGUA)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -158,7 +203,7 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
       fontName="Helvetica-Bold",
       fontSize=13,
       leading=16,
-      textColor=colors.HexColor("#1A365D"),
+      textColor=colors.HexColor("#1B5E20"),
   )
 
   subtitle_style = ParagraphStyle(
@@ -248,9 +293,9 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   t_cabecalho = Table(dados_cabecalho, colWidths=[180, 180, 180])
   t_cabecalho.setStyle(
       TableStyle([
-          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F7FAFC")),
-          ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#CBD5E0")),
-          ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F4F6F4")),
+          ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#1B5E20")),
+          ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#A5D6A7")),
           ("TOPPADDING", (0, 0), (-1, -1), 6),
           ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
           ("LEFTPADDING", (0, 0), (-1, -1), 6),
@@ -310,14 +355,14 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   t_itens = Table(table_data, colWidths=[220, 80, 60, 90, 90])
   t_itens.setStyle(
       TableStyle([
-          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1A365D")),
+          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")),
           ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
           ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
           ("FONTSIZE", (0, 0), (-1, 0), 9),
           ("ALIGN", (1, 0), (-1, -1), "CENTER"),
           ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-          ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#EDF2F7")),
-          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
+          ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#FFFDE7")),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#A5D6A7")),
           ("TOPPADDING", (0, 0), (-1, -1), 5),
           ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
       ])
@@ -471,7 +516,7 @@ if st.session_state["usuario_logado"] is None:
   with st.form("form_login"):
     login_input = st.text_input("Usuário / Login")
     senha_input = st.text_input("Senha", type="password")
-    btn_entrar = st.form_submit_button("Entrar")
+    btn_entrar = st.form_submit_button("Entrar", type="primary")
 
     if btn_entrar:
       usuario = fazer_login(login_input, senha_input)
@@ -506,7 +551,7 @@ else:
         unsafe_allow_html=True,
     )
 
-  if st.sidebar.button("Sair / Logout"):
+  if st.sidebar.button("Sair / Logout", type="secondary"):
     st.session_state["usuario_logado"] = None
     st.rerun()
 
@@ -520,22 +565,8 @@ else:
         "Gerenciar Usuários & Permissões",
     ])
 
-  # --- BARRA LATERAL OU MENU RÁPIDO ALTERNATIVO NA TELA PRINCIPAL ---
-  if user_info["perfil"] == "Gestor":
-    with st.expander(
-        "⚙️ Menu Rápido de Gestão (Alternativo caso a barra lateral esteja"
-        " oculta)",
-        expanded=False,
-    ):
-      menu = st.radio("Escolha o Módulo:", opcoes_menu, key="radio_alt")
-    if "radio_alt" not in st.session_state:
-      menu = st.sidebar.radio("Navegação", opcoes_menu)
-    else:
-      menu = st.session_state.get("radio_alt", opcoes_menu[0])
-      # Sincroniza também com a sidebar se possível
-      st.sidebar.radio("Navegação", opcoes_menu, index=opcoes_menu.index(menu) if menu in opcoes_menu else 0)
-  else:
-    menu = st.sidebar.radio("Navegação", opcoes_menu)
+  # --- BARRA LATERAL ---
+  menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # --- MÓDULO 1: NOVO ROMANEIO ---
   if menu == "Novo Romaneio (Recebimento)":
@@ -653,7 +684,7 @@ else:
     with col_p5:
       st.write("")
       st.write("")
-      if st.button("➕ Add"):
+      if st.button("➕ Add", type="primary"):
         if qtd_input > 0:
           v_tot = qtd_input * val_unit
           st.session_state["itens_romaneio"].append({
@@ -677,7 +708,7 @@ else:
       total_geral = df_itens["valor_total"].sum()
       st.markdown(f"### **Total Geral: R$ {total_geral:,.2f}**")
 
-      if st.button("🗑️ Limpar Itens"):
+      if st.button("🗑️ Limpar Itens", type="secondary"):
         st.session_state["itens_romaneio"] = []
         st.rerun()
 
@@ -1052,7 +1083,7 @@ else:
           st.image(logo_nome, caption=logo_nome, width=80)
         with col_lg2:
           if st.button(
-              "🗑️", key=f"del_logo_{logo_nome}", help=f"Excluir {logo_nome}"
+              "🗑️", key=f"del_logo_{logo_nome}", help=f"Excluir {logo_nome}", type="secondary"
           ):
             try:
               os.remove(logo_nome)
@@ -1093,7 +1124,7 @@ else:
         und_padrao = st.selectbox(
             "Unidade Padrão", ["KG", "UNID", "GRM", "CX"], key="cad_und"
         )
-        if st.button("Cadastrar Produto"):
+        if st.button("Cadastrar Produto", type="primary"):
           if novo_prod:
             try:
               conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1182,7 +1213,7 @@ else:
         st.write("")
         col_b_p1, col_b_p2 = st.columns([1, 1])
         with col_b_p1:
-          if st.button("💾 Salvar Alterações no Produto"):
+          if st.button("💾 Salvar Alterações no Produto", type="primary"):
             if edit_nome:
               try:
                 conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1242,7 +1273,7 @@ else:
             "Perfil de Acesso", ["Operador", "Gestor"]
         )
 
-        if st.button("Salvar Usuário"):
+        if st.button("Salvar Usuário", type="primary"):
           if nome_user and login_user and senha_user:
             try:
               conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1318,7 +1349,7 @@ else:
         st.write("")
         col_btn1, col_btn2 = st.columns([1, 1])
         with col_btn1:
-          if st.button("💾 Salvar Alterações"):
+          if st.button("💾 Salvar Alterações", type="primary"):
             if novo_nome and novo_login and nova_senha:
               try:
                 conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
