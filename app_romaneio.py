@@ -18,7 +18,6 @@ from reportlab.platypus import (
 import requests
 import sqlite3
 import streamlit as st
-import urllib.parse
 
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO/BOTÕES)
@@ -107,32 +106,27 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO EXCLUSIVA PARA O GRUPO DO WHATSAPP
+# FUNÇÃO DE NOTIFICAÇÃO VIA GOOGLE CHAT (WEBHOOK)
 # ---------------------------------------------------------
-def enviar_notificacao_whatsapp(
+def enviar_notificacao_google_chat(
     num_romaneio, loja, fornecedor, total, conferente
 ):
-  # Pega o ID do grupo configurado na sessão (ex: 559299998888-1612345678@g.us)
-  id_grupo = st.session_state.get("zap_id_grupo", "").strip()
-  apikey = st.session_state.get("zap_apikey", "").strip()
-
-  if not id_grupo or not apikey:
+  webhook_url = os.environ.get("GOOGLE_CHAT_WEBHOOK_URL", "")
+  if not webhook_url:
     return
 
-  texto_msg = (
-      f"🚨 *NOVO ROMANEIO HORTIFRÚTI* 🚨\n\n"
-      f"• *Romaneio:* {num_romaneio}\n"
-      f"• *Loja:* {loja}\n"
-      f"• *Fornecedor:* {fornecedor}\n"
-      f"• *Valor Total:* R$ {total:,.2f}\n"
-      f"• *Conferente:* {conferente}"
-  )
-
-  texto_codificado = urllib.parse.quote(texto_msg)
-  url = f"https://api.callmebot.com/whatsapp.php?phone={id_grupo}&text={texto_codificado}&apikey={apikey}"
-
+  mensagem = {
+      "text": (
+          f"🚨 *NOVO ROMANEIO HORTIFRÚTI CADASTRADO* 🚨\n\n"
+          f"• *Romaneio:* {num_romaneio}\n"
+          f"• *Loja:* {loja}\n"
+          f"• *Fornecedor:* {fornecedor}\n"
+          f"• *Valor Total:* R$ {total:,.2f}\n"
+          f"• *Conferente:* {conferente}"
+      )
+  }
   try:
-    requests.get(url, timeout=5)
+    requests.post(webhook_url, json=mensagem, timeout=5)
   except Exception:
     pass
 
@@ -749,8 +743,7 @@ else:
         conn.commit()
         conn.close()
 
-        # Dispara notificação exclusivamente para o grupo do WhatsApp
-        enviar_notificacao_whatsapp(
+        enviar_notificacao_google_chat(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
 
@@ -995,22 +988,9 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
-    with st.sidebar.expander("Configurar Grupo 'Logística Hortifruti-Nova Cidade'"):
-      st.session_state["zap_id_grupo"] = st.text_input(
-          "ID do Grupo (Ex: 559299998888-1612345678@g.us)", 
-          value=st.session_state.get("zap_id_grupo", "")
-      )
-      st.session_state["zap_apikey"] = st.text_input(
-          "API Key (CallMeBot)", 
-          value=st.session_state.get("zap_apikey", ""), 
-          type="password"
-      )
-      st.success("Configuração do grupo salva em sessão!")
-
-    st.sidebar.markdown("---")
     st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
     
+    # Lista arquivos de imagem salvos na pasta (excluindo o fundo de login)
     arquivos_logos = [
         f for f in os.listdir() 
         if f.lower().endswith((".png", ".jpg", ".jpeg")) 
