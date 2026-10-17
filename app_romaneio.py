@@ -6,7 +6,14 @@ import reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import Image as RLImage, Paragraph, Spacer, Table, TableStyle
+from reportlab.platypus import (
+    Image as RLImage,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 import sqlite3
 import streamlit as st
 
@@ -54,12 +61,10 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
       logo_path = f"logo_empresa.{ext}"
       break
 
-  # Função de marca d'água no fundo da página do PDF
   def desenhar_marca_dagua(canvas, doc_obj):
     if logo_path:
       canvas.saveState()
-      canvas.setFillAlpha(0.08)  # Transparência suave para marca d'água
-      # Desenha a logo centralizada na página
+      canvas.setFillAlpha(0.08)
       canvas.drawImage(
           logo_path,
           150,
@@ -510,7 +515,6 @@ else:
 
   st.sidebar.divider()
 
-  # Navegação restrita e blindada por perfil
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
   if user_info["perfil"] == "Gestor":
     opcoes_menu.extend([
@@ -814,6 +818,24 @@ else:
               file_name=f"{romaneio_sel}.pdf",
               mime="application/pdf",
           )
+
+          # Botão de exclusão exclusivo para Gestor
+          if user_info["perfil"] == "Gestor":
+            st.write("")
+            if st.button(
+                f"🗑️ Excluir Romaneio {romaneio_sel} (Apenas Gestor)",
+                type="secondary",
+            ):
+              conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+              cursor = conn.cursor()
+              cursor.execute(
+                  "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (r_id,)
+              )
+              cursor.execute("DELETE FROM romaneios WHERE id = ?", (r_id,))
+              conn.commit()
+              conn.close()
+              st.success(f"Romaneio {romaneio_sel} excluído com sucesso!")
+              st.rerun()
     else:
       st.info("Nenhum romaneio registrado ainda.")
 
@@ -822,7 +844,6 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    # Upload do Logotipo na barra lateral restrita a gestores
     st.sidebar.subheader("🖼️ Logotipo da Empresa")
     logo_file = st.sidebar.file_uploader(
         "Enviar Logo da Empresa (PNG/JPG)",
@@ -1043,7 +1064,7 @@ else:
 
       if lista_usuarios:
         user_dict = {
-            f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_users
+            f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_usuarios
         }
         user_selecionado_label = st.selectbox(
             "Selecione o Usuário", list(user_dict.keys())
