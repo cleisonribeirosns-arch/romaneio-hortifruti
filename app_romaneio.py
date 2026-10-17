@@ -38,6 +38,7 @@ st.set_page_config(
     layout="wide",
 )
 
+# Procura dinamicamente pela imagem de fundo de login na pasta
 bg_login_path = None
 for nome_possivel in [
     "Tela de login.jpeg",
@@ -68,27 +69,36 @@ if bg_login_path:
 st.markdown(
     f"""
     <style>
+    /* Oculta totalmente o cabeçalho superior do Streamlit */
     header[data-testid="stHeader"] {{
         display: none !important;
         visibility: hidden !important;
     }}
+    
+    /* Oculta rodapé padrão */
     footer {{
         visibility: hidden !important;
     }}
+
+    /* Oculta os botões flutuantes e widgets de feedback/deploy do Streamlit Cloud */
     .stApp > div:first-child {{
         background: transparent !important;
     }}
+    
     iframe[title="streamlit_feedback.feedback"] {{
         display: none !important;
     }}
+    
     div[data-testid="stToolbar"], button[kind="header"] {{
         display: none !important;
         visibility: hidden !important;
     }}
+    
     .viewerBadge_container__1QSob, .styles_viewerBadge__1yG5_, [data-testid="stStatusWidget"] {{
         display: none !important;
         visibility: hidden !important;
     }}
+
     {css_fundo}
     </style>
 """,
@@ -97,17 +107,16 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (GRUPO LOGÍSTICA)
+# FUNÇÃO DE NOTIFICAÇÃO EXCLUSIVA PARA O GRUPO DO WHATSAPP
 # ---------------------------------------------------------
 def enviar_notificacao_whatsapp(
     num_romaneio, loja, fornecedor, total, conferente
 ):
-  api_url = st.session_state.get("zap_api_url", "").strip()
-  api_token = st.session_state.get("zap_token", "").strip()
+  # Pega o ID do grupo configurado na sessão (ex: 559299998888-1612345678@g.us)
   id_grupo = st.session_state.get("zap_id_grupo", "").strip()
+  apikey = st.session_state.get("zap_apikey", "").strip()
 
-  if not api_url or not id_grupo:
-    # Suporte genérico por URL direta ou API CallMeBot/UltraMsg/Evolution
+  if not id_grupo or not apikey:
     return
 
   texto_msg = (
@@ -119,21 +128,17 @@ def enviar_notificacao_whatsapp(
       f"• *Conferente:* {conferente}"
   )
 
-  headers = {"Content-Type": "application/json"}
-  if api_token:
-    headers["apikey"] = api_token
-    headers["token"] = api_token
-
-  payload = {"number": id_grupo, "group": id_grupo, "message": texto_msg, "text": texto_msg}
+  texto_codificado = urllib.parse.quote(texto_msg)
+  url = f"https://api.callmebot.com/whatsapp.php?phone={id_grupo}&text={texto_codificado}&apikey={apikey}"
 
   try:
-    requests.post(api_url, json=payload, headers=headers, timeout=5)
+    requests.get(url, timeout=5)
   except Exception:
     pass
 
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA CENTRALIZADA)
+# FUNÇÃO GERADORA DE PDF (MARCA D'ÁGUA CENTRALIZADA NO MEIO DA PÁGINA)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(cabecalho, df_itens):
   buffer = io.BytesIO()
@@ -488,6 +493,7 @@ else:
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
+  # --- NOTIFICAÇÃO VISUAL NO PAINEL DO GESTOR ---
   if user_info["perfil"] == "Gestor":
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
@@ -743,7 +749,7 @@ else:
         conn.commit()
         conn.close()
 
-        # Dispara notificação exclusivamente para o grupo
+        # Dispara notificação exclusivamente para o grupo do WhatsApp
         enviar_notificacao_whatsapp(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
@@ -991,18 +997,14 @@ else:
   ):
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
     with st.sidebar.expander("Configurar Grupo 'Logística Hortifruti-Nova Cidade'"):
-      st.session_state["zap_api_url"] = st.text_input(
-          "URL da API / Webhook", 
-          value=st.session_state.get("zap_api_url", "")
-      )
-      st.session_state["zap_token"] = st.text_input(
-          "Token / Chave da API", 
-          value=st.session_state.get("zap_token", ""), 
-          type="password"
-      )
       st.session_state["zap_id_grupo"] = st.text_input(
-          "ID do Grupo (Ex: 120363...@g.us)", 
+          "ID do Grupo (Ex: 559299998888-1612345678@g.us)", 
           value=st.session_state.get("zap_id_grupo", "")
+      )
+      st.session_state["zap_apikey"] = st.text_input(
+          "API Key (CallMeBot)", 
+          value=st.session_state.get("zap_apikey", ""), 
+          type="password"
       )
       st.success("Configuração do grupo salva em sessão!")
 
