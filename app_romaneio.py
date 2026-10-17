@@ -18,6 +18,7 @@ from reportlab.platypus import (
 import requests
 import sqlite3
 import streamlit as st
+import urllib.parse
 
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO/BOTÕES)
@@ -106,29 +107,41 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO VIA GOOGLE CHAT (WEBHOOK)
+# FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (MÚLTIPLOS NÚMEROS)
 # ---------------------------------------------------------
-def enviar_notificacao_google_chat(
+def enviar_notificacao_whatsapp(
     num_romaneio, loja, fornecedor, total, conferente
 ):
-  webhook_url = os.environ.get("GOOGLE_CHAT_WEBHOOK_URL", "")
-  if not webhook_url:
+  telefones_str = st.session_state.get("zap_telefones", "")
+  apikey = st.session_state.get("zap_apikey", "")
+
+  if not telefones_str or not apikey:
     return
 
-  mensagem = {
-      "text": (
-          f"🚨 *NOVO ROMANEIO HORTIFRÚTI CADASTRADO* 🚨\n\n"
-          f"• *Romaneio:* {num_romaneio}\n"
-          f"• *Loja:* {loja}\n"
-          f"• *Fornecedor:* {fornecedor}\n"
-          f"• *Valor Total:* R$ {total:,.2f}\n"
-          f"• *Conferente:* {conferente}"
-      )
-  }
-  try:
-    requests.post(webhook_url, json=mensagem, timeout=5)
-  except Exception:
-    pass
+  # Separa os telefones por vírgula, ponto e vírgula ou espaço
+  lista_telefones = [
+      t.strip()
+      for t in telefones_str.replace(";", ",").replace(" ", ",").split(",")
+      if t.strip()
+  ]
+
+  texto_msg = (
+      f"🚨 *NOVO ROMANEIO HORTIFRÚTI* 🚨\n\n"
+      f"• *Romaneio:* {num_romaneio}\n"
+      f"• *Loja:* {loja}\n"
+      f"• *Fornecedor:* {fornecedor}\n"
+      f"• *Valor Total:* R$ {total:,.2f}\n"
+      f"• *Conferente:* {conferente}"
+  )
+
+  texto_codificado = urllib.parse.quote(texto_msg)
+
+  for tel in lista_telefones:
+    url = f"https://api.callmebot.com/whatsapp.php?phone={tel}&text={texto_codificado}&apikey={apikey}"
+    try:
+      requests.get(url, timeout=5)
+    except Exception:
+      pass
 
 
 # ---------------------------------------------------------
@@ -743,7 +756,8 @@ else:
         conn.commit()
         conn.close()
 
-        enviar_notificacao_google_chat(
+        # Dispara notificação para todos os telefones cadastrados
+        enviar_notificacao_whatsapp(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
 
@@ -988,9 +1002,22 @@ else:
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
+    st.sidebar.subheader("⚙️ Configurações WhatsApp")
+    with st.sidebar.expander("Configurar Alertas WhatsApp"):
+      st.session_state["zap_telefones"] = st.text_area(
+          "Telefones (separe por vírgula)\nEx: 5592999998888, 5592988887777", 
+          value=st.session_state.get("zap_telefones", "")
+      )
+      st.session_state["zap_apikey"] = st.text_input(
+          "API Key (CallMeBot)", 
+          value=st.session_state.get("zap_apikey", ""), 
+          type="password"
+      )
+      st.success("Configurações salvas em sessão!")
+
+    st.sidebar.markdown("---")
     st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
     
-    # Lista arquivos de imagem salvos na pasta (excluindo o fundo de login)
     arquivos_logos = [
         f for f in os.listdir() 
         if f.lower().endswith((".png", ".jpg", ".jpeg")) 
