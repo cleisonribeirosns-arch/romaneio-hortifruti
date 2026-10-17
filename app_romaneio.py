@@ -1,6 +1,7 @@
 import base64
 from datetime import datetime
 import io
+import json
 import os
 import pandas as pd
 import reportlab
@@ -21,22 +22,58 @@ import streamlit as st
 import urllib.parse
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO/BOTÕES)
+# PROCURA DINÂMICA PELA LOGO / ÍCONE
 # ---------------------------------------------------------
-logo_page_icon = None
-for ext in ["png", "jpg", "jpeg"]:
-  if os.path.exists(f"logo_romaneio.{ext}"):
-    logo_page_icon = f"logo_romaneio.{ext}"
-    break
-  elif os.path.exists(f"logo.{ext}"):
-    logo_page_icon = f"logo.{ext}"
+logo_path = None
+for nome in [
+    "logo.png",
+    "logo_romaneio.png",
+    "logo.jpg",
+    "logo.jpeg",
+    "logo_romaneio.jpg",
+    "logo_romaneio.jpeg",
+    "Tela de login.png",
+    "Tela de login.jpeg",
+    "Tela de login.jpg",
+    "tela_de_login.png",
+    "tela_de_login.jpeg",
+    "tela_de_login.jpg",
+]:
+  if os.path.exists(nome):
+    logo_path = nome
     break
 
 st.set_page_config(
-    page_title="Romaneio Hortifruti",
-    page_icon=logo_page_icon if logo_page_icon else "🥦",
+    page_title="Romaneio hortifruti",
+    page_icon=logo_path if logo_path else "🥦",
     layout="wide",
 )
+
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DE ÍCONE NATIVO E PWA (NOME E LOGO SUPERNOVA)
+# ---------------------------------------------------------
+icon_data_url = ""
+if logo_path:
+  mime_type = "image/png" if logo_path.lower().endswith(".png") else "image/jpeg"
+  with open(logo_path, "rb") as f:
+    encoded_logo = base64.b64encode(f.read()).decode()
+    icon_data_url = f"data:{mime_type};base64,{encoded_logo}"
+
+manifest_data = {
+    "name": "Romaneio hortifruti",
+    "short_name": "Romaneio hortifruti",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#1A365D",
+    "theme_color": "#1A365D",
+    "icons": [
+        {"src": icon_data_url, "sizes": "192x192", "type": "image/png"},
+        {"src": icon_data_url, "sizes": "512x512", "type": "image/png"},
+    ],
+}
+
+manifest_json = json.dumps(manifest_data)
+manifest_base64 = base64.b64encode(manifest_json.encode()).decode()
 
 bg_login_path = None
 for nome_possivel in [
@@ -67,6 +104,15 @@ if bg_login_path:
 
 st.markdown(
     f"""
+    <head>
+        <title>Romaneio hortifruti</title>
+        <link rel="manifest" href="data:application/manifest+json;base64,{manifest_base64}">
+        <link rel="icon" type="image/png" href="{icon_data_url}">
+        <link rel="shortcut icon" type="image/png" href="{icon_data_url}">
+        <link rel="apple-touch-icon" href="{icon_data_url}">
+        <meta name="apple-mobile-web-app-title" content="Romaneio hortifruti">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+    </head>
     <style>
     header[data-testid="stHeader"] {{
         display: none !important;
@@ -169,15 +215,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
       leading=12,
       textColor=colors.HexColor("#2D3748"),
   )
-
-  logo_path = None
-  for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo_romaneio.{ext}"):
-      logo_path = f"logo_romaneio.{ext}"
-      break
-    elif os.path.exists(f"logo.{ext}"):
-      logo_path = f"logo.{ext}"
-      break
 
   def desenhar_marca_dagua(canvas, doc_obj):
     if logo_path:
@@ -453,17 +490,8 @@ def fazer_login(login, senha):
 
 # --- TELA DE LOGIN ---
 if st.session_state["usuario_logado"] is None:
-  logo_login_display = None
-  for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo_romaneio.{ext}"):
-      logo_login_display = f"logo_romaneio.{ext}"
-      break
-    elif os.path.exists(f"logo.{ext}"):
-      logo_login_display = f"logo.{ext}"
-      break
-
-  if logo_login_display:
-    st.image(logo_login_display, width=180)
+  if logo_path:
+    st.image(logo_path, width=180)
 
   st.title("Sistema de Recebimento Hortifrúti")
   st.subheader("Acesso ao Sistema")
@@ -651,7 +679,7 @@ else:
           st.rerun()
         else:
           st.warning(
-              "A quantidade/peso do produto é obrigatória e deve ser maior"
+              "A quantidade/peso do produto é obrigatoria e deve ser maior"
               " que zero."
           )
 
