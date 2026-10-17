@@ -15,11 +15,12 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+import requests
 import sqlite3
 import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA E LOGOTIPO NA ABA DO NAVEGADOR
+# CONFIGURAÇÃO DA PÁGINA E CSS (FUNDO DE LOGIN + OCULTAR TOPO/BOTÕES)
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg"]:
@@ -32,7 +33,7 @@ for ext in ["png", "jpg", "jpeg"]:
 
 st.set_page_config(
     page_title="Romaneio Hortifruti",
-    page_icon=logo_page_icon if logo_page_icon else "🛒",
+    page_icon=logo_page_icon if logo_page_icon else "🥦",
     layout="wide",
 )
 
@@ -56,10 +57,11 @@ if bg_login_path:
     encoded_string = base64.b64encode(image_file.read()).decode()
   css_fundo = f"""
     .stApp {{
-        background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{encoded_string}");
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
+        background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{encoded_string}") !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
     }}
   """
 
@@ -77,11 +79,57 @@ st.markdown(
         visibility: hidden !important;
     }}
 
+    /* Oculta os botões flutuantes e widgets de feedback/deploy do Streamlit Cloud */
+    .stApp > div:first-child {{
+        background: transparent !important;
+    }}
+    
+    iframe[title="streamlit_feedback.feedback"] {{
+        display: none !important;
+    }}
+    
+    div[data-testid="stToolbar"], button[kind="header"] {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+    
+    .viewerBadge_container__1QSob, .styles_viewerBadge__1yG5_, [data-testid="stStatusWidget"] {{
+        display: none !important;
+        visibility: hidden !important;
+    }}
+
     {css_fundo}
     </style>
 """,
     unsafe_allow_html=True,
 )
+
+
+# ---------------------------------------------------------
+# FUNÇÃO DE NOTIFICAÇÃO VIA GOOGLE CHAT (WEBHOOK)
+# ---------------------------------------------------------
+def enviar_notificacao_google_chat(
+    num_romaneio, loja, fornecedor, total, conferente
+):
+  # Cole aqui a URL do Webhook do seu espaço/canal do Google Chat (se configurado)
+  webhook_url = os.environ.get("GOOGLE_CHAT_WEBHOOK_URL", "")
+  if not webhook_url:
+    return  # Se não houver webhook configurado, apenas ignora sem travar a aplicação
+
+  mensagem = {
+      "text": (
+          f"🚨 *NOVO ROMANEIO HORTIFRÚTI CADASTRADO* 🚨\n\n"
+          f"• *Romaneio:* {num_romaneio}\n"
+          f"• *Loja:* {loja}\n"
+          f"• *Fornecedor:* {fornecedor}\n"
+          f"• *Valor Total:* R$ {total:,.2f}\n"
+          f"• *Conferente:* {conferente}"
+      )
+  }
+  try:
+    requests.post(webhook_url, json=mensagem, timeout=5)
+  except Exception:
+    pass
 
 
 # ---------------------------------------------------------
@@ -131,8 +179,6 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
     if logo_path:
       canvas.saveState()
       canvas.setFillAlpha(0.08)
-      # Coordenadas ajustadas para centralizar perfeitamente no meio da página (onde fica o círculo)
-      # Largura da página letter = 612 pt. X = (612 - 360) / 2 = 126. Altura = 792 pt. Y centralizada em ~420.
       canvas.drawImage(
           logo_path,
           126,
@@ -376,155 +422,6 @@ def init_db():
         " ('Administrador', 'admin', '1234', 'Gestor')"
     )
 
-  cursor.execute(
-      "SELECT COUNT(*) FROM produtos WHERE codigo_produto IS NOT NULL AND"
-      " codigo_barras IS NOT NULL"
-  )
-  if cursor.fetchone()[0] == 0:
-    cursor.execute("DELETE FROM produtos")
-    produtos_iniciais = [
-        ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
-        ("2240", "165651", "ABACATE MARGARIDA KG", "KG"),
-        ("2387", "165662", "ABACAXI KG PERDA", "KG"),
-        ("69496", "66294", "ABACAXI POTE KG", "KG"),
-        ("6156", "30531", "ABACAXI UN", "UN"),
-        ("17503", "48887", "ABOBRINHA CABOTIA KG", "KG"),
-        ("77170", "91644", "ABOBRINHA CABOTIA EMB KG", "KG"),
-        ("76982", "91637", "ABOBRINHA EMBALADA KG", "KG"),
-        ("3667", "165723", "ABOBRINHA ITALIANA KG", "KG"),
-        ("2356", "165659", "ABOBRINHA KG", "KG"),
-        ("76074", "91146", "ALECRIM EMBALADO KG", "KG"),
-        ("54195", "80659", "ALECRIM KG", "KG"),
-        ("7898941929398", "90270", "ALFACE VIVA BABY UN", "UN"),
-        ("76111", "91149", "ALHO PORO EMB KG", "KG"),
-        ("54003", "80530", "ALHO PORO KG", "KG"),
-        ("4275", "187484", "ALHO ROXO KG", "KG"),
-        ("2417", "165665", "AMEIXA FRESCA KG", "KG"),
-        ("42581", "165144", "AMEIXA SECA S/CA KG", "KG"),
-        ("182", "131307", "BANANA NANICA KG", "KG"),
-        ("1038", "165575", "BANANA PACOVAN KG", "KG"),
-        ("2073", "165634", "BANANA PRATA KG", "KG"),
-        ("2219", "165648", "BATATA DOCE BRANCA KG", "KG"),
-        ("5104", "28298", "BATATA DOCE ROXA KG", "KG"),
-        ("88688", "92830", "BATATA PORTUGUE PALITO KG", "KG"),
-        ("2233", "163880", "BATATA PORTUGUESA KG", "KG"),
-        ("2349", "165658", "BERINJELA KG", "KG"),
-        ("2165", "165643", "BETERRABA KG", "KG"),
-        ("75831", "90998", "BROCOLIS EMBALADO KG", "KG"),
-        ("3223", "165707", "BROCOLIS KG", "KG"),
-        ("4480", "165766", "BROCOLIS NINJA KG", "KG"),
-        ("2691", "165686", "CARA KG", "KG"),
-        ("2028", "165629", "CEBOLA KG", "KG"),
-        ("68192", "165176", "CEBOLA PEROLA KG", "KG"),
-        ("674", "131654", "CEBOLA ROXA KG", "KG"),
-        ("2226", "165649", "CENOURA KG", "KG"),
-        ("2127", "165639", "CHEIRO VERDE UN", "UN"),
-        ("949", "165567", "CHUCHU KG", "KG"),
-        ("74483", "90318", "COCO SECO EMBALADO 1UN", "UN"),
-        ("6705", "165863", "COCO SECO UN", "UN"),
-        ("76142", "91151", "COUVE FLOR EMB KG", "KG"),
-        ("28929", "63050", "COUVE FLOR KG", "KG"),
-        ("2172", "165644", "COUVE UN", "UN"),
-        ("89647", "93143", "DUETO DE FRUTAS KG", "KG"),
-        ("76104", "91148", "ESPINAFRE EMBALADO KG", "KG"),
-        ("1298", "131275", "ESPINAFRE KG", "KG"),
-        ("644105", "64409", "FECULA KG PROD", "KG"),
-        ("66051", "25096", "FEIJAO VAGEM KG", "KG"),
-        ("2202", "165647", "FEIJAO VERDE UN", "UN"),
-        ("2400", "165664", "FRUTAS CRISTALIZAS KG", "KG"),
-        ("88923", "92889", "GENGIBRE EMBALADO KG", "KG"),
-        ("22392", "166819", "GENGIBRE KG", "KG"),
-        ("4268", "165758", "GOIABA KG", "KG"),
-        ("9942", "165989", "GOMA DE TAPIOCA KG", "KG"),
-        ("76005", "91142", "HORTELA EMBALADA KG", "KG"),
-        ("3247", "165708", "HORTELA KG", "KG"),
-        ("6385", "31519", "INGREDIENTES P/ MAIONESE KG", "KG"),
-        ("4565", "137074", "INHAME KG", "KG"),
-        ("12508", "36027", "JENIPAPO KG", "KG"),
-        ("2196", "165646", "JERIMUM KG", "KG"),
-        ("75497", "90796", "KIT CALDEIRADA KG", "KG"),
-        ("59220", "19444", "KIT COZIDAO KG", "KG"),
-        ("86899", "92193", "KIT JERIMUM E CENOURA KG", "KG"),
-        ("8747", "165943", "KIWI KG", "KG"),
-        ("9690", "35740", "LARANJA BAHIA KG", "KG"),
-        ("61827", "86243", "LARANJA PAULISTA PCT KG", "KG"),
-        ("2080", "165635", "LARANJA REGIONAL KG", "KG"),
-        ("2059", "165632", "LIMAO KG", "KG"),
-        ("7898060740072", "44550", "MACA FUJI PAP PCT DIVERTIDAS 1KG", "UN"),
-        ("4381", "28078", "MACA GRANNY SMITH KG", "KG"),
-        ("4312", "28071", "MACA KG", "KG"),
-        ("1007", "165575", "MACA RED KG", "KG"),
-        ("2332", "165657", "MACAXEIRA KG", "KG"),
-        ("2363", "165660", "MAMAO KG", "KG"),
-        ("7887", "66300", "MAMAO POTE KG", "KG"),
-        ("201", "178998", "MANGA TOMMY KG", "KG"),
-        ("56601", "81476", "MANJERICAO KG", "KG"),
-        ("2264", "165653", "MARACUJA KG", "KG"),
-        ("2158", "165642", "MAXIXE KG", "KG"),
-        ("75404", "24094", "MELANCIA KG", "KG"),
-        ("2370", "165661", "MELAO COMUM KG", "KG"),
-        ("21128", "167057", "MELAO FAMOSA", "KG"),
-        ("409", "131464", "MELAO PELE DE SAPO KG", "KG"),
-        ("17817", "131253", "MELAO REI KG", "KG"),
-        ("60974", "84505", "MEXERICA MURCOTE KG", "KG"),
-        ("8686", "165939", "MORANGO BDJ KG", "KG"),
-        ("76487", "91174", "MORANGO EMBALADO KG", "KG"),
-        ("7898141930736", "72270", "OVO DE CODORNA SAO PEDRO CARTELA 30 UD", "UN"),
-        ("40141454058", "71563", "OVOS AMAZONAS BRANCO C/30UN", "UN"),
-        ("7898963762515", "83316", "OVOS BRANCO JUMBO 10UND", "UN"),
-        ("7898141930095", "1061835", "OVOS CARTELA C/06UN BRANCO SAO PEDRO", "UN"),
-        ("7898141930064", "156391", "OVOS CARTELA C/12UN VERMELHO SAO PEDRO", "UN"),
-        ("7898141930316", "156394", "OVOS CARTELA C/20UN BRANCO SAO PEDRO", "UN"),
-        ("7898141930071", "156390", "OVOS CARTELA C/30UN BRANCO SAO PEDRO", "UN"),
-        ("7898141930774", "60346", "OVOS CARTELA C/30UN VERMELHO SAO PEDRO.", "UN"),
-        ("7418321747840", "79642", "OVOS DA FIFI CAIPIRA C/30UN", "UN"),
-        ("7892830754139", "87996", "OVOS DA FIFI COLORIDO 12UN", "UN"),
-        ("7148752245775", "87608", "OVOS DA FIFI COLORIDO 30UN", "UN"),
-        ("7895552183508", "87998", "OVOS DA FIFI VERMELHO 12UN", "UN"),
-        ("7898141930057", "10070", "OVOS SAO PEDRO BRANCO CARTELA C/12UN", "UN"),
-        ("7895098581011", "21634", "OVOS SÃO PEDRO PREMIUM VERM 10UN", "UN"),
-        ("7898141930101", "156392", "OVOS SAO PEDRO VERMELHO CARTELA C/6UN", "UN"),
-        ("42882214403", "86069", "OVOS VERMELHO OVOS AMAZONAS C/30UN", "UN"),
-        ("74285", "90251", "PEPINO COMUM EMBALADO KG", "KG"),
-        ("2066", "165633", "PEPINO COMUM KG", "KG"),
-        ("88626", "92819", "PEPINO SALADA EMB KG", "KG"),
-        ("3490", "27463", "PEPINO SALADA KG", "KG"),
-        ("4398", "28079", "PERA DANJOU KG", "KG"),
-        ("31455", "66306", "PIMENTA DE CHEIRO EMB KG", "KG"),
-        ("675369", "163735", "PIMENTA DE CHEIRO KG", "KG"),
-        ("75732", "90994", "PIMENTA MURUPI EMB KG", "KG"),
-        ("932", "165566", "PIMENTA MURUPI KG", "KG"),
-        ("6859", "165871", "PIMENTAO COLORIDO EMB KG", "KG"),
-        ("703", "165548", "PIMENTAO COLORIDO KG", "KG"),
-        ("2110", "165638", "PIMENTAO VERDE KG", "KG"),
-        ("15295", "40184", "PITAYA KG", "KG"),
-        ("2134", "165640", "QUIABO KG", "KG"),
-        ("4459", "165764", "REPOLHO ROXO KG", "KG"),
-        ("76319", "91157", "REPOLHO VERDE EMB KG", "KG"),
-        ("2097", "165636", "REPOLHO VERDE KG", "KG"),
-        ("8310", "33215", "ROMA KG", "KG"),
-        ("67843", "19449", "SALADA KG", "KG"),
-        ("9621", "165976", "SALSA KG", "KG"),
-        ("2516", "165674", "TANGERINA IMPORTADA KG", "KG"),
-        ("1175", "41418", "TOMATE KG", "KG"),
-        ("609963080069", "44160", "UVA BLACK S/SEMENTE 250G", "UN"),
-        ("7898957749492", "66509", "UVA CAPPELLARO KIDS VITORIA 250G", "UN"),
-        ("4343", "28074", "UVA MIDNIGHT KG", "KG"),
-        ("751320764102", "35155", "UVA MIDNIGHT TET 500G", "UN"),
-        ("751320764140", "33221", "UVA MISTA TET 500G", "UN"),
-        ("2394", "165663", "UVA PASSA KG", "KG"),
-        ("7896291950550", "48350", "UVA PASSAS PRETA 10KG", "UN"),
-        ("7908046701338", "79594", "UVA PRETA DOCE UVA C/ SEMENTE 500G", "UN"),
-        ("7898962939062", "90062", "UVA PRETA VITORIA CANASTRA S/SEMENT 500G", "UN"),
-        ("751320764133", "38027", "UVA THOMPSON TET 500G", "UN"),
-        ("609963080076", "44403", "UVA VERDE THOMPSON 250G", "UN"),
-    ]
-    cursor.executemany(
-        "INSERT OR IGNORE INTO produtos (codigo_barras, codigo_produto, nome,"
-        " unidade_padrao) VALUES (?, ?, ?, ?)",
-        produtos_iniciais,
-    )
-
   conn.commit()
   conn.close()
 
@@ -552,7 +449,19 @@ def fazer_login(login, senha):
 
 # --- TELA DE LOGIN ---
 if st.session_state["usuario_logado"] is None:
-  st.title("🛒 Sistema de Recebimento Hortifrúti")
+  logo_login_display = None
+  for ext in ["png", "jpg", "jpeg"]:
+    if os.path.exists(f"logo_romaneio.{ext}"):
+      logo_login_display = f"logo_romaneio.{ext}"
+      break
+    elif os.path.exists(f"logo.{ext}"):
+      logo_login_display = f"logo.{ext}"
+      break
+
+  if logo_login_display:
+    st.image(logo_login_display, width=180)
+
+  st.title("Sistema de Recebimento Hortifrúti")
   st.subheader("Acesso ao Sistema")
 
   with st.form("form_login"):
@@ -579,6 +488,21 @@ else:
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
+  # --- NOTIFICAÇÃO VISUAL NO PAINEL DO GESTOR ---
+  if user_info["perfil"] == "Gestor":
+    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    total_romaneios_db = pd.read_sql_query(
+        "SELECT COUNT(*) as qtd FROM romaneios", conn
+    ).iloc[0]["qtd"]
+    conn.close()
+
+    st.sidebar.divider()
+    st.sidebar.markdown(
+        f"🔔 **Painel de Alertas:**<br>📦 Total de Romaneios Registrados:"
+        f" **{total_romaneios_db}**",
+        unsafe_allow_html=True,
+    )
+
   if st.sidebar.button("Sair / Logout"):
     st.session_state["usuario_logado"] = None
     st.rerun()
@@ -588,6 +512,7 @@ else:
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
   if user_info["perfil"] == "Gestor":
     opcoes_menu.extend([
+        "Relatórios & Gráficos",
         "Gerenciar Cadastros (Produtos)",
         "Gerenciar Usuários & Permissões",
     ])
@@ -798,7 +723,9 @@ else:
 
         romaneio_id = cursor.lastrowid
 
+        total_romaneio_valor = 0.0
         for item in st.session_state["itens_romaneio"]:
+          total_romaneio_valor += item["valor_total"]
           cursor.execute(
               """
                         INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total)
@@ -816,6 +743,11 @@ else:
 
         conn.commit()
         conn.close()
+
+        # Dispara notificação no Google Chat
+        enviar_notificacao_google_chat(
+            num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
+        )
 
         st.success(
             f"Romaneio {num_romaneio} e {len(fotos_upload)} foto(s) salvos com"
@@ -924,7 +856,136 @@ else:
     else:
       st.info("Nenhum romaneio registrado ainda.")
 
-  # --- MÓDULO 3: GERENCIAR PRODUTOS (Gestor Apenas) ---
+  # --- MÓDULO 3: RELATÓRIOS E GRÁFICOS (Gestor Apenas) ---
+  elif (
+      menu == "Relatórios & Gráficos"
+      and user_info["perfil"] == "Gestor"
+  ):
+    st.title("📊 Relatórios de Recebimentos e Análise Gráfica")
+
+    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    query_geral = """
+        SELECT r.numero_romaneio, r.loja, r.data_recebimento, r.fornecedor, r.conferente,
+               i.produto, i.quantidade, i.unidade, i.valor_unitario, i.valor_total
+        FROM romaneios r
+        JOIN romaneio_itens i ON r.id = i.romaneio_id
+    """
+    df_completo = pd.read_sql_query(query_geral, conn)
+    conn.close()
+
+    if not df_completo.empty:
+      df_completo["data_dt"] = pd.to_datetime(
+          df_completo["data_recebimento"], format="%d/%m/%Y", errors="coerce"
+      )
+
+      st.subheader("⚙️ Filtros de Pesquisa")
+      col_f1, col_f2, col_f3 = st.columns(3)
+      with col_f1:
+        min_date = (
+            df_completo["data_dt"].min().date()
+            if not df_completo["data_dt"].isna().all()
+            else datetime.now().date()
+        )
+        max_date = (
+            df_completo["data_dt"].max().date()
+            if not df_completo["data_dt"].isna().all()
+            else datetime.now().date()
+        )
+        data_inicio = st.date_input(
+            "Data Inicial", value=min_date, format="DD/MM/YYYY"
+        )
+      with col_f2:
+        data_fim = st.date_input(
+            "Data Final", value=max_date, format="DD/MM/YYYY"
+        )
+      with col_f3:
+        lojas_disponiveis = ["Todas"] + list(df_completo["loja"].unique())
+        loja_filtro = st.selectbox("Filtrar por Loja", lojas_disponiveis)
+
+      mask = (df_completo["data_dt"].dt.date >= data_inicio) & (
+          df_completo["data_dt"].dt.date <= data_fim
+      )
+      if loja_filtro != "Todas":
+        mask = mask & (df_completo["loja"] == loja_filtro)
+
+      df_filtrado = df_completo.loc[mask].copy()
+
+      st.divider()
+
+      if not df_filtrado.empty:
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+          st.metric(
+              "Total de Romaneios", df_filtrado["numero_romaneio"].nunique()
+          )
+        with col_m2:
+          st.metric(
+              "Volume / Qtd Total",
+              f"{df_filtrado['quantidade'].sum():,.3f}",
+          )
+        with col_m3:
+          st.metric(
+              "Valor Total Acumulado",
+              f"R$ {df_filtrado['valor_total'].sum():,.2f}",
+          )
+
+        st.write("")
+        tab_r1, tab_r2 = st.tabs(["📋 Tabela de Dados", "📈 Análise Gráfica"])
+
+        with tab_r1:
+          st.subheader("Dados Detalhados do Período")
+          st.dataframe(df_filtrado.drop(columns=["data_dt"]), width="stretch")
+
+          csv_data = (
+              df_filtrado.drop(columns=["data_dt"])
+              .to_csv(index=False)
+              .encode("utf-8")
+          )
+          st.download_button(
+              label="📥 Baixar Relatório Filtrado (CSV)",
+              data=csv_data,
+              file_name=f"relatorio_hortifruti_{data_inicio}_a_{data_fim}.csv",
+              mime="text/csv",
+          )
+
+        with tab_r2:
+          st.subheader("Gráficos de Desempenho e Recebimento")
+
+          st.markdown("### 🏢 Custo/Valor Total por Loja")
+          df_loja = (
+              df_filtrado.groupby("loja")["valor_total"].sum().reset_index()
+          )
+          st.bar_chart(df_loja.set_index("loja"))
+
+          st.markdown("### 🥦 Top 10 Produtos Mais Recebidos (Qtd/Peso)")
+          df_prod = (
+              df_filtrado.groupby("produto")["quantidade"]
+              .sum()
+              .reset_index()
+          )
+          df_prod = df_prod.sort_values(
+              by="quantidade", ascending=False
+          ).head(10)
+          st.bar_chart(df_prod.set_index("produto"))
+
+          st.markdown("### 🚚 Volume Financeiro por Fornecedor")
+          df_forn = (
+              df_filtrado.groupby("fornecedor")["valor_total"]
+              .sum()
+              .reset_index()
+          )
+          df_forn = df_forn.sort_values(
+              by="valor_total", ascending=False
+          ).head(10)
+          st.bar_chart(df_forn.set_index("fornecedor"))
+      else:
+        st.warning(
+            "Nenhum registro encontrado para o período ou loja selecionados."
+        )
+    else:
+      st.info("Ainda não há romaneios cadastrados para gerar relatórios.")
+
+  # --- MÓDULO 4: GERENCIAR PRODUTOS (Gestor Apenas) ---
   elif (
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
@@ -1087,7 +1148,7 @@ else:
             st.success(f"Produto '{prod_dados_sel[3]}' excluído com sucesso!")
             st.rerun()
 
-  # --- MÓDULO 4: GERENCIAR USUÁRIOS (Gestor Apenas) ---
+  # --- MÓDULO 5: GERENCIAR USUÁRIOS (Gestor Apenas) ---
   elif (
       menu == "Gerenciar Usuários & Permissões"
       and user_info["perfil"] == "Gestor"
@@ -1106,7 +1167,7 @@ else:
         login_user = st.text_input("Login de Acesso")
         senha_user = st.text_input("Senha", type="password")
         perfil_user = st.selectbox(
-            "Perfil de Access", ["Operador", "Gestor"]
+            "Perfil de Acesso", ["Operador", "Gestor"]
         )
 
         if st.button("Salvar Usuário"):
