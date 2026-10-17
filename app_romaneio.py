@@ -791,3 +791,40 @@ else:
                             conn.close()
                             st.success(f"Usuário '{user_dados[1]}' excluído com sucesso!")
                             st.rerun()
+                            # 3. GERENCIAR CADASTROS (PRODUTOS)
+elif menu == "Gerenciar Cadastros (Produtos)":
+  st.header("📦 Gestão de Produtos (Itens CISS)")
+
+  conn = sqlite3.connect(DB_NAME)
+  df_prod = pd.read_sql_query("SELECT * FROM produtos", conn)
+  conn.close()
+
+  # ADICIONE ESTE BLOCO AQUI:
+  if df_prod.empty:
+    st.info(
+        "Ainda não existem produtos cadastrados no banco de dados. Cadastre"
+        " abaixo."
+    )
+  else:
+    st.dataframe(df_prod, use_container_width=True)
+
+  st.subheader("Adicionar Novo Produto")
+  # (o resto do formulário abaixo continua sem mexer)
+# 4. GERENCIAR USUÁRIOS
+elif menu == "Gerenciar Usuários & Permissões":
+  st.header("👥 Gestão de Usuários do Sistema")
+
+  conn = sqlite3.connect(DB_NAME)
+  df_users = pd.read_sql_query(
+      "SELECT id, username, perfil FROM usuarios", conn
+  )
+  conn.close()
+
+  # ADICIONE ESTE BLOCO AQUI:
+  if df_users.empty:
+    st.info("Nenhum usuário cadastrado além do administrador padrão.")
+  else:
+    st.dataframe(df_users, use_container_width=True)
+
+  st.subheader("Adicionar Novo Usuário")
+  # (o resto do formulário abaixo continua sem mexer)
