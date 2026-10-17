@@ -990,33 +990,27 @@ else:
   ):
     st.sidebar.subheader("🖼️ Logotipo(s) da Empresa (PDF)")
     
-    # Verifica se já existe logo salva para exibir status persistente
-    logo_existente = None
-    for ext in ["png", "jpg", "jpeg"]:
-      if os.path.exists(f"logo_romaneio.{ext}"):
-        logo_existente = f"logo_romaneio.{ext}"
-        break
-      elif os.path.exists(f"logo.{ext}"):
-        logo_existente = f"logo.{ext}"
-        break
-
-    if logo_existente:
-      st.sidebar.success(f"✅ Logo ativa: `{logo_existente}`")
-      st.sidebar.image(logo_existente, width=120)
+    # Lista e exibe separadamente todos os arquivos de imagem já salvos na pasta
+    arquivos_logos = [f for f in os.listdir() if f.lower().endswith((".png", ".jpg", ".jpeg")) and f not in ["Tela de login.jpeg", "Tela de login.jpg", "tela_de_login.jpeg", "tela_de_login.jpg", "login_bg.jpg", "login_bg.png"]]
+    
+    if arquivos_logos:
+      st.sidebar.success(f"✅ {len(arquivos_logos)} logo(s) ativa(s) na pasta:")
+      for logo_nome in arquivos_logos:
+        st.sidebar.image(logo_nome, caption=logo_nome, width=100)
 
     logo_files = st.sidebar.file_uploader(
-        "Enviar/Atualizar Logo(s) (PNG/JPG)",
+        "Enviar/Adicionar Logo(s) (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
         key="logo_upload",
     )
     if logo_files:
       for logo_file in logo_files:
-        caminho_logo = "logo_romaneio.png" # Salva sempre com nome padronizado persistente
-        with open(caminho_logo, "wb") as f:
+        # Salva cada arquivo com o seu nome original separadamente
+        with open(logo_file.name, "wb") as f:
           f.write(logo_file.getbuffer())
       st.sidebar.success(
-          f"{len(logo_files)} arquivo(s) salvo(s) e aplicado(s) com sucesso!"
+          f"{len(logo_files)} arquivo(s) salvo(s) separadamente com sucesso!"
       )
       st.rerun()
 
