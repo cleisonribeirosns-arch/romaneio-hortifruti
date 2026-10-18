@@ -649,7 +649,7 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (COM BUSCA OTIMIZADA)
+  # 6. MÓDULO 1: NOVO ROMANEIO (BUSCA AMPLIADA)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
     logo_header_path = None
@@ -699,7 +699,8 @@ else:
           else "S/N"
       )
 
-      label = f"{nome_p} (Cód: {cp_p} | Barras: {cb_p})"
+      # Formato de exibição para permitir pesquisa por descrição, código interno ou código de barras
+      label = f"{nome_p} | Cód. Int: {cp_p} | Barras: {cb_p}"
       prod_dict[label] = (nome_p, und_p)
 
     prod_nomes_keys = list(prod_dict.keys())
@@ -761,7 +762,7 @@ else:
     )
     with col_p1:
       prod_label_sel = st.selectbox(
-          "Produto (Busque por Nome, Cód. Interno ou Barras)",
+          "Produto (Pesquise por Nome, Cód. Interno ou Barras)",
           (
               prod_nomes_keys
               if prod_dict
@@ -827,7 +828,7 @@ else:
 
     st.subheader("4. Assinatura Digital na Tela (Touch / Celular)")
     st.info(
-        "💡 Dica: Assine com o dedo ou caneta na tela. Se errar, clique no"
+        "💡 Dica: Assine com o dedo ou caneta na tela. Se errar, utilize o"
         " botão de limpar abaixo."
     )
 
@@ -1261,7 +1262,6 @@ else:
               texto_pagina = page.extract_text()
               linhas = texto_pagina.split("\n")
               for linha in linhas:
-                # Regex para extrair do relatório CISS: [Cod. Barras Opcional] [Cod. Produto] [Descrição] [Unidade]
                 match = re.search(
                     r"^(\d{8,14})?\s*(\d{2,6})\s+(.+?)\s+(KG|UN|PC|PT|CX)",
                     linha.strip(),
@@ -1295,9 +1295,6 @@ else:
             st.rerun()
           except Exception as e:
             st.error(f"Erro ao processar o PDF: {e}")
-
-    with tab_p1:
-      pass
 
     with tab_p2:
       col1, col2 = st.columns(2)
