@@ -64,7 +64,7 @@ if bg_login_path:
     }}
   """
 else:
-  # Fundo padrão corporativo com as cores da logo se não houver imagem de fundo
+  # Fundo padrão corporativo com as cores da logo
   css_fundo = """
     .stApp {
         background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
@@ -97,33 +97,43 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Cores Institucionais - Verde e Vermelho da Logo */
+    /* Estilização específica para contraste e visibilidade da Tela de Login */
+    .stApp h1, .stApp h2, .stApp h3, .stApp label {{
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
+        font-weight: bold !important;
+    }}
+
+    div[data-baseweb="input"] input {{
+        color: #000000 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 6px !important;
+    }}
+
+    /* Cores Institucionais - Verde e Vermelho da Logo nos Botões */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
-        border: 1px solid #1B5E20 !important;
+        border: 1px solid #FFFFFF !important;
         font-weight: bold !important;
         border-radius: 6px !important;
+        box-shadow: 0px 4px 6px rgba(0,0,0,0.3) !important;
     }}
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
-        border-color: #2E7D32 !important;
+        border-color: #FFFFFF !important;
     }}
 
     button[kind="secondary"], .stButton > button[kind="secondary"] {{
         background-color: #C62828 !important;
         color: #FFFFFF !important;
-        border: 1px solid #C62828 !important;
+        border: 1px solid #FFFFFF !important;
         font-weight: bold !important;
         border-radius: 6px !important;
     }}
     button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
         background-color: #D32F2F !important;
-        border-color: #D32F2F !important;
-    }}
-
-    h1, h2, h3 {{
-        color: #1B5E20 !important;
+        border-color: #FFFFFF !important;
     }}
 
     div[data-testid="stMetricValue"] {{
@@ -375,7 +385,6 @@ def gerar_pdf_romaneio(
   story.append(t_itens)
   story.append(Spacer(1, 25))
 
-  # Adição das Assinaturas no PDF (se houver imagem digital gravada)
   ass_conf_elem = Paragraph("_______________________________________<br/>Assinatura do Conferente", subtitle_style)
   ass_ent_elem = Paragraph("_______________________________________<br/>Assinatura do Entregador", subtitle_style)
 
@@ -478,7 +487,6 @@ def init_db():
         )
     """)
 
-  # Criação do usuário admin padrão caso não exista
   cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
   if not cursor.fetchone():
     cursor.execute(
@@ -512,22 +520,23 @@ def fazer_login(login, senha):
 
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (COM LOGO DA EMPRESA E OCULTAÇÃO DE CONFIGS)
+# 5. TELA DE LOGIN (COM LOGO VISÍVEL E ALTO CONTRASTE DE TEXTO)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
   logo_login_display = None
-  for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo_romaneio.{ext}"):
-      logo_login_display = f"logo_romaneio.{ext}"
-      break
-    elif os.path.exists(f"logo.{ext}"):
-      logo_login_display = f"logo.{ext}"
+  for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+    for prefixo in ["logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+      if os.path.exists(f"{prefixo}.{ext}"):
+        logo_login_display = f"{prefixo}.{ext}"
+        break
+    if logo_login_display:
       break
 
   col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
   with col_l2:
     if logo_login_display:
-      st.image(logo_login_display, width=220)
+      st.image(logo_login_display, width=240)
+
     st.title("Supermercado Super Nova Cidade")
     st.subheader("Sistema de Recebimento Hortifrúti")
 
@@ -553,7 +562,6 @@ if st.session_state["usuario_logado"] is None:
 else:
   user_info = st.session_state["usuario_logado"]
 
-  # Exibição da Logo na Barra Lateral
   logo_sidebar_path = None
   for ext in ["png", "jpg", "jpeg"]:
     if os.path.exists(f"logo_romaneio.{ext}"):
@@ -569,7 +577,6 @@ else:
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
-  # PAINEL DE ALERTAS EXCLUSIVO PARA O GESTOR
   if user_info["perfil"] == "Gestor":
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
@@ -590,7 +597,6 @@ else:
 
   st.sidebar.divider()
 
-  # Definição de Permissões de Menu
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
   if user_info["perfil"] == "Gestor":
     opcoes_menu.extend([
@@ -853,7 +859,6 @@ else:
         conn.commit()
         conn.close()
 
-        # Envia notificação ao WhatsApp para o Administrador
         enviar_notificacao_whatsapp(
             num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
         )
@@ -928,7 +933,6 @@ else:
           total_geral = df_det["valor_total"].sum() if not df_det.empty else 0.0
           st.markdown(f"### **Total Geral: R$ {total_geral:,.2f}**")
 
-          # Exibição das fotos anexadas
           if cabecalho[10]:
             caminhos_fotos = cabecalho[10].split(",")
             st.write("### Comprovantes / Fotos Anexadas")
@@ -940,7 +944,6 @@ else:
                       c_foto, caption=f"Foto {idx+1}", use_column_width=True
                   )
 
-          # Geração e Download do PDF Oficial
           pdf_bytes = gerar_pdf_romaneio(
               cabecalho, df_det, cabecalho[11], cabecalho[12]
           )
