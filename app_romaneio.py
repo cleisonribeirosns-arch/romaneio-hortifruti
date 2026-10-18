@@ -6,14 +6,11 @@ import streamlit as st
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
-# Procura pela logo para o ícone da página
 logo_icon = None
 for nome in [
-    "logo_romaneio.png",
-    "logo_romaneio.jpg",
-    "logo.png",
-    "logo.jpg",
     "logo_romaneio.png.jpg",
+    "logo_romaneio.png",
+    "logo.png",
 ]:
     if os.path.exists(nome):
         logo_icon = nome
@@ -31,12 +28,9 @@ st.set_page_config(
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
+    "Tela-de-login.jpeg.ico",
     "Tela-de-login.jpeg",
     "Tela de login.jpeg",
-    "Tela de login.jpg",
-    "tela_de_login.jpeg",
-    "tela_de_login.jpg",
-    "Tela-de-login.jpeg.ico",
 ]:
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
@@ -71,7 +65,6 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização dos textos da tela inicial */
     .stApp h1 {{
         color: #FFFFFF !important;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
@@ -93,7 +86,6 @@ st.markdown(
         font-weight: bold !important;
     }}
 
-    /* Campos de Entrada de Texto */
     div[data-baseweb="input"] input {{
         color: #000000 !important;
         background-color: rgba(255, 255, 255, 0.95) !important;
@@ -101,7 +93,6 @@ st.markdown(
         font-size: 16px !important;
     }}
 
-    /* Botão de Entrar */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -140,7 +131,6 @@ def init_db():
             perfil TEXT NOT NULL
         )
     """)
-    # Usuário Administrador Padrão
     cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
     if not cursor.fetchone():
         cursor.execute(
@@ -172,24 +162,15 @@ if "usuario_logado" not in st.session_state:
 # 4. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
-    # Procura pela imagem do logo
     logo_display = None
-    for nome in [
-        "logo_romaneio.png.jpg",
-        "logo_romaneio.png",
-        "logo_romaneio.jpg",
-        "logo.png",
-        "logo.jpg",
-    ]:
+    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png"]:
         if os.path.exists(nome):
             logo_display = nome
             break
 
-    # Colunas para centralizar a tela de login
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.5, 3, 0.5])
 
     with col_central:
-        # Lado a lado: Logo da empresa + Título do sistema
         if logo_display:
             col_logo, col_titulo = st.columns([1, 3])
             with col_logo:
@@ -203,7 +184,6 @@ if st.session_state["usuario_logado"] is None:
 
         st.write("")
 
-        # Formulario de Acesso
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
             senha_input = st.text_input("Senha", type="password")
@@ -224,7 +204,6 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 
 else:
-    # Estado pós-login para testar a Etapa 1
     st.title("✅ Login Efetuado com Sucesso!")
     st.write(f"**Usuário:** {st.session_state['usuario_logado']['nome']}")
     st.write(f"**Perfil:** {st.session_state['usuario_logado']['perfil']}")
