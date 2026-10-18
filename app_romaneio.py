@@ -66,16 +66,18 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização da Logo para remover o fundo branco visualmente */
+    /* Redimensionamento e limpeza do fundo branco da logo */
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
-        filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.4)) !important;
+        filter: drop-shadow(2px 3px 5px rgba(0,0,0,0.4)) !important;
+        max-width: 140px !important;
+        margin: 0 auto !important;
     }}
 
-    /* Estilização idêntica aos efeitos gráficos da logo oficial */
+    /* Estilização com fontes arredondadas e itálico */
     .titulo-logo {{
-        font-size: 2.6rem !important;
+        font-size: 2.4rem !important;
         font-weight: 900 !important;
         line-height: 1.15 !important;
         margin-bottom: 0px !important;
@@ -84,35 +86,38 @@ st.markdown(
 
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
-        font-size: 1.6rem !important;
+        font-size: 1.4rem !important;
         font-weight: 800 !important;
+        font-style: italic !important;
         text-shadow: 
-            -2px -2px 0 #134617, 2px -2px 0 #134617, -2px 2px 0 #134617, 2px 2px 0 #134617,
-            3px 3px 5px rgba(0, 0, 0, 0.5) !important;
+            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
+            2px 2px 4px rgba(0, 0, 0, 0.5) !important;
     }}
 
     .palavra-super {{
         color: #2E7D32 !important;
+        font-style: italic !important;
         text-shadow: 
-            -2px -2px 0 #134617, 2px -2px 0 #134617, -2px 2px 0 #134617, 2px 2px 0 #134617,
-            3px 3px 5px rgba(0, 0, 0, 0.5) !important;
+            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
+            2px 2px 4px rgba(0, 0, 0, 0.5) !important;
     }}
 
-    /* Palavra NOVA com contorno amarelo por dentro e sombra/contorno escuro por fora */
+    /* Palavra NOVA em itálico, arredondada e contorno externo escuro */
     .palavra-nova {{
         color: #FF3D00 !important;
+        font-style: italic !important;
         text-shadow: 
-            -2px -2px 0 #FFEB3B, 2px -2px 0 #FFEB3B, -2px 2px 0 #FFEB3B, 2px 2px 0 #FFEB3B,
-            -3.5px -3.5px 0 #B71C1C, 3.5px -3.5px 0 #B71C1C, -3.5px 3.5px 0 #B71C1C, 3.5px 3.5px 0 #B71C1C,
-            5px 5px 8px rgba(0, 0, 0, 0.7) !important;
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
+            4px 4px 6px rgba(0, 0, 0, 0.6) !important;
     }}
 
     .palavra-cidade {{
         color: #111111 !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 3.4rem !important;
-        text-shadow: 4px 5px 6px rgba(0, 0, 0, 0.8), -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF !important;
+        font-size: 3.2rem !important;
+        text-shadow: 3px 4px 5px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
 
     .stApp h3 {{
@@ -215,7 +220,7 @@ if st.session_state["usuario_logado"] is None:
 
     with col_central:
         if logo_display:
-            col_logo, col_titulo = st.columns([1, 3], vertical_alignment="center")
+            col_logo, col_titulo = st.columns([0.8, 3.2], vertical_alignment="center")
             with col_logo:
                 st.image(logo_display, use_container_width=True)
             with col_titulo:
