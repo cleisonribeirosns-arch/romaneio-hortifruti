@@ -65,9 +65,9 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Título com a cor verde da logo e contorno claro para contraste */
+    /* Estilização geral do título com contorno branco para contraste perfeito */
     .stApp h1 {{
-        color: #1B5E20 !important;
+        font-size: 2.5rem !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(0,0,0,0.6) !important;
         font-weight: 900 !important;
         margin-bottom: 0px !important;
@@ -121,7 +121,7 @@ st.markdown(
 
 # ---------------------------------------------------------
 # 3. BANCO DE DADOS (INICIALIZAÇÃO)
-# ---------------------------------------------------------
+# ----------------->
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
@@ -175,15 +175,27 @@ if st.session_state["usuario_logado"] is None:
 
     with col_central:
         if logo_display:
-            # Configuração de alinhamento vertical centralizado para a logo e o texto
             col_logo, col_titulo = st.columns([1, 3], vertical_alignment="center")
             with col_logo:
                 st.image(logo_display, use_container_width=True)
             with col_titulo:
-                st.markdown("<h1>Supermercado<br>Super Nova Cidade</h1>", unsafe_allow_html=True)
+                # Cores personalizadas: Super (Verde), Nova (Vermelho), Cidade (Preto)
+                st.markdown(
+                    "<h1>Supermercado<br>"
+                    "<span style='color: #1B5E20;'>Super</span> "
+                    "<span style='color: #C62828;'>Nova</span> "
+                    "<span style='color: #000000;'>Cidade</span></h1>",
+                    unsafe_allow_html=True
+                )
                 st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
         else:
-            st.markdown("<h1>Supermercado Super Nova Cidade</h1>", unsafe_allow_html=True)
+            st.markdown(
+                "<h1>Supermercado<br>"
+                "<span style='color: #1B5E20;'>Super</span> "
+                "<span style='color: #C62828;'>Nova</span> "
+                "<span style='color: #000000;'>Cidade</span></h1>",
+                unsafe_allow_html=True
+            )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
         st.write("")
