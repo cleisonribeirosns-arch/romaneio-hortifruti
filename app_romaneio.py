@@ -491,19 +491,6 @@ def init_db():
         "ALTER TABLE romaneios ADD COLUMN assinatura_entregador TEXT"
     )
 
-  cursor.execute("""
-        CREATE TABLE IF NOT EXISTS romaneio_itens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            romaneio_id INTEGER NOT NULL,
-            produto TEXT NOT NULL,
-            quantidade REAL NOT NULL,
-            unidade TEXT NOT NULL,
-            valor_unitario REAL,
-            valor_total REAL,
-            FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
-        )
-    """)
-
   cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
   if not cursor.fetchone():
     cursor.execute(
@@ -600,24 +587,24 @@ else:
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
 
-  # Verificação permanente de Administrador / Gestor
+  # --- PERFIL GESTOR AUTOMÁTICO ---
   perfil_db = str(user_info.get("perfil", "")).strip().lower()
-  is_admin_user = (
-      user_info["login"] == "admin"
+  is_admin = (
+      user_info["login"].lower() == "admin"
       or "gestor" in perfil_db
       or "adm" in perfil_db
   )
 
-  if is_admin_user:
+  if is_admin:
+    st.sidebar.success("🔒 Perfil: Gestor / Administrador")
+    eh_gestor = True
+  else:
     perfil_selecionado = st.sidebar.selectbox(
-        "Perfil de Acesso", ["Gestor", "Operador"], index=0
+        "Perfil de Acesso", ["Operador", "Gestor"]
     )
     eh_gestor = perfil_selecionado == "Gestor"
-  else:
-    eh_gestor = False
-    st.sidebar.markdown(f"**Perfil:** {user_info.get('perfil', 'Operador')}")
 
-  if eh_gestor or is_admin_user:
+  if eh_gestor or is_admin:
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
         "SELECT COUNT(*) as qtd FROM romaneios", conn
@@ -638,7 +625,7 @@ else:
   st.sidebar.divider()
 
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
-  if eh_gestor or is_admin_user:
+  if eh_gestor or is_admin:
     opcoes_menu.extend([
         "Relatórios & Gráficos",
         "Gerenciar Cadastros (Produtos)",
@@ -648,7 +635,7 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (COM BOTÃO FÍSICO DE LIMPAR ASSINATURA)
+  # 6. MÓDULO 1: NOVO ROMANEIO (COM CARREGAMENTO GARANTIDO DE PRODUTOS)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
     logo_header_path = None
@@ -674,10 +661,11 @@ else:
     else:
       st.title("Novo Romaneio de Recebimento - Hortifrúti")
 
+    # BUSCA DE PRODUTOS CORRIGIDA PARA EXIBIR TODOS OS CADASTRADOS NA LISTA
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
     cursor.execute(
-        "SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM"
+        "SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM"
         " produtos ORDER BY nome"
     )
     produtos_lista = cursor.fetchall()
@@ -685,18 +673,22 @@ else:
 
     prod_dict = {}
     for p in produtos_lista:
-      cb = (
-          p[0]
-          if p[0] and str(p[0]).strip() not in ["None", "Nenhum", ""]
+      nome_p = p[0]
+      und_p = p[1] if p[1] else "KG"
+      cp_p = (
+          p[2]
+          if p[2] and str(p[2]).strip() not in ["None", "Nenhum", ""]
           else "S/N"
       )
-      cp = (
-          p[1]
-          if p[1] and str(p[1]).strip() not in ["None", "Nenhum", ""]
+      cb_p = (
+          p[3]
+          if p[3] and str(p[3]).strip() not in ["None", "Nenhum", ""]
           else "S/N"
       )
-      label = f"{p[2]} (Cód: {cp} | Barras: {cb})"
-      prod_dict[label] = (p[2], p[3])
+
+      label = f"{nome_p} (Cód: {cp_p} | Barras: {cb_p})"
+      prod_dict[label] = (nome_p, und_p)
+
     prod_nomes_keys = list(prod_dict.keys())
 
     with st.expander("1. Cabeçalho do Recebimento", expanded=True):
@@ -760,7 +752,7 @@ else:
           (
               prod_nomes_keys
               if prod_dict
-              else ["Cadastre produtos no painel de gestor"]
+              else ["Nenhum produto cadastrado no sistema"]
           ),
       )
       prod_nome_real = (
@@ -822,17 +814,16 @@ else:
 
     st.subheader("4. Assinatura Digital na Tela (Touch / Celular)")
     st.info(
-        "💡 Dica: Assine com o dedo ou caneta na tela. Caso erre, utilize os"
-        " botões abaixo para limpar o quadro."
+        "💡 Dica: Assine com o dedo ou caneta na tela. Se errar, clique no"
+        " botão de limpar abaixo."
     )
 
     col_ass1, col_ass2 = st.columns(2)
 
     with col_ass1:
       st.write("**Assinatura do Conferente**")
-      # Gerenciador de estado para limpar o canvas do conferente
-      if "clear_conf" not in st.session_state:
-        st.session_state["clear_conf"] = False
+      if "conf_key" not in st.session_state:
+        st.session_state["conf_key"] = 0
 
       canvas_conf = st_canvas(
           fill_color="rgba(255, 255, 255, 0)",
@@ -842,15 +833,16 @@ else:
           height=140,
           width=300,
           drawing_mode="freedraw",
-          key="canvas_conferente",
+          key=f"canvas_conferente_{st.session_state['conf_key']}",
       )
-      if st.button("🔄 Limpar Assinatura Conferente", key="btn_clr_conf"):
+      if st.button("🔄 Limpar Assinatura Conferente"):
+        st.session_state["conf_key"] += 1
         st.rerun()
 
     with col_ass2:
       st.write("**Assinatura do Entregador / Fornecedor**")
-      if "clear_ent" not in st.session_state:
-        st.session_state["clear_ent"] = False
+      if "ent_key" not in st.session_state:
+        st.session_state["ent_key"] = 0
 
       canvas_ent = st_canvas(
           fill_color="rgba(255, 255, 255, 0)",
@@ -860,9 +852,10 @@ else:
           height=140,
           width=300,
           drawing_mode="freedraw",
-          key="canvas_entregador",
+          key=f"canvas_entregador_{st.session_state['ent_key']}",
       )
-      if st.button("🔄 Limpar Assinatura Entregador", key="btn_clr_ent"):
+      if st.button("🔄 Limpar Assinatura Entregador"):
+        st.session_state["ent_key"] += 1
         st.rerun()
 
     st.write("")
@@ -1053,7 +1046,7 @@ else:
               type="primary",
           )
 
-          if eh_gestor or is_admin_user:
+          if eh_gestor or is_admin:
             st.write("")
             if st.button(
                 f"🗑️ Excluir Romaneio {romaneio_sel} (Apenas Gestor)",
@@ -1075,7 +1068,7 @@ else:
   # ---------------------------------------------------------
   # 8. MÓDULO 3: RELATÓRIOS & GRÁFICOS (GESTOR)
   # ---------------------------------------------------------
-  elif menu == "Relatórios & Gráficos" and (eh_gestor or is_admin_user):
+  elif menu == "Relatórios & Gráficos" and (eh_gestor or is_admin):
     st.title("📊 Relatórios de Recebimentos e Análise Gráfica")
 
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1190,9 +1183,7 @@ else:
   # ---------------------------------------------------------
   # 9. MÓDULO 4: CADASTRO E EDIÇÃO DE PRODUTOS + LOGOS (GESTOR)
   # ---------------------------------------------------------
-  elif menu == "Gerenciar Cadastros (Produtos)" and (
-      eh_gestor or is_admin_user
-  ):
+  elif menu == "Gerenciar Cadastros (Produtos)" and (eh_gestor or is_admin):
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
     with st.sidebar.expander("Configurar Alerta WhatsApp"):
       st.session_state["zap_api_url"] = st.text_input(
@@ -1367,9 +1358,7 @@ else:
   # ---------------------------------------------------------
   # 10. MÓDULO 5: GERENCIAR USUÁRIOS (GESTOR)
   # ---------------------------------------------------------
-  elif menu == "Gerenciar Usuários & Permissões" and (
-      eh_gestor or is_admin_user
-  ):
+  elif menu == "Gerenciar Usuários & Permissões" and (eh_gestor or is_admin):
     st.title("👥 Controle de Usuários e Permissões")
 
     tab1, tab2 = st.tabs(
