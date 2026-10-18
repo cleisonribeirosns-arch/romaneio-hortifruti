@@ -65,23 +65,26 @@ st.markdown(
         visibility: hidden !important;
     }}
 
+    /* Título com a cor verde da logo e contorno claro para contraste */
     .stApp h1 {{
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-        font-weight: 800 !important;
+        color: #1B5E20 !important;
+        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(0,0,0,0.6) !important;
+        font-weight: 900 !important;
         margin-bottom: 0px !important;
+        line-height: 1.1 !important;
     }}
 
+    /* Subtítulo na cor preta com contorno suave para leitura */
     .stApp h3 {{
-        color: #F57F17 !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-        font-weight: bold !important;
-        margin-top: 5px !important;
+        color: #000000 !important;
+        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 1px 1px 3px rgba(255,255,255,0.8) !important;
+        font-weight: 800 !important;
+        margin-top: 10px !important;
     }}
 
     .stApp label {{
         color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8) !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         font-size: 16px !important;
         font-weight: bold !important;
     }}
@@ -172,11 +175,12 @@ if st.session_state["usuario_logado"] is None:
 
     with col_central:
         if logo_display:
-            col_logo, col_titulo = st.columns([1, 3])
+            # Configuração de alinhamento vertical centralizado para a logo e o texto
+            col_logo, col_titulo = st.columns([1, 3], vertical_alignment="center")
             with col_logo:
                 st.image(logo_display, use_container_width=True)
             with col_titulo:
-                st.markdown("<h1>Supermercado Super Nova Cidade</h1>", unsafe_allow_html=True)
+                st.markdown("<h1>Supermercado<br>Super Nova Cidade</h1>", unsafe_allow_html=True)
                 st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
         else:
             st.markdown("<h1>Supermercado Super Nova Cidade</h1>", unsafe_allow_html=True)
