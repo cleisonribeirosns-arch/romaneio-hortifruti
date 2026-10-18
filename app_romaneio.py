@@ -68,7 +68,7 @@ st.markdown(
 
     /* Reduzindo o espaçamento superior da página no Streamlit */
     .block-container {{
-        padding-top: 1.5rem !important;
+        padding-top: 1.0rem !important;
         padding-bottom: 1rem !important;
     }}
 
@@ -77,16 +77,16 @@ st.markdown(
         background: transparent !important;
         mix-blend-mode: multiply !important;
         filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 85px !important;
+        max-width: 95px !important;
         width: 100% !important;
         height: auto !important;
         margin: 0 auto !important;
         display: block !important;
     }}
 
-    /* Estilização dos textos estilizados */
+    /* Estilização dos textos estilizados com fontes maiores */
     .titulo-logo {{
-        font-size: 2.0rem !important;
+        font-size: 2.6rem !important;
         font-weight: 900 !important;
         line-height: 1.1 !important;
         margin-bottom: 0px !important;
@@ -95,11 +95,11 @@ st.markdown(
 
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
-        font-size: 1.1rem !important;
+        font-size: 1.35rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.2px -1.2px 0 #134617, 1.2px -1.2px 0 #134617, -1.2px 1.2px 0 #134617, 1.2px 1.2px 0 #134617,
+            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
 
@@ -107,7 +107,7 @@ st.markdown(
         color: #2E7D32 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.2px -1.2px 0 #134617, 1.2px -1.2px 0 #134617, -1.2px 1.2px 0 #134617, 1.2px 1.2px 0 #134617,
+            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
 
@@ -115,8 +115,8 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.2px -1.2px 0 #FFEB3B, 1.2px -1.2px 0 #FFEB3B, -1.2px 1.2px 0 #FFEB3B, 1.2px 1.2px 0 #FFEB3B,
-            -2.5px -2.5px 0 #B71C1C, 2.5px -2.5px 0 #B71C1C, -2.5px 2.5px 0 #B71C1C, 2.5px 2.5px 0 #B71C1C,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
 
@@ -124,17 +124,17 @@ st.markdown(
         color: #111111 !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.4rem !important;
-        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF !important;
+        font-size: 3.2rem !important;
+        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
 
     .stApp h3 {{
         color: #000000 !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
         font-weight: 800 !important;
-        font-size: 1.15rem !important;
-        margin-top: 5px !important;
-        margin-bottom: 10px !important;
+        font-size: 1.3rem !important;
+        margin-top: 2px !important;
+        margin-bottom: 8px !important;
     }}
 
     .stApp label {{
@@ -167,22 +167,22 @@ st.markdown(
         border-color: #FFFFFF !important;
     }}
 
-    /* Ajustes específicos para celular para compactar ao máximo */
+    /* Ajustes responsivos para celular com fontes proporcionais maiores */
     @media (max-width: 768px) {{
         img[data-testid="stImage"] {{
-            max-width: 60px !important;
+            max-width: 65px !important;
         }}
         .titulo-logo {{
-            font-size: 1.5rem !important;
+            font-size: 1.8rem !important;
         }}
         .palavra-sup-mercado {{
-            font-size: 0.95rem !important;
+            font-size: 1.05rem !important;
         }}
         .palavra-cidade {{
-            font-size: 1.9rem !important;
+            font-size: 2.3rem !important;
         }}
         .stApp h3 {{
-            font-size: 1.0rem !important;
+            font-size: 1.1rem !important;
         }}
     }}
 
@@ -249,7 +249,7 @@ if st.session_state["usuario_logado"] is None:
 
     with col_central:
         if logo_display:
-            col_logo, col_titulo = st.columns([0.5, 3.5], vertical_alignment="center")
+            col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
             with col_logo:
                 st.image(logo_display, use_container_width=True)
             with col_titulo:
