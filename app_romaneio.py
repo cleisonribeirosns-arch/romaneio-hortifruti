@@ -66,41 +66,44 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização com contorno e sombra 3D idênticos à logo */
+    /* Estilização idêntica ao sombreamento e contornos da logo oficial */
     .titulo-logo {{
-        font-size: 2.8rem !important;
+        font-size: 2.6rem !important;
         font-weight: 900 !important;
-        line-height: 1.1 !important;
+        line-height: 1.15 !important;
         margin-bottom: 0px !important;
-        font-family: 'Arial Black', sans-serif !important;
+        font-family: 'Arial Black', Gadget, sans-serif !important;
     }}
 
-    .palavra-verde {{
+    .palavra-sup-mercado {{
         color: #1B5E20 !important;
-        text-shadow: 
-            -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF,
-            -3px 0 0 #FFF, 3px 0 0 #FFF, 0 -3px 0 #FFF, 0 3px 0 #FFF,
-            3px 4px 6px rgba(0, 0, 0, 0.8) !important;
+        font-size: 1.8rem !important;
+        font-weight: 800 !important;
+        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 3px 4px rgba(0,0,0,0.6) !important;
     }}
 
-    .palavra-vermelha {{
-        color: #E53935 !important;
+    .palavra-super {{
+        color: #2E7D32 !important;
         text-shadow: 
-            -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF,
-            -3px 0 0 #FFF, 3px 0 0 #FFF, 0 -3px 0 #FFF, 0 3px 0 #FFF,
-            3px 4px 6px rgba(0, 0, 0, 0.8) !important;
+            -2px -2px 0 #134617, 2px -2px 0 #134617, -2px 2px 0 #134617, 2px 2px 0 #134617,
+            3px 3px 5px rgba(0, 0, 0, 0.5) !important;
     }}
 
-    .palavra-preta {{
-        color: #1A1A1A !important;
+    .palavra-nova {{
+        color: #FF5722 !important;
+        text-shadow: 
+            -2px -2px 0 #FFEB3B, 2px -2px 0 #FFEB3B, -2px 2px 0 #FFEB3B, 2px 2px 0 #FFEB3B,
+            3px 3px 5px rgba(0, 0, 0, 0.6) !important;
+    }}
+
+    .palavra-cidade {{
+        color: #111111 !important;
         font-style: italic !important;
-        text-shadow: 
-            -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF,
-            -3px 0 0 #FFF, 3px 0 0 #FFF, 0 -3px 0 #FFF, 0 3px 0 #FFF,
-            3px 4px 6px rgba(0, 0, 0, 0.8) !important;
+        font-family: 'Brush Script MT', cursive, sans-serif !important;
+        font-size: 2.2rem !important;
+        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.7), -1px -1px 0 #FFF, 1px -1px 0 #FFF !important;
     }}
 
-    /* Subtítulo com destaque escuro e borda suave */
     .stApp h3 {{
         color: #000000 !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
@@ -206,23 +209,23 @@ if st.session_state["usuario_logado"] is None:
                 st.image(logo_display, use_container_width=True)
             with col_titulo:
                 st.markdown(
-                    "<h1 class='titulo-logo'>"
-                    "<span class='palavra-verde'>Supermercado</span><br>"
-                    "<span class='palavra-verde'>SUPER</span> "
-                    "<span class='palavra-vermelha'>NOVA</span><br>"
-                    "<span class='palavra-preta'>Cidade</span>"
-                    "</h1>",
+                    "<div class='titulo-logo'>"
+                    "<span class='palavra-sup-mercado'>Supermercado</span><br>"
+                    "<span class='palavra-super'>SUPER</span> "
+                    "<span class='palavra-nova'>NOVA</span><br>"
+                    "<span class='palavra-cidade'>Cidade</span>"
+                    "</div>",
                     unsafe_allow_html=True
                 )
                 st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
         else:
             st.markdown(
-                "<h1 class='titulo-logo'>"
-                "<span class='palavra-verde'>Supermercado</span><br>"
-                "<span class='palavra-verde'>SUPER</span> "
-                "<span class='palavra-vermelha'>NOVA</span><br>"
-                "<span class='palavra-preta'>Cidade</span>"
-                "</h1>",
+                "<div class='titulo-logo'>"
+                "<span class='palavra-sup-mercado'>Supermercado</span><br>"
+                "<span class='palavra-super'>SUPER</span> "
+                "<span class='palavra-nova'>NOVA</span><br>"
+                "<span class='palavra-cidade'>Cidade</span>"
+                "</div>",
                 unsafe_allow_html=True
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
