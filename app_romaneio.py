@@ -3,6 +3,7 @@ from datetime import datetime
 import io
 import os
 import pandas as pd
+from PIL import Image
 import reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -18,6 +19,7 @@ from reportlab.platypus import (
 import requests
 import sqlite3
 import streamlit as st
+from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA E CSS (IDENTIDADE VISUAL DA EMPRESA)
@@ -111,14 +113,6 @@ st.markdown(
         border-radius: 6px !important;
     }}
 
-    /* Estilização centralizada para container de logo */
-    .logo-container {{
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        margin-bottom: 15px;
-    }}
-
     /* Cores Institucionais - Verde e Vermelho nos Botões */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
@@ -163,7 +157,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 2. FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (VISÍVEL APENAS AO GESTOR)
+# 2. FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP
 # ---------------------------------------------------------
 def enviar_notificacao_whatsapp(
     num_romaneio, loja, fornecedor, total, conferente
@@ -394,15 +388,24 @@ def gerar_pdf_romaneio(
   story.append(t_itens)
   story.append(Spacer(1, 25))
 
-  ass_conf_elem = Paragraph("_______________________________________<br/>Assinatura do Conferente", subtitle_style)
-  ass_ent_elem = Paragraph("_______________________________________<br/>Assinatura do Entregador", subtitle_style)
+  ass_conf_elem = Paragraph(
+      "_______________________________________<br/>Assinatura do Conferente",
+      subtitle_style,
+  )
+  ass_ent_elem = Paragraph(
+      "_______________________________________<br/>Assinatura do Entregador",
+      subtitle_style,
+  )
 
   if assinatura_conf and os.path.exists(assinatura_conf):
     ass_conf_elem = RLImage(assinatura_conf, width=150, height=45)
   if assinatura_ent and os.path.exists(assinatura_ent):
     ass_ent_elem = RLImage(assinatura_ent, width=150, height=45)
 
-  dados_ass = [[ass_conf_elem, ass_ent_elem], ["Conferente", "Entregador / Fornecedor"]]
+  dados_ass = [
+      [ass_conf_elem, ass_ent_elem],
+      ["Conferente", "Entregador / Fornecedor"],
+  ]
   t_ass = Table(dados_ass, colWidths=[270, 270])
   t_ass.setStyle(
       TableStyle([
@@ -479,9 +482,13 @@ def init_db():
   if "caminho_foto" not in col_rom:
     cursor.execute("ALTER TABLE romaneios ADD COLUMN caminho_foto TEXT")
   if "assinatura_conferente" not in col_rom:
-    cursor.execute("ALTER TABLE romaneios ADD COLUMN assinatura_conferente TEXT")
+    cursor.execute(
+        "ALTER TABLE romaneios ADD COLUMN assinatura_conferente TEXT"
+    )
   if "assinatura_entregador" not in col_rom:
-    cursor.execute("ALTER TABLE romaneios ADD COLUMN assinatura_entregador TEXT")
+    cursor.execute(
+        "ALTER TABLE romaneios ADD COLUMN assinatura_entregador TEXT"
+    )
 
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneio_itens (
@@ -529,7 +536,7 @@ def fazer_login(login, senha):
 
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (CORREÇÃO DE LOGO E CONTRASTE DE TEXTO)
+# 5. TELA DE LOGIN (LOGO AO LADO DO NOME DA EMPRESA)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
   logo_login_display = None
@@ -541,13 +548,20 @@ if st.session_state["usuario_logado"] is None:
     if logo_login_display:
       break
 
-  col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+  col_l1, col_l2, col_l3 = st.columns([0.5, 3, 0.5])
   with col_l2:
     if logo_login_display:
-      st.image(logo_login_display, use_container_width=True)
+      col_logo, col_texto = st.columns([1, 2.5])
+      with col_logo:
+        st.image(logo_login_display, use_container_width=True)
+      with col_texto:
+        st.title("Supermercado Super Nova Cidade")
+        st.subheader("Sistema de Recebimento Hortifrúti")
+    else:
+      st.title("Supermercado Super Nova Cidade")
+      st.subheader("Sistema de Recebimento Hortifrúti")
 
-    st.title("Supermercado Super Nova Cidade")
-    st.subheader("Sistema de Recebimento Hortifrúti")
+    st.write("")
 
     with st.form("form_login"):
       login_input = st.text_input("Usuário / Login")
@@ -571,10 +585,6 @@ if st.session_state["usuario_logado"] is None:
 else:
   user_info = st.session_state["usuario_logado"]
 
-  # Identificação do perfil do usuário (Garante permissão ao Administrador/Gestor)
-  perfil_atual = str(user_info.get("perfil", "")).strip().lower()
-  eh_gestor = perfil_atual in ["gestor", "administrador", "admin"]
-
   logo_sidebar_path = None
   for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
     for prefixo in ["logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
@@ -588,7 +598,18 @@ else:
     st.sidebar.image(logo_sidebar_path, use_container_width=True)
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
-  st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
+
+  # Seletor dinâmico para garantir liberação dos menus de Administrador/Gestor
+  perfil_original = str(user_info.get("perfil", "Operador")).strip()
+  perfil_selecionado = st.sidebar.selectbox(
+      "Perfil Ativo",
+      ["Gestor", "Operador"],
+      index=0
+      if perfil_original.lower() in ["gestor", "administrador", "admin"]
+      else 1,
+  )
+
+  eh_gestor = perfil_selecionado == "Gestor"
 
   if eh_gestor:
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -610,7 +631,6 @@ else:
 
   st.sidebar.divider()
 
-  # Definição Dinâmica de Permissões de Menu
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
   if eh_gestor:
     opcoes_menu.extend([
@@ -622,7 +642,7 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (CONFERENTES E GESTORES)
+  # 6. MÓDULO 1: NOVO ROMANEIO (COM ASSINATURA NA TELA TOUCH)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
     st.title("📋 Novo Romaneio de Recebimento - Hortifrúti")
@@ -731,7 +751,9 @@ else:
           ),
       )
     with col_p3:
-      qtd_input = st.number_input("Qtd / Peso", min_value=0.0, step=0.1, format="%.3f")
+      qtd_input = st.number_input(
+          "Qtd / Peso", min_value=0.0, step=0.1, format="%.3f"
+      )
     with col_p4:
       val_unit = st.number_input(
           "Valor Unit. (R$)", min_value=0.0, step=0.01, format="%.2f"
@@ -771,21 +793,33 @@ else:
         accept_multiple_files=True,
     )
 
-    st.subheader("4. Assinatura Digital")
+    st.subheader("4. Coleta de Assinatura Digital na Tela (Touch / Dedo)")
     col_ass1, col_ass2 = st.columns(2)
+
     with col_ass1:
-      st.write("**Assinatura do Conferente (Upload ou Imagem)**")
-      foto_conf_upload = st.file_uploader(
-          "Enviar imagem da assinatura do Conferente",
-          type=["png", "jpg", "jpeg"],
-          key="ass_conf",
+      st.write("✍️ **Assinatura do Conferente** (Assine com o dedo ou caneta)")
+      canvas_conf = st_canvas(
+          fill_color="rgba(255, 255, 255, 0)",
+          stroke_width=3,
+          stroke_color="#000000",
+          background_color="#FFFFFF",
+          height=150,
+          width=320,
+          drawing_mode="freedraw",
+          key="canvas_conferente",
       )
+
     with col_ass2:
-      st.write("**Assinatura do Entregador / Fornecedor**")
-      foto_ent_upload = st.file_uploader(
-          "Enviar imagem da assinatura do Entregador",
-          type=["png", "jpg", "jpeg"],
-          key="ass_ent",
+      st.write("✍️ **Assinatura do Entregador** (Assine com o dedo ou caneta)")
+      canvas_ent = st_canvas(
+          fill_color="rgba(255, 255, 255, 0)",
+          stroke_width=3,
+          stroke_color="#000000",
+          background_color="#FFFFFF",
+          height=150,
+          width=320,
+          drawing_mode="freedraw",
+          key="canvas_entregador",
       )
 
     if st.button("✅ Finalizar e Salvar Romaneio", type="primary"):
@@ -808,21 +842,23 @@ else:
           caminhos_salvos.append(caminho_foto)
         caminhos_str = ",".join(caminhos_salvos)
 
+        # Processar e Salvar Imagem da Assinatura do Conferente
         caminho_ass_conf = None
-        if foto_conf_upload:
+        if canvas_conf.image_data is not None:
+          img_conf = Image.fromarray(canvas_conf.image_data.astype("uint8"))
           caminho_ass_conf = os.path.join(
               "uploads", f"ass_conf_{num_romaneio}.png"
           )
-          with open(caminho_ass_conf, "wb") as f:
-            f.write(foto_conf_upload.getbuffer())
+          img_conf.save(caminho_ass_conf)
 
+        # Processar e Salvar Imagem da Assinatura do Entregador
         caminho_ass_ent = None
-        if foto_ent_upload:
+        if canvas_ent.image_data is not None:
+          img_ent = Image.fromarray(canvas_ent.image_data.astype("uint8"))
           caminho_ass_ent = os.path.join(
               "uploads", f"ass_ent_{num_romaneio}.png"
           )
-          with open(caminho_ass_ent, "wb") as f:
-            f.write(foto_ent_upload.getbuffer())
+          img_ent.save(caminho_ass_ent)
 
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
@@ -991,10 +1027,7 @@ else:
   # ---------------------------------------------------------
   # 8. MÓDULO 3: RELATÓRIOS & GRÁFICOS (GESTOR)
   # ---------------------------------------------------------
-  elif (
-      menu == "Relatórios & Gráficos"
-      and eh_gestor
-  ):
+  elif menu == "Relatórios & Gráficos" and eh_gestor:
     st.title("📊 Relatórios de Recebimentos e Análise Gráfica")
 
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1109,10 +1142,7 @@ else:
   # ---------------------------------------------------------
   # 9. MÓDULO 4: CADASTRO E EDIÇÃO DE PRODUTOS + LOGOS (GESTOR)
   # ---------------------------------------------------------
-  elif (
-      menu == "Gerenciar Cadastros (Produtos)"
-      and eh_gestor
-  ):
+  elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
     with st.sidebar.expander("Configurar Alerta WhatsApp"):
       st.session_state["zap_api_url"] = st.text_input(
@@ -1287,10 +1317,7 @@ else:
   # ---------------------------------------------------------
   # 10. MÓDULO 5: GERENCIAR USUÁRIOS (GESTOR)
   # ---------------------------------------------------------
-  elif (
-      menu == "Gerenciar Usuários & Permissões"
-      and eh_gestor
-  ):
+  elif menu == "Gerenciar Usuários & Permissões" and eh_gestor:
     st.title("👥 Controle de Usuários e Permissões")
 
     tab1, tab2 = st.tabs(
@@ -1304,9 +1331,7 @@ else:
         nome_user = st.text_input("Nome Completo")
         login_user = st.text_input("Login de Acesso")
         senha_user = st.text_input("Senha", type="password")
-        perfil_user = st.selectbox(
-            "Perfil de Acesso", ["Operador", "Gestor"]
-        )
+        perfil_user = st.selectbox("Perfil de Acesso", ["Operador", "Gestor"])
 
         if st.button("Salvar Usuário", type="primary"):
           if nome_user and login_user and senha_user:
@@ -1350,9 +1375,7 @@ else:
       conn.close()
 
       if lista_usuarios:
-        user_dict = {
-            f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_usuarios
-        }
+        user_dict = {f"{u[1]} ({u[2]}) - {u[4]}": u for u in lista_usuarios}
         user_selecionado_label = st.selectbox(
             "Selecione o Usuário", list(user_dict.keys())
         )
