@@ -66,7 +66,7 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização idêntica ao sombreamento e contornos da logo oficial */
+    /* Estilização idêntica aos efeitos gráficos da logo oficial */
     .titulo-logo {{
         font-size: 2.6rem !important;
         font-weight: 900 !important;
@@ -76,10 +76,12 @@ st.markdown(
     }}
 
     .palavra-sup-mercado {{
-        color: #1B5E20 !important;
-        font-size: 1.8rem !important;
+        color: #2E7D32 !important;
+        font-size: 1.6rem !important;
         font-weight: 800 !important;
-        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 3px 4px rgba(0,0,0,0.6) !important;
+        text-shadow: 
+            -2px -2px 0 #134617, 2px -2px 0 #134617, -2px 2px 0 #134617, 2px 2px 0 #134617,
+            3px 3px 5px rgba(0, 0, 0, 0.5) !important;
     }}
 
     .palavra-super {{
@@ -92,16 +94,17 @@ st.markdown(
     .palavra-nova {{
         color: #FF5722 !important;
         text-shadow: 
-            -2px -2px 0 #FFEB3B, 2px -2px 0 #FFEB3B, -2px 2px 0 #FFEB3B, 2px 2px 0 #FFEB3B,
-            3px 3px 5px rgba(0, 0, 0, 0.6) !important;
+            -2px -2px 0 #B71C1C, 2px -2px 0 #B71C1C, -2px 2px 0 #B71C1C, 2px 2px 0 #B71C1C,
+            -3px -3px 0 #FFEB3B, 3px -3px 0 #FFEB3B, -3px 3px 0 #FFEB3B, 3px 3px 0 #FFEB3B,
+            4px 4px 6px rgba(0, 0, 0, 0.6) !important;
     }}
 
     .palavra-cidade {{
         color: #111111 !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.2rem !important;
-        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.7), -1px -1px 0 #FFF, 1px -1px 0 #FFF !important;
+        font-size: 2.8rem !important;
+        text-shadow: 3px 4px 5px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
 
     .stApp h3 {{
