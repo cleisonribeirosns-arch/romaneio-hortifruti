@@ -66,6 +66,13 @@ st.markdown(
         visibility: hidden !important;
     }}
 
+    /* Estilização da Logo para remover o fundo branco visualmente */
+    img[data-testid="stImage"] {{
+        background: transparent !important;
+        mix-blend-mode: multiply !important;
+        filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.4)) !important;
+    }}
+
     /* Estilização idêntica aos efeitos gráficos da logo oficial */
     .titulo-logo {{
         font-size: 2.6rem !important;
@@ -91,20 +98,21 @@ st.markdown(
             3px 3px 5px rgba(0, 0, 0, 0.5) !important;
     }}
 
+    /* Palavra NOVA com contorno amarelo por dentro e sombra/contorno escuro por fora */
     .palavra-nova {{
-        color: #FF5722 !important;
+        color: #FF3D00 !important;
         text-shadow: 
-            -2px -2px 0 #B71C1C, 2px -2px 0 #B71C1C, -2px 2px 0 #B71C1C, 2px 2px 0 #B71C1C,
-            -3px -3px 0 #FFEB3B, 3px -3px 0 #FFEB3B, -3px 3px 0 #FFEB3B, 3px 3px 0 #FFEB3B,
-            4px 4px 6px rgba(0, 0, 0, 0.6) !important;
+            -2px -2px 0 #FFEB3B, 2px -2px 0 #FFEB3B, -2px 2px 0 #FFEB3B, 2px 2px 0 #FFEB3B,
+            -3.5px -3.5px 0 #B71C1C, 3.5px -3.5px 0 #B71C1C, -3.5px 3.5px 0 #B71C1C, 3.5px 3.5px 0 #B71C1C,
+            5px 5px 8px rgba(0, 0, 0, 0.7) !important;
     }}
 
     .palavra-cidade {{
         color: #111111 !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.8rem !important;
-        text-shadow: 3px 4px 5px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
+        font-size: 3.4rem !important;
+        text-shadow: 4px 5px 6px rgba(0, 0, 0, 0.8), -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF !important;
     }}
 
     .stApp h3 {{
