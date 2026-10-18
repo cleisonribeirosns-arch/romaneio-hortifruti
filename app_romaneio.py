@@ -100,7 +100,6 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização para visibilidade do texto da Tela de Login */
     .stApp h1, .stApp h2, .stApp h3, .stApp label {{
         color: #FFFFFF !important;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
@@ -113,7 +112,6 @@ st.markdown(
         border-radius: 6px !important;
     }}
 
-    /* Cores Institucionais - Verde e Vermelho nos Botões */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -197,7 +195,7 @@ def enviar_notificacao_whatsapp(
 
 
 # ---------------------------------------------------------
-# 3. FUNÇÃO GERADORA DE PDF OFICIAL (COM ASSINATURAS DIGITAIS)
+# 3. FUNÇÃO GERADORA DE PDF OFICIAL
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(
     cabecalho, df_itens, assinatura_conf=None, assinatura_ent=None
@@ -599,17 +597,22 @@ else:
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
 
-  # Seletor dinâmico para garantir liberação dos menus de Administrador/Gestor
-  perfil_original = str(user_info.get("perfil", "Operador")).strip()
+  # Seletor dinâmico de Perfil com padrão Gestor para facilitar testes e acesso completo
+  perfil_original = str(user_info.get("perfil", "Gestor")).strip()
   perfil_selecionado = st.sidebar.selectbox(
-      "Perfil Ativo",
+      "Perfil de Acesso (Menu Gestor)",
       ["Gestor", "Operador"],
       index=0
-      if perfil_original.lower() in ["gestor", "administrador", "admin"]
-      else 1,
+      if (
+          perfil_original.lower() in ["gestor", "administrador", "admin"]
+          or user_info["login"] == "admin"
+      )
+      else 0,
   )
 
-  eh_gestor = perfil_selecionado == "Gestor"
+  eh_gestor = (
+      perfil_selecionado == "Gestor" or user_info["login"] == "admin"
+  )
 
   if eh_gestor:
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -642,7 +645,7 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (COM ASSINATURA NA TELA TOUCH)
+  # 6. MÓDULO 1: NOVO ROMANEIO (COM CANVAS TOUCH E BOTÃO DE LIMPAR)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
     st.title("📋 Novo Romaneio de Recebimento - Hortifrúti")
@@ -793,35 +796,41 @@ else:
         accept_multiple_files=True,
     )
 
-    st.subheader("4. Coleta de Assinatura Digital na Tela (Touch / Dedo)")
+    st.subheader("4. Assinatura Digital na Tela (Touch / Dedo)")
+    st.info(
+        "💡 Dica: Use o dedo ou caneta touch para assinar. Se errar, utilize a"
+        " ferramenta de borracha/lixeira no painel de desenho."
+    )
+
     col_ass1, col_ass2 = st.columns(2)
 
     with col_ass1:
-      st.write("✍️ **Assinatura do Conferente** (Assine com o dedo ou caneta)")
+      st.write("**Assinatura do Conferente**")
       canvas_conf = st_canvas(
           fill_color="rgba(255, 255, 255, 0)",
           stroke_width=3,
           stroke_color="#000000",
           background_color="#FFFFFF",
-          height=150,
-          width=320,
+          height=140,
+          width=300,
           drawing_mode="freedraw",
           key="canvas_conferente",
       )
 
     with col_ass2:
-      st.write("✍️ **Assinatura do Entregador** (Assine com o dedo ou caneta)")
+      st.write("**Assinatura do Entregador / Fornecedor**")
       canvas_ent = st_canvas(
           fill_color="rgba(255, 255, 255, 0)",
           stroke_width=3,
           stroke_color="#000000",
           background_color="#FFFFFF",
-          height=150,
-          width=320,
+          height=140,
+          width=300,
           drawing_mode="freedraw",
           key="canvas_entregador",
       )
 
+    st.write("")
     if st.button("✅ Finalizar e Salvar Romaneio", type="primary"):
       if not num_romaneio.strip():
         st.error("O número do romaneio é obrigatório.")
@@ -842,18 +851,22 @@ else:
           caminhos_salvos.append(caminho_foto)
         caminhos_str = ",".join(caminhos_salvos)
 
-        # Processar e Salvar Imagem da Assinatura do Conferente
         caminho_ass_conf = None
-        if canvas_conf.image_data is not None:
+        if (
+            canvas_conf.image_data is not None
+            and canvas_conf.image_data.sum() > 0
+        ):
           img_conf = Image.fromarray(canvas_conf.image_data.astype("uint8"))
           caminho_ass_conf = os.path.join(
               "uploads", f"ass_conf_{num_romaneio}.png"
           )
           img_conf.save(caminho_ass_conf)
 
-        # Processar e Salvar Imagem da Assinatura do Entregador
         caminho_ass_ent = None
-        if canvas_ent.image_data is not None:
+        if (
+            canvas_ent.image_data is not None
+            and canvas_ent.image_data.sum() > 0
+        ):
           img_ent = Image.fromarray(canvas_ent.image_data.astype("uint8"))
           caminho_ass_ent = os.path.join(
               "uploads", f"ass_ent_{num_romaneio}.png"
