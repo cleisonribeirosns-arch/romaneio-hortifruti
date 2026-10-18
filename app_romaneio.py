@@ -15,11 +15,12 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+import requests
 import sqlite3
 import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA E CSS (IDENTIDADE VISUAL DA EMPRESA)
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg"]:
@@ -31,7 +32,7 @@ for ext in ["png", "jpg", "jpeg"]:
     break
 
 st.set_page_config(
-    page_title="Romaneio Hortifruti",
+    page_title="Romaneio Hortifrúti - Super Nova Cidade",
     page_icon=logo_page_icon if logo_page_icon else "🥦",
     layout="wide",
 )
@@ -55,12 +56,20 @@ if bg_login_path:
     encoded_string = base64.b64encode(image_file.read()).decode()
   css_fundo = f"""
     .stApp {{
-        background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{encoded_string}") !important;
+        background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{encoded_string}") !important;
         background-size: cover !important;
         background-position: center !important;
         background-repeat: no-repeat !important;
         background-attachment: fixed !important;
     }}
+  """
+else:
+  # Fundo padrão corporativo com as cores da logo se não houver imagem de fundo
+  css_fundo = """
+    .stApp {
+        background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+        background-attachment: fixed !important;
+    }
   """
 
 st.markdown(
@@ -88,7 +97,7 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização padrão (Cores da empresa: Verde, Vermelho, Amarelo e Branco) */
+    /* Cores Institucionais - Verde e Vermelho da Logo */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -135,9 +144,51 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# FUNÇÃO GERADORA DE PDF
+# 2. FUNÇÃO DE NOTIFICAÇÃO VIA WHATSAPP (VISÍVEL APENAS AO GESTOR)
 # ---------------------------------------------------------
-def gerar_pdf_romaneio(cabecalho, df_itens):
+def enviar_notificacao_whatsapp(
+    num_romaneio, loja, fornecedor, total, conferente
+):
+  api_url = st.session_state.get("zap_api_url", "").strip()
+  api_token = st.session_state.get("zap_token", "").strip()
+  id_grupo = st.session_state.get("zap_id_grupo", "").strip()
+
+  if not api_url or not id_grupo:
+    return
+
+  texto_msg = (
+      f"🚨 *NOVO ROMANEIO HORTIFRÚTI - SUPER NOVA CIDADE* 🚨\n\n"
+      f"• *Romaneio:* {num_romaneio}\n"
+      f"• *Loja:* {loja}\n"
+      f"• *Fornecedor:* {fornecedor}\n"
+      f"• *Valor Total:* R$ {total:,.2f}\n"
+      f"• *Conferente:* {conferente}"
+  )
+
+  headers = {"Content-Type": "application/json"}
+  if api_token:
+    headers["apikey"] = api_token
+    headers["token"] = api_token
+
+  payload = {
+      "number": id_grupo,
+      "group": id_grupo,
+      "message": texto_msg,
+      "text": texto_msg,
+  }
+
+  try:
+    requests.post(api_url, json=payload, headers=headers, timeout=5)
+  except Exception:
+    pass
+
+
+# ---------------------------------------------------------
+# 3. FUNÇÃO GERADORA DE PDF OFICIAL (COM ASSINATURAS DIGITAIS)
+# ---------------------------------------------------------
+def gerar_pdf_romaneio(
+    cabecalho, df_itens, assinatura_conf=None, assinatura_ent=None
+):
   buffer = io.BytesIO()
   doc = SimpleDocTemplate(
       buffer,
@@ -193,8 +244,8 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
       canvas.restoreState()
 
   texto_empresa = Paragraph(
-      "<b>SUPERMERCADO NOVA CIDADE / SUPER NOVA CIDADE</b><br/>Controle de"
-      " Recebimento de Mercadorias - Hortifrúti",
+      "<b>SUPERMERCADO SUPER NOVA CIDADE</b><br/>Controle de Recebimento"
+      " de Mercadorias - Hortifrúti",
       title_style,
   )
 
@@ -322,19 +373,23 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
   )
 
   story.append(t_itens)
-  story.append(Spacer(1, 35))
+  story.append(Spacer(1, 25))
 
-  dados_ass = [
-      [
-          "_______________________________________",
-          "_______________________________________",
-      ],
-      ["Assinatura do Conferente", "Assinatura do Entregador / Fornecedor"],
-  ]
+  # Adição das Assinaturas no PDF (se houver imagem digital gravada)
+  ass_conf_elem = Paragraph("_______________________________________<br/>Assinatura do Conferente", subtitle_style)
+  ass_ent_elem = Paragraph("_______________________________________<br/>Assinatura do Entregador", subtitle_style)
+
+  if assinatura_conf and os.path.exists(assinatura_conf):
+    ass_conf_elem = RLImage(assinatura_conf, width=150, height=45)
+  if assinatura_ent and os.path.exists(assinatura_ent):
+    ass_ent_elem = RLImage(assinatura_ent, width=150, height=45)
+
+  dados_ass = [[ass_conf_elem, ass_ent_elem], ["Conferente", "Entregador / Fornecedor"]]
   t_ass = Table(dados_ass, colWidths=[270, 270])
   t_ass.setStyle(
       TableStyle([
           ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+          ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
           ("FONTSIZE", (0, 0), (-1, -1), 8),
           ("TEXTCOLOR", (0, 0), (-1, -1), colors.HexColor("#4A5568")),
       ])
@@ -350,7 +405,7 @@ def gerar_pdf_romaneio(cabecalho, df_itens):
 
 
 # ---------------------------------------------------------
-# INICIALIZAÇÃO DA BASE DE DADOS
+# 4. INICIALIZAÇÃO DA BASE DE DADOS (SQLite)
 # ---------------------------------------------------------
 def init_db():
   conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -395,7 +450,9 @@ def init_db():
             conferente TEXT NOT NULL,
             pagamento_a_vista TEXT NOT NULL,
             data_pagamento TEXT,
-            caminho_foto TEXT
+            caminho_foto TEXT,
+            assinatura_conferente TEXT,
+            assinatura_entregador TEXT
         )
     """)
 
@@ -403,6 +460,10 @@ def init_db():
   col_rom = [column[1] for column in cursor.fetchall()]
   if "caminho_foto" not in col_rom:
     cursor.execute("ALTER TABLE romaneios ADD COLUMN caminho_foto TEXT")
+  if "assinatura_conferente" not in col_rom:
+    cursor.execute("ALTER TABLE romaneios ADD COLUMN assinatura_conferente TEXT")
+  if "assinatura_entregador" not in col_rom:
+    cursor.execute("ALTER TABLE romaneios ADD COLUMN assinatura_entregador TEXT")
 
   cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneio_itens (
@@ -417,6 +478,7 @@ def init_db():
         )
     """)
 
+  # Criação do usuário admin padrão caso não exista
   cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
   if not cursor.fetchone():
     cursor.execute(
@@ -449,7 +511,9 @@ def fazer_login(login, senha):
   return usr
 
 
-# --- TELA DE LOGIN ---
+# ---------------------------------------------------------
+# 5. TELA DE LOGIN (COM LOGO DA EMPRESA E OCULTAÇÃO DE CONFIGS)
+# ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
   logo_login_display = None
   for ext in ["png", "jpg", "jpeg"]:
@@ -460,35 +524,36 @@ if st.session_state["usuario_logado"] is None:
       logo_login_display = f"logo.{ext}"
       break
 
-  if logo_login_display:
-    st.image(logo_login_display, width=180)
+  col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+  with col_l2:
+    if logo_login_display:
+      st.image(logo_login_display, width=220)
+    st.title("Supermercado Super Nova Cidade")
+    st.subheader("Sistema de Recebimento Hortifrúti")
 
-  st.title("Sistema de Recebimento Hortifrúti")
-  st.subheader("Acesso ao Sistema")
+    with st.form("form_login"):
+      login_input = st.text_input("Usuário / Login")
+      senha_input = st.text_input("Senha", type="password")
+      btn_entrar = st.form_submit_button("Entrar no Sistema", type="primary")
 
-  with st.form("form_login"):
-    login_input = st.text_input("Usuário / Login")
-    senha_input = st.text_input("Senha", type="password")
-    btn_entrar = st.form_submit_button("Entrar", type="primary")
-
-    if btn_entrar:
-      usuario = fazer_login(login_input, senha_input)
-      if usuario:
-        st.session_state["usuario_logado"] = {
-            "id": usuario[0],
-            "nome": usuario[1],
-            "perfil": usuario[2],
-            "login": login_input,
-        }
-        st.success(f"Bem-vindo, {usuario[1]}!")
-        st.rerun()
-      else:
-        st.error("Usuário ou senha incorretos.")
+      if btn_entrar:
+        usuario = fazer_login(login_input, senha_input)
+        if usuario:
+          st.session_state["usuario_logado"] = {
+              "id": usuario[0],
+              "nome": usuario[1],
+              "perfil": usuario[2],
+              "login": login_input,
+          }
+          st.success(f"Bem-vindo, {usuario[1]}!")
+          st.rerun()
+        else:
+          st.error("Usuário ou senha incorretos.")
 
 else:
   user_info = st.session_state["usuario_logado"]
 
-  # Exibição da Logo na Barra Lateral caso exista
+  # Exibição da Logo na Barra Lateral
   logo_sidebar_path = None
   for ext in ["png", "jpg", "jpeg"]:
     if os.path.exists(f"logo_romaneio.{ext}"):
@@ -504,6 +569,7 @@ else:
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
+  # PAINEL DE ALERTAS EXCLUSIVO PARA O GESTOR
   if user_info["perfil"] == "Gestor":
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
@@ -513,7 +579,7 @@ else:
 
     st.sidebar.divider()
     st.sidebar.markdown(
-        f"🔔 **Painel de Alertas:**<br>📦 Total de Romaneios Registrados:"
+        f"🔔 **Painel de Alertas (Gestor):**<br>📦 Romaneios Registrados:"
         f" **{total_romaneios_db}**",
         unsafe_allow_html=True,
     )
@@ -524,6 +590,7 @@ else:
 
   st.sidebar.divider()
 
+  # Definição de Permissões de Menu
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
   if user_info["perfil"] == "Gestor":
     opcoes_menu.extend([
@@ -534,9 +601,11 @@ else:
 
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
-  # --- MÓDULO 1: NOVO ROMANEIO ---
+  # ---------------------------------------------------------
+  # 6. MÓDULO 1: NOVO ROMANEIO (CONFERENTES E GESTORES)
+  # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
-    st.title("📋 Novo Romaneio de Recebimento")
+    st.title("📋 Novo Romaneio de Recebimento - Hortifrúti")
 
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
@@ -578,10 +647,10 @@ else:
                 "LOJA 03 TERRA NOVA",
                 "LOJA 04 MANOA",
                 "LOJA 05 ZUMBI",
-                "LOJA 06 OWALDO FROTA",
+                "LOJA 06 OSWALDO FROTA",
                 "LOJA 07 MOSAICO",
             ],
-            index=2,
+            index=1,
         )
       with col2:
         data_rec = st.date_input(
@@ -624,7 +693,7 @@ else:
           (
               prod_nomes_keys
               if prod_dict
-              else ["Cadastre produtos no gestor"]
+              else ["Cadastre produtos no painel de gestor"]
           ),
       )
       prod_nome_real = (
@@ -662,10 +731,7 @@ else:
           })
           st.rerun()
         else:
-          st.warning(
-              "A quantidade/peso do produto é obrigatória e deve ser maior"
-              " que zero."
-          )
+          st.warning("A quantidade/peso deve ser maior que zero.")
 
     if st.session_state["itens_romaneio"]:
       df_itens = pd.DataFrame(st.session_state["itens_romaneio"])
@@ -678,27 +744,39 @@ else:
         st.session_state["itens_romaneio"] = []
         st.rerun()
 
-    st.subheader("3. Anexo de Comprovante / Foto")
+    st.subheader("3. Anexo de Fotos / Comprovantes")
     fotos_upload = st.file_uploader(
         "Anexar fotos da Nota / Canhoto / Mercadoria",
         type=["jpg", "jpeg", "png"],
         accept_multiple_files=True,
     )
 
+    st.subheader("4. Assinatura Digital")
+    col_ass1, col_ass2 = st.columns(2)
+    with col_ass1:
+      st.write("**Assinatura do Conferente (Upload ou Imagem)**")
+      foto_conf_upload = st.file_uploader(
+          "Enviar imagem da assinatura do Conferente",
+          type=["png", "jpg", "jpeg"],
+          key="ass_conf",
+      )
+    with col_ass2:
+      st.write("**Assinatura do Entregador / Fornecedor**")
+      foto_ent_upload = st.file_uploader(
+          "Enviar imagem da assinatura do Entregador",
+          type=["png", "jpg", "jpeg"],
+          key="ass_ent",
+      )
+
     if st.button("✅ Finalizar e Salvar Romaneio", type="primary"):
       if not num_romaneio.strip():
-        st.error("O campo 'Número do Romaneio' é obrigatório.")
+        st.error("O número do romaneio é obrigatório.")
       elif not fornecedor.strip():
-        st.error("O campo 'Fornecedor / Entregador' é obrigatório.")
+        st.error("O fornecedor é obrigatório.")
       elif not st.session_state["itens_romaneio"]:
-        st.error(
-            "Adicione pelo menos um item ao romaneio antes de salvar."
-        )
+        st.error("Adicione pelo menos um item ao romaneio.")
       elif not fotos_upload:
-        st.error(
-            "É obrigatório anexar pelo menos uma foto da Nota / Canhoto /"
-            " Mercadoria antes de finalizar o romaneio."
-        )
+        st.error("É obrigatório anexar pelo menos uma foto da nota/canhoto.")
       else:
         caminhos_salvos = []
         for foto_upload in fotos_upload:
@@ -708,15 +786,30 @@ else:
           with open(caminho_foto, "wb") as f:
             f.write(foto_upload.getbuffer())
           caminhos_salvos.append(caminho_foto)
-
         caminhos_str = ",".join(caminhos_salvos)
+
+        caminho_ass_conf = None
+        if foto_conf_upload:
+          caminho_ass_conf = os.path.join(
+              "uploads", f"ass_conf_{num_romaneio}.png"
+          )
+          with open(caminho_ass_conf, "wb") as f:
+            f.write(foto_conf_upload.getbuffer())
+
+        caminho_ass_ent = None
+        if foto_ent_upload:
+          caminho_ass_ent = os.path.join(
+              "uploads", f"ass_ent_{num_romaneio}.png"
+          )
+          with open(caminho_ass_ent, "wb") as f:
+            f.write(foto_ent_upload.getbuffer())
 
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
         cursor.execute(
             """
-                    INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
             (
                 num_romaneio,
@@ -733,12 +826,15 @@ else:
                     else None
                 ),
                 caminhos_str,
+                caminho_ass_conf,
+                caminho_ass_ent,
             ),
         )
 
         romaneio_id = cursor.lastrowid
-
+        total_romaneio_valor = 0.0
         for item in st.session_state["itens_romaneio"]:
+          total_romaneio_valor += item["valor_total"]
           cursor.execute(
               """
                         INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total)
@@ -757,15 +853,21 @@ else:
         conn.commit()
         conn.close()
 
+        # Envia notificação ao WhatsApp para o Administrador
+        enviar_notificacao_whatsapp(
+            num_romaneio, loja, fornecedor, total_romaneio_valor, conferente
+        )
+
         st.success(
-            f"Romaneio {num_romaneio} e {len(fotos_upload)} foto(s) salvos com"
-            " sucesso!"
+            f"Romaneio {num_romaneio} salvo e notificação enviada com sucesso!"
         )
         st.session_state["itens_romaneio"] = []
 
-  # --- MÓDULO 2: CONSULTAR ROMANEIOS ---
+  # ---------------------------------------------------------
+  # 7. MÓDULO 2: CONSULTAR E IMPRIMIR ROMANEIOS
+  # ---------------------------------------------------------
   elif menu == "Consultar Romaneios":
-    st.title("🔍 Consulta e Impressão de Romaneios")
+    st.title("🔍 Consulta, Impressão e PDF de Romaneios")
 
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     df_romaneios = pd.read_sql_query(
@@ -777,7 +879,7 @@ else:
       st.dataframe(df_romaneios, width="stretch")
 
       romaneio_sel = st.selectbox(
-          "Selecione o Romaneio para Detalhes / Impressão",
+          "Selecione o Romaneio para Visualizar / Imprimir",
           df_romaneios["numero_romaneio"].tolist(),
       )
       if romaneio_sel:
@@ -786,8 +888,9 @@ else:
         cursor.execute(
             "SELECT id, numero_romaneio, loja, data_recebimento, fornecedor,"
             " codigo_fornecedor, telefone_fornecedor, conferente,"
-            " pagamento_a_vista, data_pagamento, caminho_foto FROM romaneios"
-            " WHERE numero_romaneio = ?",
+            " pagamento_a_vista, data_pagamento, caminho_foto,"
+            " assinatura_conferente, assinatura_entregador FROM romaneios WHERE"
+            " numero_romaneio = ?",
             (romaneio_sel,),
         )
         cabecalho = cursor.fetchone()
@@ -804,16 +907,15 @@ else:
 
           st.markdown("---")
           st.subheader(
-              f"📄 Visualização para Impressão - Romaneio: {cabecalho[1]}"
+              f"📄 Visualização Oficial - Romaneio: {cabecalho[1]}"
           )
 
           texto_detalhes = (
-              "**SUPERMERCADO NOVA CIDADE / SUPER NOVA CIDADE**<br>"
-              f"**Loja:** {cabecalho[2]} | **Data do Recebimento:**"
-              f" {cabecalho[3]}<br>**Fornecedor:** {cabecalho[4]} (Cód:"
-              f" {cabecalho[5]} | Tel: {cabecalho[6]})<br>**Responsável Rec."
-              f" Físico:** {cabecalho[7]}<br>**Pagamento à Vista:**"
-              f" {cabecalho[8]}"
+              "**SUPERMERCADO SUPER NOVA CIDADE**<br>"
+              f"**Loja:** {cabecalho[2]} | **Data:** {cabecalho[3]}<br>"
+              f"**Fornecedor:** {cabecalho[4]} (Cód: {cabecalho[5]} | Tel:"
+              f" {cabecalho[6]})<br>**Conferente:**"
+              f" {cabecalho[7]}<br>**Pagamento à Vista:** {cabecalho[8]}"
           )
           if cabecalho[8] == "Não":
             texto_detalhes += f" | Data Pgto: {cabecalho[9]}"
@@ -826,9 +928,10 @@ else:
           total_geral = df_det["valor_total"].sum() if not df_det.empty else 0.0
           st.markdown(f"### **Total Geral: R$ {total_geral:,.2f}**")
 
+          # Exibição das fotos anexadas
           if cabecalho[10]:
             caminhos_fotos = cabecalho[10].split(",")
-            st.write("### Fotos / Comprovantes Anexados")
+            st.write("### Comprovantes / Fotos Anexadas")
             cols_img = st.columns(len(caminhos_fotos))
             for idx, c_foto in enumerate(caminhos_fotos):
               if os.path.exists(c_foto):
@@ -837,12 +940,16 @@ else:
                       c_foto, caption=f"Foto {idx+1}", use_column_width=True
                   )
 
-          pdf_bytes = gerar_pdf_romaneio(cabecalho, df_det)
+          # Geração e Download do PDF Oficial
+          pdf_bytes = gerar_pdf_romaneio(
+              cabecalho, df_det, cabecalho[11], cabecalho[12]
+          )
           st.download_button(
-              label="📄 Baixar Romaneio em PDF (Documento Oficial)",
+              label="📄 Baixar Romaneio em PDF (Pronto para Impressão)",
               data=pdf_bytes,
               file_name=f"{romaneio_sel}.pdf",
               mime="application/pdf",
+              type="primary",
           )
 
           if user_info["perfil"] == "Gestor":
@@ -864,7 +971,9 @@ else:
     else:
       st.info("Nenhum romaneio registrado ainda.")
 
-  # --- MÓDULO 3: RELATÓRIOS E GRÁFICOS (Gestor Apenas) ---
+  # ---------------------------------------------------------
+  # 8. MÓDULO 3: RELATÓRIOS & GRÁFICOS (GESTOR)
+  # ---------------------------------------------------------
   elif (
       menu == "Relatórios & Gráficos"
       and user_info["perfil"] == "Gestor"
@@ -928,7 +1037,7 @@ else:
           )
         with col_m2:
           st.metric(
-              "Volume / Qtd Total",
+              "Volume Total (Qtd)",
               f"{df_filtrado['quantidade'].sum():,.3f}",
           )
         with col_m3:
@@ -957,7 +1066,7 @@ else:
           )
 
         with tab_r2:
-          st.subheader("Gráficos de Desempenho e Recebimento")
+          st.subheader("Gráficos de Desempenho")
 
           st.markdown("### 🏢 Custo/Valor Total por Loja")
           df_loja = (
@@ -975,73 +1084,41 @@ else:
               by="quantidade", ascending=False
           ).head(10)
           st.bar_chart(df_prod.set_index("produto"))
-
-          st.markdown("### 🚚 Volume Financeiro por Fornecedor")
-          df_forn = (
-              df_filtrado.groupby("fornecedor")["valor_total"]
-              .sum()
-              .reset_index()
-          )
-          df_forn = df_forn.sort_values(
-              by="valor_total", ascending=False
-          ).head(10)
-          st.bar_chart(df_forn.set_index("fornecedor"))
       else:
-        st.warning(
-            "Nenhum registro encontrado para o período ou loja selecionados."
-        )
+        st.warning("Nenhum registro encontrado para o período.")
     else:
       st.info("Ainda não há romaneios cadastrados para gerar relatórios.")
 
-  # --- MÓDULO 4: GERENCIAR PRODUTOS (Gestor Apenas) ---
+  # ---------------------------------------------------------
+  # 9. MÓDULO 4: CADASTRO E EDIÇÃO DE PRODUTOS + LOGOS (GESTOR)
+  # ---------------------------------------------------------
   elif (
       menu == "Gerenciar Cadastros (Produtos)"
       and user_info["perfil"] == "Gestor"
   ):
-    st.sidebar.subheader("🖼️ Gerenciar Logotipos (PDF)")
+    st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
+    with st.sidebar.expander("Configurar Alerta WhatsApp"):
+      st.session_state["zap_api_url"] = st.text_input(
+          "URL da API / Webhook", value=st.session_state.get("zap_api_url", "")
+      )
+      st.session_state["zap_token"] = st.text_input(
+          "Token / Chave da API",
+          value=st.session_state.get("zap_token", ""),
+          type="password",
+      )
+      st.session_state["zap_id_grupo"] = st.text_input(
+          "ID do Grupo WhatsApp",
+          value=st.session_state.get("zap_id_grupo", ""),
+      )
+      st.success("Configuração salva!")
 
-    arquivos_logos = [
-        f
-        for f in os.listdir()
-        if f.lower().endswith((".png", ".jpg", ".jpeg"))
-        and f
-        not in [
-            "Tela de login.jpeg",
-            "Tela de login.jpg",
-            "tela_de_login.jpeg",
-            "tela_de_login.jpg",
-            "login_bg.jpg",
-            "login_bg.png",
-        ]
-    ]
-
-    if arquivos_logos:
-      st.sidebar.markdown("---")
-      st.sidebar.write("**Logotipos Ativos:**")
-      for logo_nome in arquivos_logos:
-        col_lg1, col_lg2 = st.sidebar.columns([3, 1])
-        with col_lg1:
-          st.image(logo_nome, caption=logo_nome, width=80)
-        with col_lg2:
-          if st.button(
-              "🗑️",
-              key=f"del_logo_{logo_nome}",
-              help=f"Excluir {logo_nome}",
-              type="secondary",
-          ):
-            try:
-              os.remove(logo_nome)
-              st.sidebar.success(f"Logo '{logo_nome}' excluída!")
-              st.rerun()
-            except Exception as e:
-              st.sidebar.error(f"Erro ao excluir: {e}")
-      st.sidebar.markdown("---")
-
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🖼️ Gerenciar Logotipos e Imagens")
     logo_files = st.sidebar.file_uploader(
-        "Enviar Nova(s) Logo(s) (PNG/JPG)",
+        "Enviar Nova(s) Logo(s) / Tela de Fundo (PNG/JPG)",
         type=["png", "jpg", "jpeg"],
         accept_multiple_files=True,
-        key="logo_upload",
+        key="logo_upload_multi",
     )
     if logo_files:
       for logo_file in logo_files:
@@ -1050,7 +1127,7 @@ else:
       st.sidebar.success(f"{len(logo_files)} arquivo(s) salvo(s) com sucesso!")
       st.rerun()
 
-    st.title("📦 Cadastro e Gestão de Produtos (Hortifrúti)")
+    st.title("📦 Cadastro e Gestão de Produtos")
 
     tab_p1, tab_p2 = st.tabs(
         ["➕ Adicionar Novo Produto", "✏️ Editar ou Excluir Produto"]
@@ -1059,11 +1136,9 @@ else:
     with tab_p1:
       col1, col2 = st.columns(2)
       with col1:
-        st.subheader("Adicionar Novo Produto")
+        st.subheader("Adicionar Produto")
         cod_barras = st.text_input("Código de Barras", key="cad_barras")
-        cod_prod = st.text_input(
-            "Código do Produto (ERP / Interno)", key="cad_cod"
-        )
+        cod_prod = st.text_input("Código do Produto (ERP)", key="cad_cod")
         novo_prod = st.text_input("Nome do Produto", key="cad_nome")
         und_padrao = st.selectbox(
             "Unidade Padrão", ["KG", "UNID", "GRM", "CX"], key="cad_und"
@@ -1088,7 +1163,7 @@ else:
             st.warning("Preencha o nome do produto.")
 
       with col2:
-        st.subheader("Produtos Cadastrados")
+        st.subheader("Lista de Produtos")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_prod = pd.read_sql_query(
             "SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM"
@@ -1096,14 +1171,13 @@ else:
             conn,
         )
         conn.close()
-
         if not df_prod.empty:
           st.dataframe(df_prod, width="stretch")
         else:
-          st.info("Nenhum produto cadastrado no momento.")
+          st.info("Nenhum produto cadastrado.")
 
     with tab_p2:
-      st.subheader("Editar ou Excluir Produto Cadastrado")
+      st.subheader("Editar ou Excluir Produto")
       conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
       cursor = conn.cursor()
       cursor.execute(
@@ -1157,7 +1231,7 @@ else:
         st.write("")
         col_b_p1, col_b_p2 = st.columns([1, 1])
         with col_b_p1:
-          if st.button("💾 Salvar Alterações no Produto", type="primary"):
+          if st.button("💾 Salvar Alterações", type="primary"):
             if edit_nome:
               try:
                 conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1178,11 +1252,9 @@ else:
                 st.success("Produto atualizado com sucesso!")
                 st.rerun()
               except sqlite3.IntegrityError:
-                st.error(
-                    "Este nome ou código já está em uso por outro produto."
-                )
+                st.error("Este nome ou código já está em uso.")
             else:
-              st.warning("O nome do produto não pode ficar em branco.")
+              st.warning("O nome não pode ficar em branco.")
         with col_b_p2:
           if st.button("🗑️ Excluir Produto", type="secondary"):
             conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1195,7 +1267,9 @@ else:
             st.success(f"Produto '{prod_dados_sel[3]}' excluído com sucesso!")
             st.rerun()
 
-  # --- MÓDULO 5: GERENCIAR USUÁRIOS (Gestor Apenas) ---
+  # ---------------------------------------------------------
+  # 10. MÓDULO 5: GERENCIAR USUÁRIOS (GESTOR)
+  # ---------------------------------------------------------
   elif (
       menu == "Gerenciar Usuários & Permissões"
       and user_info["perfil"] == "Gestor"
@@ -1209,7 +1283,7 @@ else:
     with tab1:
       col1, col2 = st.columns(2)
       with col1:
-        st.subheader("Cadastrar Novo Usuário")
+        st.subheader("Novo Usuário")
         nome_user = st.text_input("Nome Completo")
         login_user = st.text_input("Login de Acesso")
         senha_user = st.text_input("Senha", type="password")
@@ -1232,7 +1306,7 @@ else:
               st.success(f"Usuário '{login_user}' cadastrado com sucesso!")
               st.rerun()
             except sqlite3.IntegrityError:
-              st.error("Login já está em uso por outro usuário.")
+              st.error("Login já está em uso.")
           else:
             st.warning("Preencha todos os campos obrigatórios.")
 
@@ -1243,14 +1317,13 @@ else:
             "SELECT id, nome, login, perfil FROM usuarios", conn
         )
         conn.close()
-
         if not df_users.empty:
           st.dataframe(df_users, width="stretch")
         else:
           st.info("Nenhum usuário cadastrado.")
 
     with tab2:
-      st.subheader("Editar, Alterar Senha ou Excluir Usuário")
+      st.subheader("Editar ou Excluir Usuário")
       conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
       cursor = conn.cursor()
       cursor.execute(
@@ -1314,16 +1387,13 @@ else:
                 st.success("Usuário atualizado com sucesso!")
                 st.rerun()
               except sqlite3.IntegrityError:
-                st.error("Este login já está em uso por outro usuário.")
+                st.error("Este login já está em uso.")
             else:
               st.warning("Preencha todos os campos obrigatórios.")
         with col_btn2:
           if st.button("🗑️ Excluir Usuário", type="secondary"):
             if user_dados[0] == user_info["id"]:
-              st.error(
-                  "Você não pode excluir o seu próprio usuário enquanto está"
-                  " logado!"
-              )
+              st.error("Você não pode excluir seu próprio usuário ativo!")
             else:
               conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
               cursor = conn.cursor()
