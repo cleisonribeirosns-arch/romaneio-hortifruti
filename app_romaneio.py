@@ -37,7 +37,7 @@ st.set_page_config(
     page_title="Romaneio Hortifrúti - Super Nova Cidade",
     page_icon=logo_page_icon if logo_page_icon else "🥦",
     layout="wide",
-    initial_sidebar_state="expanded",  # Força a barra lateral a iniciar SEMPRE expandida
+    initial_sidebar_state="expanded",
 )
 
 bg_login_path = None
@@ -79,7 +79,6 @@ else:
 st.markdown(
     f"""
     <style>
-    /* Força a exibição e fixação do menu lateral (Sidebar) */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -601,24 +600,24 @@ else:
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
 
-  # Seletor de Perfil na Sidebar (Garante Acesso de Gestor/Administrador)
-  perfil_original = str(user_info.get("perfil", "Gestor")).strip()
-  perfil_selecionado = st.sidebar.selectbox(
-      "Perfil de Acesso",
-      ["Gestor", "Operador"],
-      index=0
-      if (
-          perfil_original.lower() in ["gestor", "administrador", "admin"]
-          or user_info["login"] == "admin"
-      )
-      else 0,
+  # Verificação permanente de Administrador / Gestor
+  perfil_db = str(user_info.get("perfil", "")).strip().lower()
+  is_admin_user = (
+      user_info["login"] == "admin"
+      or "gestor" in perfil_db
+      or "adm" in perfil_db
   )
 
-  eh_gestor = (
-      perfil_selecionado == "Gestor" or user_info["login"] == "admin"
-  )
+  if is_admin_user:
+    perfil_selecionado = st.sidebar.selectbox(
+        "Perfil de Acesso", ["Gestor", "Operador"], index=0
+    )
+    eh_gestor = perfil_selecionado == "Gestor"
+  else:
+    eh_gestor = False
+    st.sidebar.markdown(f"**Perfil:** {user_info.get('perfil', 'Operador')}")
 
-  if eh_gestor:
+  if eh_gestor or is_admin_user:
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
         "SELECT COUNT(*) as qtd FROM romaneios", conn
@@ -639,7 +638,7 @@ else:
   st.sidebar.divider()
 
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
-  if eh_gestor:
+  if eh_gestor or is_admin_user:
     opcoes_menu.extend([
         "Relatórios & Gráficos",
         "Gerenciar Cadastros (Produtos)",
@@ -649,10 +648,9 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (COM LOGO DA EMPRESA NO TÍTULO)
+  # 6. MÓDULO 1: NOVO ROMANEIO (COM BOTÃO FÍSICO DE LIMPAR ASSINATURA)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
-    # Cabeçalho Principal com a Logo ao Lado do Título (Sem Prancheta)
     logo_header_path = None
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
       for prefixo in [
@@ -822,16 +820,20 @@ else:
         accept_multiple_files=True,
     )
 
-    st.subheader("4. Assinatura Digital na Tela (Touch / Dedo)")
+    st.subheader("4. Assinatura Digital na Tela (Touch / Celular)")
     st.info(
-        "💡 Dica: Use o dedo ou caneta touch para assinar. Se errar, utilize a"
-        " ferramenta de borracha/lixeira no painel de desenho."
+        "💡 Dica: Assine com o dedo ou caneta na tela. Caso erre, utilize os"
+        " botões abaixo para limpar o quadro."
     )
 
     col_ass1, col_ass2 = st.columns(2)
 
     with col_ass1:
       st.write("**Assinatura do Conferente**")
+      # Gerenciador de estado para limpar o canvas do conferente
+      if "clear_conf" not in st.session_state:
+        st.session_state["clear_conf"] = False
+
       canvas_conf = st_canvas(
           fill_color="rgba(255, 255, 255, 0)",
           stroke_width=3,
@@ -842,9 +844,14 @@ else:
           drawing_mode="freedraw",
           key="canvas_conferente",
       )
+      if st.button("🔄 Limpar Assinatura Conferente", key="btn_clr_conf"):
+        st.rerun()
 
     with col_ass2:
       st.write("**Assinatura do Entregador / Fornecedor**")
+      if "clear_ent" not in st.session_state:
+        st.session_state["clear_ent"] = False
+
       canvas_ent = st_canvas(
           fill_color="rgba(255, 255, 255, 0)",
           stroke_width=3,
@@ -855,6 +862,8 @@ else:
           drawing_mode="freedraw",
           key="canvas_entregador",
       )
+      if st.button("🔄 Limpar Assinatura Entregador", key="btn_clr_ent"):
+        st.rerun()
 
     st.write("")
     if st.button("✅ Finalizar e Salvar Romaneio", type="primary"):
@@ -1044,7 +1053,7 @@ else:
               type="primary",
           )
 
-          if eh_gestor:
+          if eh_gestor or is_admin_user:
             st.write("")
             if st.button(
                 f"🗑️ Excluir Romaneio {romaneio_sel} (Apenas Gestor)",
@@ -1066,7 +1075,7 @@ else:
   # ---------------------------------------------------------
   # 8. MÓDULO 3: RELATÓRIOS & GRÁFICOS (GESTOR)
   # ---------------------------------------------------------
-  elif menu == "Relatórios & Gráficos" and eh_gestor:
+  elif menu == "Relatórios & Gráficos" and (eh_gestor or is_admin_user):
     st.title("📊 Relatórios de Recebimentos e Análise Gráfica")
 
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1181,7 +1190,9 @@ else:
   # ---------------------------------------------------------
   # 9. MÓDULO 4: CADASTRO E EDIÇÃO DE PRODUTOS + LOGOS (GESTOR)
   # ---------------------------------------------------------
-  elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
+  elif menu == "Gerenciar Cadastros (Produtos)" and (
+      eh_gestor or is_admin_user
+  ):
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
     with st.sidebar.expander("Configurar Alerta WhatsApp"):
       st.session_state["zap_api_url"] = st.text_input(
@@ -1356,7 +1367,9 @@ else:
   # ---------------------------------------------------------
   # 10. MÓDULO 5: GERENCIAR USUÁRIOS (GESTOR)
   # ---------------------------------------------------------
-  elif menu == "Gerenciar Usuários & Permissões" and eh_gestor:
+  elif menu == "Gerenciar Usuários & Permissões" and (
+      eh_gestor or is_admin_user
+  ):
     st.title("👥 Controle de Usuários e Permissões")
 
     tab1, tab2 = st.tabs(
