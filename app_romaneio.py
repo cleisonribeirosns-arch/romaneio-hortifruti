@@ -23,12 +23,12 @@ import streamlit as st
 # 1. CONFIGURAÇÃO DA PÁGINA E CSS (IDENTIDADE VISUAL DA EMPRESA)
 # ---------------------------------------------------------
 logo_page_icon = None
-for ext in ["png", "jpg", "jpeg"]:
-  if os.path.exists(f"logo_romaneio.{ext}"):
-    logo_page_icon = f"logo_romaneio.{ext}"
-    break
-  elif os.path.exists(f"logo.{ext}"):
-    logo_page_icon = f"logo.{ext}"
+for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+  for prefixo in ["logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+    if os.path.exists(f"{prefixo}.{ext}"):
+      logo_page_icon = f"{prefixo}.{ext}"
+      break
+  if logo_page_icon:
     break
 
 st.set_page_config(
@@ -41,8 +41,10 @@ bg_login_path = None
 for nome_possivel in [
     "Tela de login.jpeg",
     "Tela de login.jpg",
+    "Tela de login.png",
     "tela_de_login.jpeg",
     "tela_de_login.jpg",
+    "tela_de_login.png",
     "login_bg.jpg",
     "login_bg.png",
 ]:
@@ -64,7 +66,6 @@ if bg_login_path:
     }}
   """
 else:
-  # Fundo padrão corporativo com as cores da logo
   css_fundo = """
     .stApp {
         background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
@@ -97,7 +98,7 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização específica para contraste e visibilidade da Tela de Login */
+    /* Estilização para visibilidade do texto da Tela de Login */
     .stApp h1, .stApp h2, .stApp h3, .stApp label {{
         color: #FFFFFF !important;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8) !important;
@@ -110,7 +111,15 @@ st.markdown(
         border-radius: 6px !important;
     }}
 
-    /* Cores Institucionais - Verde e Vermelho da Logo nos Botões */
+    /* Estilização centralizada para container de logo */
+    .logo-container {{
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 15px;
+    }}
+
+    /* Cores Institucionais - Verde e Vermelho nos Botões */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -230,12 +239,12 @@ def gerar_pdf_romaneio(
   )
 
   logo_path = None
-  for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo_romaneio.{ext}"):
-      logo_path = f"logo_romaneio.{ext}"
-      break
-    elif os.path.exists(f"logo.{ext}"):
-      logo_path = f"logo.{ext}"
+  for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+    for prefixo in ["logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+      if os.path.exists(f"{prefixo}.{ext}"):
+        logo_path = f"{prefixo}.{ext}"
+        break
+    if logo_path:
       break
 
   def desenhar_marca_dagua(canvas, doc_obj):
@@ -520,7 +529,7 @@ def fazer_login(login, senha):
 
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (COM LOGO VISÍVEL E ALTO CONTRASTE DE TEXTO)
+# 5. TELA DE LOGIN (CORREÇÃO DE LOGO E CONTRASTE DE TEXTO)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
   logo_login_display = None
@@ -535,7 +544,7 @@ if st.session_state["usuario_logado"] is None:
   col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
   with col_l2:
     if logo_login_display:
-      st.image(logo_login_display, width=240)
+      st.image(logo_login_display, use_container_width=True)
 
     st.title("Supermercado Super Nova Cidade")
     st.subheader("Sistema de Recebimento Hortifrúti")
@@ -562,22 +571,26 @@ if st.session_state["usuario_logado"] is None:
 else:
   user_info = st.session_state["usuario_logado"]
 
+  # Identificação do perfil do usuário (Garante permissão ao Administrador/Gestor)
+  perfil_atual = str(user_info.get("perfil", "")).strip().lower()
+  eh_gestor = perfil_atual in ["gestor", "administrador", "admin"]
+
   logo_sidebar_path = None
-  for ext in ["png", "jpg", "jpeg"]:
-    if os.path.exists(f"logo_romaneio.{ext}"):
-      logo_sidebar_path = f"logo_romaneio.{ext}"
-      break
-    elif os.path.exists(f"logo.{ext}"):
-      logo_sidebar_path = f"logo.{ext}"
+  for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+    for prefixo in ["logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+      if os.path.exists(f"{prefixo}.{ext}"):
+        logo_sidebar_path = f"{prefixo}.{ext}"
+        break
+    if logo_sidebar_path:
       break
 
   if logo_sidebar_path:
-    st.sidebar.image(logo_sidebar_path, width=140)
+    st.sidebar.image(logo_sidebar_path, use_container_width=True)
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
   st.sidebar.markdown(f"**Perfil:** {user_info['perfil']}")
 
-  if user_info["perfil"] == "Gestor":
+  if eh_gestor:
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     total_romaneios_db = pd.read_sql_query(
         "SELECT COUNT(*) as qtd FROM romaneios", conn
@@ -597,8 +610,9 @@ else:
 
   st.sidebar.divider()
 
+  # Definição Dinâmica de Permissões de Menu
   opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
-  if user_info["perfil"] == "Gestor":
+  if eh_gestor:
     opcoes_menu.extend([
         "Relatórios & Gráficos",
         "Gerenciar Cadastros (Produtos)",
@@ -955,7 +969,7 @@ else:
               type="primary",
           )
 
-          if user_info["perfil"] == "Gestor":
+          if eh_gestor:
             st.write("")
             if st.button(
                 f"🗑️ Excluir Romaneio {romaneio_sel} (Apenas Gestor)",
@@ -979,7 +993,7 @@ else:
   # ---------------------------------------------------------
   elif (
       menu == "Relatórios & Gráficos"
-      and user_info["perfil"] == "Gestor"
+      and eh_gestor
   ):
     st.title("📊 Relatórios de Recebimentos e Análise Gráfica")
 
@@ -1097,7 +1111,7 @@ else:
   # ---------------------------------------------------------
   elif (
       menu == "Gerenciar Cadastros (Produtos)"
-      and user_info["perfil"] == "Gestor"
+      and eh_gestor
   ):
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
     with st.sidebar.expander("Configurar Alerta WhatsApp"):
@@ -1275,7 +1289,7 @@ else:
   # ---------------------------------------------------------
   elif (
       menu == "Gerenciar Usuários & Permissões"
-      and user_info["perfil"] == "Gestor"
+      and eh_gestor
   ):
     st.title("👥 Controle de Usuários e Permissões")
 
