@@ -31,6 +31,7 @@ for nome_bg in [
     "Tela-de-login.jpeg.ico",
     "Tela-de-login.jpeg",
     "Tela de login.jpeg",
+    "Tela de login.jpeg.jpeg",
 ]:
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
@@ -65,19 +66,44 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Estilização geral do título com contorno branco para contraste perfeito */
-    .stApp h1 {{
-        font-size: 2.5rem !important;
-        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(0,0,0,0.6) !important;
+    /* Estilização com contorno e sombra 3D idênticos à logo */
+    .titulo-logo {{
+        font-size: 2.8rem !important;
         font-weight: 900 !important;
-        margin-bottom: 0px !important;
         line-height: 1.1 !important;
+        margin-bottom: 0px !important;
+        font-family: 'Arial Black', sans-serif !important;
     }}
 
-    /* Subtítulo na cor preta com contorno suave para leitura */
+    .palavra-verde {{
+        color: #1B5E20 !important;
+        text-shadow: 
+            -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF,
+            -3px 0 0 #FFF, 3px 0 0 #FFF, 0 -3px 0 #FFF, 0 3px 0 #FFF,
+            3px 4px 6px rgba(0, 0, 0, 0.8) !important;
+    }}
+
+    .palavra-vermelha {{
+        color: #E53935 !important;
+        text-shadow: 
+            -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF,
+            -3px 0 0 #FFF, 3px 0 0 #FFF, 0 -3px 0 #FFF, 0 3px 0 #FFF,
+            3px 4px 6px rgba(0, 0, 0, 0.8) !important;
+    }}
+
+    .palavra-preta {{
+        color: #1A1A1A !important;
+        font-style: italic !important;
+        text-shadow: 
+            -2px -2px 0 #FFF, 2px -2px 0 #FFF, -2px 2px 0 #FFF, 2px 2px 0 #FFF,
+            -3px 0 0 #FFF, 3px 0 0 #FFF, 0 -3px 0 #FFF, 0 3px 0 #FFF,
+            3px 4px 6px rgba(0, 0, 0, 0.8) !important;
+    }}
+
+    /* Subtítulo com destaque escuro e borda suave */
     .stApp h3 {{
         color: #000000 !important;
-        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 1px 1px 3px rgba(255,255,255,0.8) !important;
+        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
         font-weight: 800 !important;
         margin-top: 10px !important;
     }}
@@ -121,7 +147,7 @@ st.markdown(
 
 # ---------------------------------------------------------
 # 3. BANCO DE DADOS (INICIALIZAÇÃO)
-# ----------------->
+# ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
@@ -179,21 +205,24 @@ if st.session_state["usuario_logado"] is None:
             with col_logo:
                 st.image(logo_display, use_container_width=True)
             with col_titulo:
-                # Cores personalizadas: Super (Verde), Nova (Vermelho), Cidade (Preto)
                 st.markdown(
-                    "<h1>Supermercado<br>"
-                    "<span style='color: #1B5E20;'>Super</span> "
-                    "<span style='color: #C62828;'>Nova</span> "
-                    "<span style='color: #000000;'>Cidade</span></h1>",
+                    "<h1 class='titulo-logo'>"
+                    "<span class='palavra-verde'>Supermercado</span><br>"
+                    "<span class='palavra-verde'>SUPER</span> "
+                    "<span class='palavra-vermelha'>NOVA</span><br>"
+                    "<span class='palavra-preta'>Cidade</span>"
+                    "</h1>",
                     unsafe_allow_html=True
                 )
                 st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
         else:
             st.markdown(
-                "<h1>Supermercado<br>"
-                "<span style='color: #1B5E20;'>Super</span> "
-                "<span style='color: #C62828;'>Nova</span> "
-                "<span style='color: #000000;'>Cidade</span></h1>",
+                "<h1 class='titulo-logo'>"
+                "<span class='palavra-verde'>Supermercado</span><br>"
+                "<span class='palavra-verde'>SUPER</span> "
+                "<span class='palavra-vermelha'>NOVA</span><br>"
+                "<span class='palavra-preta'>Cidade</span>"
+                "</h1>",
                 unsafe_allow_html=True
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
