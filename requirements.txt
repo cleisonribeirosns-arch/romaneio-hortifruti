@@ -1,4 +1,7 @@
 streamlit
 pandas
+Pillow
+pypdf
 reportlab
+requests
 streamlit-drawable-canvas
