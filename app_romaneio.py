@@ -4,6 +4,7 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+import pypdf
 import reportlab
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
@@ -17,6 +18,7 @@ from reportlab.platypus import (
     TableStyle,
 )
 import requests
+import re
 import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
@@ -34,7 +36,7 @@ for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
     break
 
 st.set_page_config(
-    page_title="Romaneio Hortifrúti - Super Nova Cidade",
+    page_title="Romaneio Hortifrúti - Supermercado Super Nova Cidade",
     page_icon=logo_page_icon if logo_page_icon else "🥦",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -171,7 +173,7 @@ def enviar_notificacao_whatsapp(
     return
 
   texto_msg = (
-      f"🚨 *NOVO ROMANEIO HORTIFRÚTI - SUPER NOVA CIDADE* 🚨\n\n"
+      f"🚨 *NOVO ROMANEIO HORTIFRÚTI - SUPERMERCADO SUPER NOVA CIDADE* 🚨\n\n"
       f"• *Romaneio:* {num_romaneio}\n"
       f"• *Loja:* {loja}\n"
       f"• *Fornecedor:* {fornecedor}\n"
@@ -198,7 +200,7 @@ def enviar_notificacao_whatsapp(
 
 
 # ---------------------------------------------------------
-# 3. FUNÇÃO GERADORA DE PDF OFICIAL
+# 3. FUNÇÃO GERADORA DE PDF OFICIAL DO ROMANEIO
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(
     cabecalho, df_itens, assinatura_conf=None, assinatura_ent=None
@@ -491,6 +493,19 @@ def init_db():
         "ALTER TABLE romaneios ADD COLUMN assinatura_entregador TEXT"
     )
 
+  cursor.execute("""
+        CREATE TABLE IF NOT EXISTS romaneio_itens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            romaneio_id INTEGER NOT NULL,
+            produto TEXT NOT NULL,
+            quantidade REAL NOT NULL,
+            unidade TEXT NOT NULL,
+            valor_unitario REAL,
+            valor_total REAL,
+            FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
+        )
+    """)
+
   cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
   if not cursor.fetchone():
     cursor.execute(
@@ -524,7 +539,7 @@ def fazer_login(login, senha):
 
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (LOGO AO LADO DO NOME DA EMPRESA)
+# 5. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
   logo_login_display = None
@@ -587,7 +602,6 @@ else:
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
 
-  # --- PERFIL GESTOR AUTOMÁTICO ---
   perfil_db = str(user_info.get("perfil", "")).strip().lower()
   is_admin = (
       user_info["login"].lower() == "admin"
@@ -635,7 +649,7 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (COM CARREGAMENTO GARANTIDO DE PRODUTOS)
+  # 6. MÓDULO 1: NOVO ROMANEIO (COM BUSCA OTIMIZADA)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
     logo_header_path = None
@@ -661,7 +675,6 @@ else:
     else:
       st.title("Novo Romaneio de Recebimento - Hortifrúti")
 
-    # BUSCA DE PRODUTOS CORRIGIDA PARA EXIBIR TODOS OS CADASTRADOS NA LISTA
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
     cursor.execute(
@@ -676,12 +689,12 @@ else:
       nome_p = p[0]
       und_p = p[1] if p[1] else "KG"
       cp_p = (
-          p[2]
+          str(p[2]).strip()
           if p[2] and str(p[2]).strip() not in ["None", "Nenhum", ""]
           else "S/N"
       )
       cb_p = (
-          p[3]
+          str(p[3]).strip()
           if p[3] and str(p[3]).strip() not in ["None", "Nenhum", ""]
           else "S/N"
       )
@@ -748,7 +761,7 @@ else:
     )
     with col_p1:
       prod_label_sel = st.selectbox(
-          "Produto",
+          "Produto (Busque por Nome, Cód. Interno ou Barras)",
           (
               prod_nomes_keys
               if prod_dict
@@ -1181,7 +1194,7 @@ else:
       st.info("Ainda não há romaneios cadastrados para gerar relatórios.")
 
   # ---------------------------------------------------------
-  # 9. MÓDULO 4: CADASTRO E EDIÇÃO DE PRODUTOS + LOGOS (GESTOR)
+  # 9. MÓDULO 4: CADASTRO, IMPORTAÇÃO DE PDF E EDIÇÃO DE PRODUTOS
   # ---------------------------------------------------------
   elif menu == "Gerenciar Cadastros (Produtos)" and (eh_gestor or is_admin):
     st.sidebar.subheader("⚙️ Alerta WhatsApp (Grupo)")
@@ -1217,11 +1230,76 @@ else:
 
     st.title("📦 Cadastro e Gestão de Produtos")
 
-    tab_p1, tab_p2 = st.tabs(
-        ["➕ Adicionar Novo Produto", "✏️ Editar ou Excluir Produto"]
-    )
+    tab_p1, tab_p2, tab_p3 = st.tabs([
+        "📥 Importar Inventário (PDF)",
+        "➕ Adicionar Novo Produto",
+        "✏️ Editar ou Excluir Produto",
+    ])
 
     with tab_p1:
+      st.subheader(
+          "Importar Produtos Automaticamente via Relatório de Inventário (PDF)"
+      )
+      st.info(
+          "💡 Envie o arquivo PDF de inventário (ex: Rel_153...) para cadastrar"
+          " todos os produtos, códigos de barras e códigos internos de forma"
+          " instantânea."
+      )
+
+      pdf_inventario = st.file_uploader(
+          "Arquivo PDF de Inventário", type=["pdf"], key="pdf_inv_upload"
+      )
+      if pdf_inventario:
+        if st.button("🚀 Processar e Importar Produtos do PDF", type="primary"):
+          try:
+            reader = pypdf.PdfReader(pdf_inventario)
+            conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+            cursor = conn.cursor()
+            contador_importados = 0
+
+            for page in reader.pages:
+              texto_pagina = page.extract_text()
+              linhas = texto_pagina.split("\n")
+              for linha in linhas:
+                # Regex para extrair do relatório CISS: [Cod. Barras Opcional] [Cod. Produto] [Descrição] [Unidade]
+                match = re.search(
+                    r"^(\d{8,14})?\s*(\d{2,6})\s+(.+?)\s+(KG|UN|PC|PT|CX)",
+                    linha.strip(),
+                )
+                if match:
+                  c_barras = match.group(1) if match.group(1) else None
+                  c_prod = match.group(2)
+                  desc = match.group(3).strip()
+                  und = match.group(4)
+                  if und == "UN":
+                    und = "UNID"
+
+                  try:
+                    cursor.execute(
+                        """
+                                            INSERT OR REPLACE INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
+                                            VALUES (?, ?, ?, ?)
+                                        """,
+                        (c_barras, c_prod, desc, und),
+                    )
+                    contador_importados += 1
+                  except Exception:
+                    pass
+
+            conn.commit()
+            conn.close()
+            st.success(
+                f"Sucesso! {contador_importados} produtos foram importados e"
+                " atualizados no sistema."
+            )
+            st.rerun()
+          except Exception as e:
+            st.error(f"Erro ao processar o PDF: {e}")
+
+    with tab_p1:
+      pass
+
+    with tab_p2:
       col1, col2 = st.columns(2)
       with col1:
         st.subheader("Adicionar Produto")
@@ -1251,7 +1329,7 @@ else:
             st.warning("Preencha o nome do produto.")
 
       with col2:
-        st.subheader("Lista de Produtos")
+        st.subheader("Lista de Produtos Cadastrados")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_prod = pd.read_sql_query(
             "SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM"
@@ -1264,7 +1342,7 @@ else:
         else:
           st.info("Nenhum produto cadastrado.")
 
-    with tab_p2:
+    with tab_p3:
       st.subheader("Editar ou Excluir Produto")
       conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
       cursor = conn.cursor()
