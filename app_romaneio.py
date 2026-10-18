@@ -66,65 +66,33 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Redimensionamento e limpeza do fundo branco da logo */
+    /* Container central da logo */
+    .logo-container {{
+        text-align: center !important;
+        margin: 0 auto 10px auto !important;
+    }}
+
+    /* Estilização da Logo: limpa fundo e ajusta tamanho máximo de forma responsiva */
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
-        filter: drop-shadow(2px 3px 5px rgba(0,0,0,0.4)) !important;
-        max-width: 140px !important;
+        filter: drop-shadow(2px 3px 5px rgba(0,0,0,0.5)) !important;
+        max-width: 260px !important;
+        width: 100% !important;
+        height: auto !important;
         margin: 0 auto !important;
+        display: block !important;
     }}
 
-    /* Estilização com fontes arredondadas e itálico */
-    .titulo-logo {{
-        font-size: 2.4rem !important;
-        font-weight: 900 !important;
-        line-height: 1.15 !important;
-        margin-bottom: 0px !important;
-        font-family: 'Arial Black', Gadget, sans-serif !important;
-    }}
-
-    .palavra-sup-mercado {{
-        color: #2E7D32 !important;
-        font-size: 1.4rem !important;
-        font-weight: 800 !important;
-        font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 4px rgba(0, 0, 0, 0.5) !important;
-    }}
-
-    .palavra-super {{
-        color: #2E7D32 !important;
-        font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 4px rgba(0, 0, 0, 0.5) !important;
-    }}
-
-    /* Palavra NOVA em itálico, arredondada e contorno externo escuro */
-    .palavra-nova {{
-        color: #FF3D00 !important;
-        font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
-            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
-            4px 4px 6px rgba(0, 0, 0, 0.6) !important;
-    }}
-
-    .palavra-cidade {{
-        color: #111111 !important;
-        font-style: italic !important;
-        font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 3.2rem !important;
-        text-shadow: 3px 4px 5px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
-    }}
-
-    .stApp h3 {{
+    /* Subtítulo ajustado para telas menores e computadores */
+    .subtitulo-sistema {{
         color: #000000 !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
         font-weight: 800 !important;
+        font-size: 1.5rem !important;
+        text-align: center !important;
         margin-top: 10px !important;
+        margin-bottom: 20px !important;
     }}
 
     .stApp label {{
@@ -155,6 +123,16 @@ st.markdown(
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
+    }}
+
+    /* Regra responsiva para Celulares / Aparelhos Menores */
+    @media (max-width: 768px) {{
+        img[data-testid="stImage"] {{
+            max-width: 200px !important;
+        }}
+        .subtitulo-sistema {{
+            font-size: 1.2rem !important;
+        }}
     }}
 
     {css_fundo}
@@ -216,37 +194,21 @@ if st.session_state["usuario_logado"] is None:
             logo_display = nome
             break
 
-    col_vazia_esq, col_central, col_vazia_dir = st.columns([0.5, 3, 0.5])
+    col_vazia_esq, col_central, col_vazia_dir = st.columns([1, 2, 1])
 
     with col_central:
         if logo_display:
-            col_logo, col_titulo = st.columns([0.8, 3.2], vertical_alignment="center")
-            with col_logo:
-                st.image(logo_display, use_container_width=True)
-            with col_titulo:
-                st.markdown(
-                    "<div class='titulo-logo'>"
-                    "<span class='palavra-sup-mercado'>Supermercado</span><br>"
-                    "<span class='palavra-super'>SUPER</span> "
-                    "<span class='palavra-nova'>NOVA</span><br>"
-                    "<span class='palavra-cidade'>Cidade</span>"
-                    "</div>",
-                    unsafe_allow_html=True
-                )
-                st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+            st.image(logo_display, use_container_width=True)
         else:
             st.markdown(
-                "<div class='titulo-logo'>"
-                "<span class='palavra-sup-mercado'>Supermercado</span><br>"
-                "<span class='palavra-super'>SUPER</span> "
-                "<span class='palavra-nova'>NOVA</span><br>"
-                "<span class='palavra-cidade'>Cidade</span>"
-                "</div>",
-                unsafe_allow_html=True
+                "<h1 style='text-align:center; color:#1B5E20;'>Supermercado Super Nova Cidade</h1>",
+                unsafe_allow_html=True,
             )
-            st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
-        st.write("")
+        st.markdown(
+            "<div class='subtitulo-sistema'>Sistema de Recebimento Hortifrúti</div>",
+            unsafe_allow_html=True,
+        )
 
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
