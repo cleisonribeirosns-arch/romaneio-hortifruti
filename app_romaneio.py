@@ -37,6 +37,7 @@ st.set_page_config(
     page_title="Romaneio Hortifrúti - Super Nova Cidade",
     page_icon=logo_page_icon if logo_page_icon else "🥦",
     layout="wide",
+    initial_sidebar_state="expanded",  # Força a barra lateral a iniciar SEMPRE expandida
 )
 
 bg_login_path = None
@@ -78,6 +79,14 @@ else:
 st.markdown(
     f"""
     <style>
+    /* Força a exibição e fixação do menu lateral (Sidebar) */
+    section[data-testid="stSidebar"] {{
+        display: block !important;
+        visibility: visible !important;
+        background-color: #F4F6F4 !important;
+        border-right: 3px solid #1B5E20 !important;
+    }}
+    
     header[data-testid="stHeader"] {{
         display: none !important;
         visibility: hidden !important;
@@ -140,11 +149,6 @@ st.markdown(
     div[data-testid="stMetricValue"] {{
         color: #F57F17 !important;
         font-weight: bold !important;
-    }}
-
-    section[data-testid="stSidebar"] {{
-        background-color: #F4F6F4 !important;
-        border-right: 3px solid #1B5E20 !important;
     }}
 
     {css_fundo}
@@ -597,10 +601,10 @@ else:
 
   st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
 
-  # Seletor dinâmico de Perfil com padrão Gestor para facilitar testes e acesso completo
+  # Seletor de Perfil na Sidebar (Garante Acesso de Gestor/Administrador)
   perfil_original = str(user_info.get("perfil", "Gestor")).strip()
   perfil_selecionado = st.sidebar.selectbox(
-      "Perfil de Acesso (Menu Gestor)",
+      "Perfil de Acesso",
       ["Gestor", "Operador"],
       index=0
       if (
@@ -645,10 +649,32 @@ else:
   menu = st.sidebar.radio("Navegação", opcoes_menu)
 
   # ---------------------------------------------------------
-  # 6. MÓDULO 1: NOVO ROMANEIO (COM CANVAS TOUCH E BOTÃO DE LIMPAR)
+  # 6. MÓDULO 1: NOVO ROMANEIO (COM LOGO DA EMPRESA NO TÍTULO)
   # ---------------------------------------------------------
   if menu == "Novo Romaneio (Recebimento)":
-    st.title("📋 Novo Romaneio de Recebimento - Hortifrúti")
+    # Cabeçalho Principal com a Logo ao Lado do Título (Sem Prancheta)
+    logo_header_path = None
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+      for prefixo in [
+          "logo_romaneio",
+          "logo",
+          "Tela de login",
+          "tela_de_login",
+      ]:
+        if os.path.exists(f"{prefixo}.{ext}"):
+          logo_header_path = f"{prefixo}.{ext}"
+          break
+      if logo_header_path:
+        break
+
+    if logo_header_path:
+      col_h1, col_h2 = st.columns([1, 5])
+      with col_h1:
+        st.image(logo_header_path, width=110)
+      with col_h2:
+        st.title("Novo Romaneio de Recebimento - Hortifrúti")
+    else:
+      st.title("Novo Romaneio de Recebimento - Hortifrúti")
 
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
