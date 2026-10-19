@@ -216,12 +216,10 @@ def init_db():
         CREATE TABLE IF NOT EXISTS romaneios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             numero_romaneio TEXT NOT NULL,
-            fornecedor_nome TEXT NOT NULL,
-            codigo_fornecedor TEXT,
-            telefone_fornecedor TEXT,
-            loja TEXT DEFAULT '6',
+            fornecedor TEXT NOT NULL,
             data_recebimento TEXT NOT NULL,
             conferente TEXT NOT NULL,
+            observacoes TEXT,
             data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -261,7 +259,7 @@ if "usuario_logado" not in st.session_state:
 
 
 # ---------------------------------------------------------
-# 4. CONTROLE DE FLUXO (LOGIN vs ETAPA 2)
+# 4. CONTROLE DE FLUXO (LOGIN vs ÁREA DO CONFERENTE)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     # --- TELA DE LOGIN ---
@@ -320,7 +318,7 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 
 else:
-    # --- ETAPA 2: ÁREA DO CONFERENTE E GESTÃO DE ROMANEIOS ---
+    # --- ÁREA DO CONFERENTE (ESTRUTURA CLÁSSICA ANTERIOR) ---
     st.sidebar.title("Super Nova Cidade")
     st.sidebar.write(f"**Usuário:** {st.session_state['usuario_logado']['nome']}")
     st.sidebar.write(f"**Perfil:** {st.session_state['usuario_logado']['perfil']}")
@@ -337,141 +335,49 @@ else:
 
     elif menu == "➕ Novo Romaneio":
         st.title("🥦 Cadastro de Romaneio - Hortifrúti")
-
-        # Geração automática do Número do Romaneio Sequencial
-        conn_seq = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-        cursor_seq = conn_seq.cursor()
-        cursor_seq.execute("SELECT COUNT(*) FROM romaneios")
-        total_romaneios = cursor_seq.fetchone()[0]
-        conn_seq.close()
-        proximo_num = f"{total_romaneios + 1:05d}"
-
-        # Base oficial de produtos CISS / Hortifrúti
-        produtos_hortifruti = [
-            {"barras": "58063", "codigo": "82405", "nome": "ABACATE AVOCADO KG", "und": "KG"},
-            {"barras": "5884", "codigo": "28920", "nome": "ABACATE FORTUNA KG", "und": "KG"},
-            {"barras": "17510", "codigo": "48903", "nome": "ABACATE GEADA KG", "und": "KG"},
-            {"barras": "2240", "codigo": "165651", "nome": "ABACATE MARGARIDA KG", "und": "KG"},
-            {"barras": "9034", "codigo": "163887", "nome": "ABACATE REGIONAL KG", "und": "KG"},
-            {"barras": "73677", "codigo": "90217", "nome": "ABACAXI FATIADO KG", "und": "KG"},
-            {"barras": "2387", "codigo": "165662", "nome": "ABACAXI KG PERDA", "und": "KG"},
-            {"barras": "6156", "codigo": "30531", "nome": "ABACAXI UN", "und": "UN"},
-            {"barras": "17503", "codigo": "48887", "nome": "ABOBRINHA CABOTIA KG", "und": "KG"},
-            {"barras": "3667", "codigo": "165723", "nome": "ABOBRINHA ITALIANA KG", "und": "KG"},
-            {"barras": "2356", "codigo": "165659", "nome": "ABOBRINHA KG", "und": "KG"},
-            {"barras": "7898910073589", "codigo": "165340", "nome": "ALFACE AMERICANA", "und": "UN"},
-            {"barras": "386296", "codigo": "165339", "nome": "ALFACE ROXA UN", "und": "UN"},
-            {"barras": "7898941929398", "codigo": "90270", "nome": "ALFACE VIVA BABY UN", "und": "UN"},
-            {"barras": "4275", "codigo": "187484", "nome": "ALHO ROXO KG", "und": "KG"},
-            {"barras": "182", "codigo": "131307", "nome": "BANANA NANICA KG", "und": "KG"},
-            {"barras": "1038", "codigo": "165575", "nome": "BANANA PACOVAN KG", "und": "KG"},
-            {"barras": "2073", "codigo": "165634", "nome": "BANANA PRATA KG", "und": "KG"},
-            {"barras": "2219", "codigo": "165648", "nome": "BATATA DOCE BRANCA KG", "und": "KG"},
-            {"barras": "5104", "codigo": "28298", "nome": "BATATA DOCE ROXA KG", "und": "KG"},
-            {"barras": "2233", "codigo": "163880", "nome": "BATATA PORTUGUESA KG", "und": "KG"},
-            {"barras": "2349", "codigo": "165658", "nome": "BERINJELA KG", "und": "KG"},
-            {"barras": "2165", "codigo": "165643", "nome": "BETERRABA KG", "und": "KG"},
-            {"barras": "4480", "codigo": "165766", "nome": "BROCOLIS NINJA KG", "und": "KG"},
-            {"barras": "2691", "codigo": "165686", "nome": "CARA KG", "und": "KG"},
-            {"barras": "2028", "codigo": "165629", "nome": "CEBOLA KG", "und": "KG"},
-            {"barras": "674", "codigo": "131654", "nome": "CEBOLA ROXA KG", "und": "KG"},
-            {"barras": "2226", "codigo": "165649", "nome": "CENOURA KG", "und": "KG"},
-            {"barras": "2127", "codigo": "165639", "nome": "CHEIRO VERDE UN", "und": "UN"},
-            {"barras": "949", "codigo": "165567", "nome": "CHUCHU KG", "und": "KG"},
-            {"barras": "6705", "codigo": "165863", "nome": "COCO SECO UN", "und": "UN"},
-            {"barras": "2172", "codigo": "165644", "nome": "COUVE FLOR KG", "und": "KG"},
-            {"barras": "2202", "codigo": "165647", "nome": "FEIJAO VERDE UN", "und": "UN"},
-            {"barras": "22392", "codigo": "166819", "nome": "GENGIBRE KG", "und": "KG"},
-            {"barras": "4268", "codigo": "165758", "nome": "GOIABA KG", "und": "KG"},
-            {"barras": "3247", "codigo": "165708", "nome": "HORTELA KG", "und": "KG"},
-            {"barras": "4565", "codigo": "137074", "nome": "INHAME KG", "und": "KG"},
-            {"barras": "12508", "codigo": "36027", "nome": "JENIPAPO KG", "und": "KG"},
-            {"barras": "2196", "codigo": "165646", "nome": "JERIMUM KG", "und": "KG"},
-            {"barras": "8747", "codigo": "165943", "nome": "KIWI KG", "und": "KG"},
-            {"barras": "9690", "codigo": "35740", "nome": "LARANJA BAHIA KG", "und": "KG"},
-            {"barras": "61827", "codigo": "86243", "nome": "LARANJA PAULISTA PCT KG", "und": "KG"},
-            {"barras": "2080", "codigo": "165635", "nome": "LARANJA REGIONAL KG", "und": "KG"},
-            {"barras": "2059", "codigo": "165632", "nome": "LIMAO KG", "und": "KG"},
-            {"barras": "4312", "codigo": "28071", "nome": "MACA KG", "und": "KG"},
-            {"barras": "1007", "codigo": "165572", "nome": "MACA RED KG", "und": "KG"},
-            {"barras": "2332", "codigo": "165657", "nome": "MACAXEIRA KG", "und": "KG"},
-            {"barras": "2363", "codigo": "165660", "nome": "MAMAO KG", "und": "KG"},
-            {"barras": "201", "codigo": "178998", "nome": "MANGA TOMMY KG", "und": "KG"},
-            {"barras": "2264", "codigo": "165653", "nome": "MARACUJA KG", "und": "KG"},
-            {"barras": "2158", "codigo": "165642", "nome": "MAXIXE KG", "und": "KG"},
-            {"barras": "75404", "codigo": "24094", "nome": "MELANCIA KG", "und": "KG"},
-            {"barras": "2370", "codigo": "165661", "nome": "MELAO COMUM KG", "und": "KG"},
-            {"barras": "8686", "codigo": "165939", "nome": "MORANGO BDJ KG", "und": "KG"},
-            {"barras": "40141454058", "codigo": "71563", "nome": "OVOS AMAZONAS BRANCO C/30UN", "und": "UN"},
-            {"barras": "7898141930071", "codigo": "156390", "nome": "OVOS CARTELA C/30UN BRANCO SAO PEDRO", "und": "UN"},
-            {"barras": "2066", "codigo": "165633", "nome": "PEPINO COMUM KG", "und": "KG"},
-            {"barras": "4398", "codigo": "28079", "nome": "PERA DANJOU KG", "und": "KG"},
-            {"barras": "675369", "codigo": "163735", "nome": "PIMENTA DE CHEIRO KG", "und": "KG"},
-            {"barras": "703", "codigo": "165548", "nome": "PIMENTAO COLORIDO KG", "und": "KG"},
-            {"barras": "2110", "codigo": "165638", "nome": "PIMENTAO VERDE KG", "und": "KG"},
-            {"barras": "2134", "codigo": "165640", "nome": "QUIABO KG", "und": "KG"},
-            {"barras": "4459", "codigo": "165764", "nome": "REPOLHO ROXO KG", "und": "KG"},
-            {"barras": "2097", "codigo": "165636", "nome": "REPOLHO VERDE KG", "und": "KG"},
-            {"barras": "3254", "codigo": "165709", "nome": "RUCULA KG", "und": "KG"},
-            {"barras": "9621", "codigo": "165976", "nome": "SALSA KG", "und": "KG"},
-            {"barras": "2516", "codigo": "165674", "nome": "TANGERINA IMPORTADA KG", "und": "KG"},
-            {"barras": "1175", "codigo": "41418", "nome": "TOMATE KG", "und": "KG"},
-        ]
+        st.write("Preencha os dados do fornecedor e lance os itens conferidos.")
 
         with st.form("form_romaneio"):
-            # Cabeçalho idêntico ao modelo físico
-            st.markdown(f"### 🏷️ ROM. **{proximo_num}**")
-            
-            c1, c2, c3 = st.columns([2, 1, 1])
-            with c1:
-                fornecedor_nome = st.text_input("Fornecedor / Entregador")
-            with c2:
-                codigo_fornecedor = st.text_input("Código do Fornecedor")
-            with c3:
-                telefone_fornecedor = st.text_input("Tel. / Contato")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                num_romaneio = st.text_input("Nº do Romaneio / Nota Fiscal")
+            with col2:
+                fornecedor = st.text_input("Fornecedor / Produtor")
+            with col3:
+                data_rec = st.date_input("Data de Recebimento", value=date.today())
 
-            c4, c5, c6 = st.columns([2, 1, 1])
-            with c4:
-                resp_fisico = st.text_input("Resp. Rec. Físico (Conferente)", value=st.session_state["usuario_logado"]["nome"])
-            with c5:
-                loja = st.text_input("Loja", value="6")
-            with c6:
-                # Data no formato brasileiro (DD/MM/AAAA)
-                data_hoje = date.today().strftime("%d/%m/%Y")
-                data_rec = st.text_input("Data do Rec.", value=data_hoje)
+            obs = st.text_area("Observações (Opcional)")
 
             st.divider()
-            st.subheader("📦 Adicionar Itens (Pesquisa por Descrição, Cód. Barras ou Interno)")
+            st.subheader("📦 Itens do Romaneio")
 
             if "itens_temp" not in st.session_state:
                 st.session_state["itens_temp"] = []
 
-            termo_busca = st.selectbox(
-                "Selecione o Produto:",
-                options=produtos_hortifruti,
-                format_func=lambda p: f"{p['nome']} | Cód: {p['codigo']} | Barras: {p['barras']}"
-            )
-
-            col_q, col_b = st.columns([3, 1])
-            with col_q:
-                qtd_input = st.number_input("Quantidade / Peso Conferido", min_value=0.01, step=1.0, key="input_qtd")
-            with col_b:
+            c_prod, c_qtd, c_un, c_btn = st.columns([3, 2, 2, 1])
+            with c_prod:
+                prod_input = st.text_input("Produto", key="input_produto")
+            with c_qtd:
+                qtd_input = st.number_input("Quantidade", min_value=0.01, step=1.0, key="input_qtd")
+            with c_un:
+                un_input = st.selectbox("Unidade", ["Kg", "Caixas", "Maços", "Unidades", "Sacos"], key="input_un")
+            with c_btn:
                 st.write("")
-                btn_add = st.form_submit_button("➕ Adicionar Item")
+                btn_add = st.form_submit_button("➕ Adicionar")
 
             if btn_add:
-                if not termo_busca:
-                    st.warning("Selecione um produto.")
+                if prod_input.strip() == "":
+                    st.warning("Informe o nome do produto.")
                 else:
                     st.session_state["itens_temp"].append({
-                        "produto": termo_busca["nome"],
+                        "produto": prod_input,
                         "quantidade": qtd_input,
-                        "unidade": termo_busca["und"]
+                        "unidade": un_input
                     })
-                    st.success(f"Item '{termo_busca['nome']}' ({qtd_input} {termo_busca['und']}) adicionado!")
+                    st.success(f"Item '{prod_input}' adicionado com sucesso!")
 
             if st.session_state["itens_temp"]:
-                st.write("### Itens Lançados no Romaneio:")
+                st.write("### Itens Lançados:")
                 for idx, item in enumerate(st.session_state["itens_temp"]):
                     st.write(f"- **{item['produto']}**: {item['quantidade']} {item['unidade']}")
                 
@@ -480,25 +386,11 @@ else:
                     st.rerun()
 
             st.divider()
-            
-            # Área de Assinaturas Digitais (Touch / Caneta)
-            st.subheader("✍️ Assinaturas Digitais")
-            st.write("Confirme os nomes para validação do recebimento:")
-            
-            col_ass1, col_ass2 = st.columns(2)
-            with col_ass1:
-                st.write("**Assinatura do Entregador / Fornecedor**")
-                ass_entregador = st.text_input("Nome / Confirmação do Entregador", placeholder="Nome completo ou rubrica do entregador")
-            with col_ass2:
-                st.write("**Assinatura do Conferente**")
-                ass_conferente = st.text_input("Confirmação do Conferente", value=st.session_state["usuario_logado"]["nome"])
-
-            st.divider()
-            btn_salvar_romaneio = st.form_submit_button("💾 Salvar e Finalizar Romaneio", type="primary")
+            btn_salvar_romaneio = st.form_submit_button("💾 Salvar Romaneio Completo", type="primary")
 
             if btn_salvar_romaneio:
-                if not fornecedor_nome:
-                    st.error("Preencha o Nome do Fornecedor / Entregador.")
+                if not num_romaneio or not fornecedor:
+                    st.error("Preencha o Número do Romaneio e o Fornecedor.")
                 elif not st.session_state["itens_temp"]:
                     st.error("Adicione pelo menos um item ao romaneio.")
                 else:
@@ -507,8 +399,8 @@ else:
                         cursor = conn.cursor()
                         
                         cursor.execute(
-                            "INSERT INTO romaneios (numero_romaneio, fornecedor_nome, codigo_fornecedor, telefone_fornecedor, loja, data_recebimento, conferente) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                            (proximo_num, fornecedor_nome, codigo_fornecedor, telefone_fornecedor, loja, data_rec, resp_fisico)
+                            "INSERT INTO romaneios (numero_romaneio, fornecedor, data_recebimento, conferente, observacoes) VALUES (?, ?, ?, ?, ?)",
+                            (num_romaneio, fornecedor, str(data_rec), st.session_state["usuario_logado"]["nome"], obs)
                         )
                         romaneio_id = cursor.lastrowid
 
@@ -521,7 +413,7 @@ else:
                         conn.commit()
                         conn.close()
 
-                        st.success(f"Romaneio Nº {proximo_num} salvo com sucesso no banco de dados!")
+                        st.success(f"Romaneio Nº {num_romaneio} salvo com sucesso no banco de dados!")
                         st.session_state["itens_temp"] = []
                         st.rerun()
                     except Exception as e:
@@ -533,7 +425,7 @@ else:
 
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, numero_romaneio, fornecedor_nome, codigo_fornecedor, data_recebimento, conferente, loja FROM romaneios ORDER BY id DESC")
+        cursor.execute("SELECT id, numero_romaneio, fornecedor, data_recebimento, conferente, observacoes FROM romaneios ORDER BY id DESC")
         romaneios = cursor.fetchall()
         conn.close()
 
@@ -541,9 +433,9 @@ else:
             st.info("Nenhum romaneio cadastrado até o momento.")
         else:
             for r in romaneios:
-                with st.expander(f"Rom. Nº: {r[1]} | Fornecedor: {r[2]} | Data: {r[4]} | Loja: {r[6]}"):
-                    st.write(f"**Cód. Fornecedor:** {r[3] if r[3] else 'Não informado'}")
-                    st.write(f"**Conferente (Rec. Físico):** {r[5]}")
+                with st.expander(f"Romaneio Nº: {r[1]} | Fornecedor: {r[2]} | Data: {r[3]}"):
+                    st.write(f"**Conferente:** {r[4]}")
+                    st.write(f"**Observações:** {r[5] if r[5] else 'Nenhuma'}")
                     st.write("**Itens Conferidos:**")
                     
                     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
