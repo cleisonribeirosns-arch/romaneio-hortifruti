@@ -4,6 +4,17 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import (
+    Image as RLImage,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
@@ -110,7 +121,7 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 2. BANCO DE DADOS E INICIALIZAÇÃO COM PRODUTOS OFICIAIS CISS
+# 2. BANCO DE DADOS E INICIALIZAÇÃO
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -167,7 +178,6 @@ def init_db():
         )
     """)
 
-    # Garante o usuário Administrador padrão
     cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
     if not cursor.fetchone():
         cursor.execute(
@@ -175,7 +185,6 @@ def init_db():
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
 
-    # Inserção da Lista Oficial de Produtos CISS/Hortifrúti
     produtos_iniciais = [
         ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
@@ -282,7 +291,211 @@ def fazer_login(login, senha):
 
 
 # ---------------------------------------------------------
-# 3. TELA DE LOGIN
+# 3. FUNÇÃO PARA GERAR PDF DO ROMANEIO
+# ---------------------------------------------------------
+def gerar_pdf_romaneio(romaneio_data, itens_data):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=30,
+        bottomMargin=30,
+    )
+    story = []
+    styles = getSampleStyleSheet()
+
+    logo_path = None
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+            if os.path.exists(f"{prefixo}.{ext}"):
+                logo_path = f"{prefixo}.{ext}"
+                break
+        if logo_path:
+            break
+
+    # Função para desenhar a marca d'água centralizada e o rodapé
+    def add_background_and_footer(canvas_obj, doc_obj):
+        canvas_obj.saveState()
+        if logo_path and os.path.exists(logo_path):
+            try:
+                # Marca d'água centralizada com baixa opacidadade simulada ou imagem centralizada
+                canvas_obj.setFillAlpha(0.1)
+                canvas_obj.drawImage(
+                    logo_path,
+                    letter[0] / 2 - 125,
+                    letter[1] / 2 - 125,
+                    width=250,
+                    height=250,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            except Exception:
+                pass
+        canvas_obj.restoreState()
+
+    # Cabeçalho com Logo
+    header_data = []
+    logo_img = (
+        RLImage(logo_path, width=50, height=50)
+        if logo_path and os.path.exists(logo_path)
+        else Paragraph("<b>SUPER NOVA CIDADE</b>", styles["Normal"])
+    )
+
+    header_table = Table(
+        [
+            [
+                logo_img,
+                Paragraph(
+                    "<b>SUPERMERCADO SUPER NOVA CIDADE</b><br/>Romaneio de"
+                    " Recebimento - Hortifrúti",
+                    styles["Normal"],
+                ),
+                Paragraph(
+                    f"<b>ROM:</b> {romaneio_data['numero_romaneio']}<br/><b>Data:</b>"
+                    f" {romaneio_data['data_recebimento']}",
+                    styles["Normal"],
+                ),
+            ]
+        ],
+        colWidths=[60, 320, 160],
+    )
+    header_table.setStyle(
+        TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey),
+        ])
+    )
+    story.append(header_table)
+    story.append(Spacer(1, 10))
+
+    # Dados do Fornecedor
+    info_data = [
+        [
+            Paragraph(
+                f"<b>Fornecedor:</b> {romaneio_data['fornecedor']}",
+                styles["Normal"],
+            ),
+            Paragraph(
+                f"<b>Cód. Fornecedor:</b> {romaneio_data['codigo_fornecedor']}",
+                styles["Normal"],
+            ),
+        ],
+        [
+            Paragraph(
+                f"<b>Telefone:</b> {romaneio_data['telefone_fornecedor']}",
+                styles["Normal"],
+            ),
+            Paragraph(
+                f"<b>Loja:</b> {romaneio_data['loja']}", styles["Normal"]
+            ),
+        ],
+        [
+            Paragraph(
+                f"<b>Conferente (Rec. Físico):</b>"
+                f" {romaneio_data['conferente']}",
+                styles["Normal"],
+            ),
+            Paragraph(
+                f"<b>Pagamento à Vista:</b> {romaneio_data['pagamento_a_vista']}",
+                styles["Normal"],
+            ),
+        ],
+    ]
+    info_table = Table(info_data, colWidths=[270, 270])
+    info_table.setStyle(
+        TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke),
+        ])
+    )
+    story.append(info_table)
+    story.append(Spacer(1, 15))
+
+    # Tabela de Itens
+    table_content = [
+        ["Item", "Descrição do Produto", "Qtd / Peso", "UND", "Vl. Unit", "Total"]
+    ]
+    total_geral = 0
+    for idx, item in enumerate(itens_data, 1):
+        v_unit = item[4] if len(item) > 4 and item[4] else 0.0
+        v_tot = item[5] if len(item) > 5 and item[5] else 0.0
+        total_geral += v_tot
+        table_content.append([
+            str(idx),
+            str(item[1]),
+            f"{item[2]:,.3f}",
+            str(item[3]),
+            f"R$ {v_unit:,.2f}",
+            f"R$ {v_tot:,.2f}",
+        ])
+
+    itens_table = Table(
+        table_content, colWidths=[35, 215, 75, 50, 75, 90]
+    )
+    itens_table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ])
+    )
+    story.append(itens_table)
+
+    story.append(Spacer(1, 10))
+    total_table = Table(
+        [[f"TOTAL GERAL DO ROMANEIO: R$ {total_geral:,.2f}"]], colWidths=[540]
+    )
+    total_table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#C62828")),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke),
+            ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ])
+    )
+    story.append(total_table)
+    story.append(Spacer(1, 20))
+
+    # Assinaturas
+    ass_data = [
+        [
+            Paragraph(
+                f"<b>Conferente:</b><br/>{romaneio_data['conferente']}",
+                styles["Normal"],
+            ),
+            Paragraph(
+                f"<b>Entregador / Fornecedor:</b><br/>{romaneio_data['fornecedor']}",
+                styles["Normal"],
+            ),
+        ]
+    ]
+    ass_table = Table(ass_data, colWidths=[270, 270])
+    ass_table.setStyle(
+        TableStyle([
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("TOPPADDING", (0, 0), (-1, -1), 25),
+            ("VALIGN", (0, 0), (-1, -1), "BOTTOM"),
+        ])
+    )
+    story.append(ass_table)
+
+    doc.build(story, onFirstPage=add_background_and_footer, onLaterPages=add_background_and_footer)
+    buffer.seek(0)
+    return buffer
+
+
+# ---------------------------------------------------------
+# 4. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     col_l1, col_l2, col_l3 = st.columns([0.5, 3, 0.5])
@@ -348,7 +561,7 @@ else:
 
     st.sidebar.divider()
 
-    opcoes_menu = ["Novo Romaneio (Recebimento)", "Consultar Romaneios"]
+    opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios"]
     if eh_gestor:
         opcoes_menu.extend([
             "Relatórios & Gráficos",
@@ -359,13 +572,10 @@ else:
     menu = st.sidebar.radio("Navegação", opcoes_menu)
 
     # ---------------------------------------------------------
-    # 4. MÓDULOS DO SISTEMA
+    # 5. MÓDULOS DO SISTEMA
     # ---------------------------------------------------------
-    if menu == "Novo Romaneio (Recebimento)":
-        st.title("Novo Romaneio de Recebimento - Hortifrúti")
-        st.info(
-            "Pesquise o produto por código de barras, código interno ou descrição."
-        )
+    if menu == "Romaneio de Recebimento - Hortifrúti":
+        st.title("Romaneio de Recebimento - Hortifrúti")
 
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
@@ -412,6 +622,11 @@ else:
                 cod_fornecedor = st.text_input("Código do Fornecedor")
                 tel_fornecedor = st.text_input("Telefone do Fornecedor")
 
+            pag_a_vista = st.selectbox("Pagamento à Vista?", ["NÃO", "SIM"])
+            data_pag = st.date_input(
+                "Data para Pagamento", datetime.now(), format="DD/MM/YYYY"
+            )
+
             conferente = st.text_input(
                 "Responsável Rec. Físico",
                 value=user_info["nome"],
@@ -427,7 +642,7 @@ else:
         )
         with col_p1:
             prod_label_sel = st.selectbox(
-                "Produto (Busca por Descrição, Cód. ou Barras)",
+                "Produto",
                 (
                     prod_nomes_keys
                     if prod_dict
@@ -520,20 +735,121 @@ else:
             elif not st.session_state["itens_romaneio"]:
                 st.error("Adicione itens ao romaneio.")
             else:
-                st.success(
-                    f"Romaneio {num_romaneio} processado com sucesso!"
-                )
-                st.session_state["itens_romaneio"] = []
+                try:
+                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    cursor = conn.cursor()
+
+                    caminho_foto_salva = ""
+                    if fotos_upload:
+                        for f in fotos_upload:
+                            path_f = os.path.join("uploads", f.name)
+                            with open(path_f, "wb") as f_out:
+                                f_out.write(f.getbuffer())
+                            caminho_foto_salva = path_f
+
+                    cursor.execute(
+                        """
+                        INSERT INTO romaneios (
+                            numero_romaneio, loja, data_recebimento, fornecedor, 
+                            codigo_fornecedor, telefone_fornecedor, conferente, 
+                            pagamento_a_vista, data_pagamento, caminho_foto
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                        (
+                            num_romaneio,
+                            loja,
+                            str(data_rec),
+                            fornecedor,
+                            cod_fornecedor,
+                            tel_fornecedor,
+                            user_info["nome"],
+                            pag_a_vista,
+                            str(data_pag),
+                            caminho_foto_salva,
+                        ),
+                    )
+                    romaneio_id = cursor.lastrowid
+
+                    for itm in st.session_state["itens_romaneio"]:
+                        cursor.execute(
+                            """
+                            INSERT INTO romaneio_itens (
+                                romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total
+                            ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                romaneio_id,
+                                itm["produto"],
+                                itm["quantidade"],
+                                itm["unidade"],
+                                itm["valor_unitario"],
+                                itm["valor_total"],
+                            ),
+                        )
+
+                    conn.commit()
+                    conn.close()
+
+                    st.success(
+                        f"Romaneio {num_romaneio} salvo com sucesso no banco de"
+                        " dados!"
+                    )
+                    st.session_state["itens_romaneio"] = []
+                except Exception as e:
+                    st.error(f"Erro ao salvar romaneio: {e}")
 
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-        df_rom = pd.read_sql_query("SELECT * FROM romaneios", conn)
+        df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
+
         if not df_rom.empty:
-            st.dataframe(df_rom, use_container_width=True)
+            for idx, row in df_rom.iterrows():
+                with st.expander(
+                    f"Romaneio: {row['numero_romaneio']} | Fornecedor:"
+                    f" {row['fornecedor']} | Data: {row['data_recebimento']}"
+                ):
+                    st.write(f"**Loja:** {row['loja']}")
+                    st.write(
+                        f"**Código Fornecedor:** {row['codigo_fornecedor']} |"
+                        f" **Telefone:** {row['telefone_fornecedor']}"
+                    )
+                    st.write(f"**Conferente:** {row['conferente']}")
+                    st.write(
+                        f"**Pagamento à Vista:** {row['pagamento_a_vista']} |"
+                        f" **Data Pagamento:** {row['data_pagamento']}"
+                    )
+
+                    conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    df_itens = pd.read_sql_query(
+                        "SELECT produto, quantidade, unidade, valor_unitario,"
+                        " valor_total FROM romaneio_itens WHERE romaneio_id = ?",
+                        conn_i,
+                        params=(row["id"],),
+                    )
+                    conn_i.close()
+
+                    st.markdown("**Itens Conferidos:**")
+                    st.dataframe(df_itens, use_container_width=True)
+
+                    total_rom = df_itens["valor_total"].sum()
+                    st.markdown(f"**Total do Romaneio: R$ {total_rom:,.2f}**")
+
+                    # Botão para baixar PDF
+                    romaneio_dict = row.to_dict()
+                    itens_tuple_list = df_itens.to_records(index=False).tolist()
+                    pdf_buffer = gerar_pdf_romaneio(romaneio_dict, itens_tuple_list)
+
+                    st.download_button(
+                        label=f"📥 Baixar PDF - {row['numero_romaneio']}",
+                        data=pdf_buffer,
+                        file_name=f"{row['numero_romaneio']}.pdf",
+                        mime="application/pdf",
+                        key=f"pdf_btn_{row['id']}",
+                    )
         else:
-            st.info("Nenhum romaneio cadastrado.")
+            st.info("Nenhum romaneio cadastrado até o momento.")
 
     elif menu == "Relatórios & Gráficos" and eh_gestor:
         st.title("📊 Relatórios e Análise Gráfica")
