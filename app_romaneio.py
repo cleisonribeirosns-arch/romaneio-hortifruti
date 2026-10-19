@@ -613,27 +613,32 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                data_rec_str = st.text_input(
-                    "Data do Recebimento (DD/MM/AAAA) *",
-                    value=datetime.now().strftime("%d/%m/%Y"),
+                # Data de recebimento padrão com seletor de data
+                data_rec = st.date_input(
+                    "Data do Recebimento",
+                    datetime.now(),
+                    format="DD/MM/YYYY",
                     key=f"data_rec_{k_suffix}",
                 )
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
+                # Exemplo de telefone zerado no placeholder
                 tel_fornecedor = st.text_input(
                     "Telefone do Fornecedor",
-                    placeholder="(92)99184-1047",
+                    placeholder="(92) 00000-0000",
                     key=f"tel_forn_{k_suffix}",
                 )
 
             pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
             
-            data_pag_str = ""
+            # Condicional: Data para pagamento só aparece se a opção for "NÃO"
+            data_pag = None
             if pag_a_vista == "NÃO":
-                data_pag_str = st.text_input(
-                    "Data para Pagamento (DD/MM/AAAA)",
-                    value=datetime.now().strftime("%d/%m/%Y"),
+                data_pag = st.date_input(
+                    "Data para Pagamento",
+                    datetime.now(),
+                    format="DD/MM/YYYY",
                     key=f"data_pag_{k_suffix}",
                 )
 
@@ -744,12 +749,15 @@ else:
             )
 
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
-            if not num_romaneio.strip() or not fornecedor.strip() or not data_rec_str.strip():
-                st.error("Preencha o número do romaneio, o fornecedor e a data de recebimento obrigatória.")
+            if not num_romaneio.strip() or not fornecedor.strip():
+                st.error("Preencha o número do romaneio e o fornecedor.")
             elif not st.session_state["itens_romaneio"]:
                 st.error("Adicione itens ao romaneio.")
             else:
                 try:
+                    data_rec_str = data_rec.strftime("%d/%m/%Y")
+                    data_pag_str = data_pag.strftime("%d/%m/%Y") if data_pag else ""
+
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
