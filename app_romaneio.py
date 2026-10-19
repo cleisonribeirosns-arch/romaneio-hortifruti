@@ -20,7 +20,7 @@ import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL (ETAPA 1 ORIGINAL)
+# 1. CONFIGURAÇÃO DA PÁGINA E TELA DE LOGIN (EXATA DO VÍDEO)
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
@@ -485,16 +485,32 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
 
 
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN (ETAPA 1 ORIGINAL EXATA DO VÍDEO)
+# 4. TELA DE LOGIN (ETAPA 1 IDÊNTICA AO VÍDEO COM CARTÃO BRANCO E LOGO)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
-    col_l1, col_l2, col_l3 = st.columns([0.5, 3, 0.5])
+    # Criação da estrutura de colunas centralizadas com cartão de fundo branco idêntico ao vídeo
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
+        st.markdown(
+            """
+            <div style="background-color: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,00,0,0.3); margin-top: 20px;">
+            """,
+            unsafe_allow_html=True,
+        )
+        
         if logo_page_icon and os.path.exists(logo_page_icon):
-            st.image(logo_page_icon, width=220)
-        st.title("Supermercado Super Nova Cidade")
-        st.subheader("Sistema de Recebimento Hortifrúti")
-        st.write("")
+            st.image(logo_page_icon, use_column_width=True)
+
+        st.markdown(
+            """
+            </div>
+            <div style="text-align: center; margin-top: 15px;">
+                <h2 style="color: #FFFFFF; font-size: 22px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Supermercado SUPER NOVA Cidade</h2>
+                <h3 style="color: #FFFFFF; font-size: 16px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Sistema de Recebimento Hortifrúti</h3>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
@@ -613,32 +629,53 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Data de recebimento padrão com seletor de data
-                data_rec = st.date_input(
-                    "Data do Recebimento",
-                    datetime.now(),
-                    format="DD/MM/YYYY",
+                # Data de recebimento em branco (vazia por padrão) para o conferente selecionar/digitar
+                data_rec_str = st.text_input(
+                    "Data do Recebimento (DD/MM/AAAA)",
+                    value="",
+                    placeholder="Ex: 19/10/2026",
                     key=f"data_rec_{k_suffix}",
                 )
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
-                # Exemplo de telefone zerado no placeholder
-                tel_fornecedor = st.text_input(
+                
+                # Telefone com formatação dinâmica enquanto digita
+                if f"tel_input_val_{k_suffix}" not in st.session_state:
+                    st.session_state[f"tel_input_val_{k_suffix}"] = ""
+
+                def formatar_telefone():
+                    raw = "".join(filter(str.isdigit, st.session_state[f"raw_tel_{k_suffix}"]))
+                    if len(raw) > 11:
+                        raw = raw[:11]
+                    if len(raw) > 6:
+                        formatted = f"({raw[:2]}) {raw[2:7]}-{raw[7:]}"
+                    elif len(raw) > 2:
+                        formatted = f"({raw[:2]}) {raw[2:]}"
+                    elif len(raw) > 0:
+                        formatted = f"({raw}"
+                    else:
+                        formatted = ""
+                    st.session_state[f"tel_input_val_{k_suffix}"] = formatted
+
+                st.text_input(
                     "Telefone do Fornecedor",
-                    placeholder="(92) 00000-0000",
-                    key=f"tel_forn_{k_suffix}",
+                    value=st.session_state[f"tel_input_val_{k_suffix}"],
+                    placeholder="(92) 90000-0000",
+                    key=f"raw_tel_{k_suffix}",
+                    on_change=formatar_telefone,
                 )
+                tel_fornecedor = st.session_state[f"tel_input_val_{k_suffix}"]
 
             pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
             
             # Condicional: Data para pagamento só aparece se a opção for "NÃO"
-            data_pag = None
+            data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag = st.date_input(
-                    "Data para Pagamento",
-                    datetime.now(),
-                    format="DD/MM/YYYY",
+                data_pag_str = st.text_input(
+                    "Data para Pagamento (DD/MM/AAAA)",
+                    value="",
+                    placeholder="Ex: 26/10/2026",
                     key=f"data_pag_{k_suffix}",
                 )
 
@@ -749,15 +786,12 @@ else:
             )
 
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
-            if not num_romaneio.strip() or not fornecedor.strip():
-                st.error("Preencha o número do romaneio e o fornecedor.")
+            if not num_romaneio.strip() or not fornecedor.strip() or not data_rec_str.strip():
+                st.error("Preencha o número do romaneio, o fornecedor e a data do recebimento.")
             elif not st.session_state["itens_romaneio"]:
                 st.error("Adicione itens ao romaneio.")
             else:
                 try:
-                    data_rec_str = data_rec.strftime("%d/%m/%Y")
-                    data_pag_str = data_pag.strftime("%d/%m/%Y") if data_pag else ""
-
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
