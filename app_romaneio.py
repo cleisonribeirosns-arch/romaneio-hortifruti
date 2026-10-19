@@ -302,3 +302,160 @@ else:
     if st.button("Sair / Logout"):
         st.session_state["usuario_logado"] = None
         st.rerun()
+# ---------------------------------------------------------
+    # ÁREA DO CONFERENTE E GESTÃO DE ROMANEIOS (ETAPA 2)
+    # ---------------------------------------------------------
+    st.sidebar.title("Super Nova Cidade")
+    st.sidebar.write(f"**Usuário:** {st.session_state['usuario_logado']['nome']}")
+    st.sidebar.write(f"**Perfil:** {st.session_state['usuario_logado']['perfil']}")
+    st.sidebar.divider()
+
+    menu = st.sidebar.radio(
+        "Navegação",
+        ["➕ Novo Romaneio", "📋 Consultar Romaneios", "🚪 Sair do Sistema"]
+    )
+
+    if menu == "🚪 Sair do Sistema":
+        st.session_state["usuario_logado"] = None
+        st.rerun()
+
+    elif menu == "➕ Novo Romaneio":
+        st.title("🥦 Cadastro de Romaneio - Hortifrúti")
+        st.write("Preencha os dados do fornecedor e lance os itens conferidos.")
+
+        # Garantir a criação das tabelas de romaneio no banco caso não existam
+        conn_db = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor_db = conn_db.cursor()
+        cursor_db.execute("""
+            CREATE TABLE IF NOT EXISTS romaneios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_romaneio TEXT NOT NULL,
+                fornecedor TEXT NOT NULL,
+                data_recebimento TEXT NOT NULL,
+                conferente TEXT NOT NULL,
+                observacoes TEXT,
+                data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        cursor_db.execute("""
+            CREATE TABLE IF NOT EXISTS itens_romaneio (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                romaneio_id INTEGER,
+                produto TEXT NOT NULL,
+                quantidade REAL NOT NULL,
+                unidade TEXT NOT NULL,
+                FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
+            )
+        """)
+        conn_db.commit()
+        conn_db.close()
+
+        with st.form("form_romaneio"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                num_romaneio = st.text_input("Nº do Romaneio / Nota Fiscal")
+            with col2:
+                fornecedor = st.text_input("Fornecedor / Produtor")
+            with col3:
+                data_rec = st.date_input("Data de Recebimento", value=date.today())
+
+            obs = st.text_area("Observações (Opcional)")
+
+            st.divider()
+            st.subheader("📦 Itens do Romaneio")
+
+            if "itens_temp" not in st.session_state:
+                st.session_state["itens_temp"] = []
+
+            c_prod, c_qtd, c_un, c_btn = st.columns([3, 2, 2, 1])
+            with c_prod:
+                prod_input = st.text_input("Produto", key="input_produto")
+            with c_qtd:
+                qtd_input = st.number_input("Quantidade", min_value=0.01, step=1.0, key="input_qtd")
+            with c_un:
+                un_input = st.selectbox("Unidade", ["Kg", "Caixas", "Maços", "Unidades", "Sacos"], key="input_un")
+            with c_btn:
+                st.write("")
+                btn_add = st.form_submit_button("➕ Adicionar")
+
+            if btn_add:
+                if prod_input.strip() == "":
+                    st.warning("Informe o nome do produto.")
+                else:
+                    st.session_state["itens_temp"].append({
+                        "produto": prod_input,
+                        "quantidade": qtd_input,
+                        "unidade": un_input
+                    })
+                    st.success(f"Item '{prod_input}' adicionado com sucesso!")
+
+            if st.session_state["itens_temp"]:
+                st.write("### Itens Lançados:")
+                for idx, item in enumerate(st.session_state["itens_temp"]):
+                    st.write(f"- **{item['produto']}**: {item['quantidade']} {item['unidade']}")
+                
+                if st.form_submit_button("🗑️ Limpar Todos os Itens"):
+                    st.session_state["itens_temp"] = []
+                    st.rerun()
+
+            st.divider()
+            btn_salvar_romaneio = st.form_submit_button("💾 Salvar Romaneio Completo", type="primary")
+
+            if btn_salvar_romaneio:
+                if not num_romaneio or not fornecedor:
+                    st.error("Preencha o Número do Romaneio e o Fornecedor.")
+                elif not st.session_state["itens_temp"]:
+                    st.error("Adicione pelo menos um item ao romaneio.")
+                else:
+                    try:
+                        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                        cursor = conn.cursor()
+                        
+                        cursor.execute(
+                            "INSERT INTO romaneios (numero_romaneio, fornecedor, data_recebimento, conferente, observacoes) VALUES (?, ?, ?, ?, ?)",
+                            (num_romaneio, fornecedor, str(data_rec), st.session_state["usuario_logado"]["nome"], obs)
+                        )
+                        romaneio_id = cursor.lastrowid
+
+                        for item in st.session_state["itens_temp"]:
+                            cursor.execute(
+                                "INSERT INTO itens_romaneio (romaneio_id, produto, quantidade, unidade) VALUES (?, ?, ?, ?)",
+                                (romaneio_id, item["produto"], item["quantidade"], item["unidade"])
+                            )
+
+                        conn.commit()
+                        conn.close()
+
+                        st.success(f"Romaneio Nº {num_romaneio} salvo com sucesso no banco de dados!")
+                        st.session_state["itens_temp"] = []
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao salvar romaneio: {e}")
+
+    elif menu == "📋 Consultar Romaneios":
+        st.title("📋 Romaneios Lançados")
+        st.write("Consulta rápida dos romaneios salvos no sistema.")
+
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, numero_romaneio, fornecedor, data_recebimento, conferente, observacoes FROM romaneios ORDER BY id DESC")
+        romaneios = cursor.fetchall()
+        conn.close()
+
+        if not romaneios:
+            st.info("Nenhum romaneio cadastrado até o momento.")
+        else:
+            for r in romaneios:
+                with st.expander(f"Romaneio Nº: {r[1]} | Fornecedor: {r[2]} | Data: {r[3]}"):
+                    st.write(f"**Conferente:** {r[4]}")
+                    st.write(f"**Observações:** {r[5] if r[5] else 'Nenhuma'}")
+                    st.write("**Itens Conferidos:**")
+                    
+                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT produto, quantidade, unidade FROM itens_romaneio WHERE romaneio_id = ?", (r[0],))
+                    itens = cursor.fetchall()
+                    conn.close()
+
+                    for it in itens:
+                        st.write(f"- {it[0]}: **{it[1]} {it[2]}**")
