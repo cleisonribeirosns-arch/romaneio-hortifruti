@@ -306,7 +306,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story = []
     styles = getSampleStyleSheet()
 
-    # Busca abrangente pela imagem do logótipo
     logo_path = None
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
         for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
@@ -317,7 +316,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         if logo_path:
             break
 
-    # Função do ReportLab para desenhar o logótipo centralizado em marca d'água no fundo
     def add_watermark(canvas_obj, doc_obj):
         if logo_path and os.path.exists(logo_path):
             canvas_obj.saveState()
@@ -336,7 +334,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
                 pass
             canvas_obj.restoreState()
 
-    # Logótipo do Cabeçalho
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
@@ -369,7 +366,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(header_table)
     story.append(Spacer(1, 10))
 
-    # Tabela de Dados Principais do Fornecedor e Loja
     info_data = [
         [
             Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"]),
@@ -384,6 +380,12 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             Paragraph(f"<b>Pagamento à Vista:</b> {romaneio_data.get('pagamento_a_vista','')}", styles["Normal"]),
         ],
     ]
+    if romaneio_data.get("pagamento_a_vista") == "NÃO" and romaneio_data.get("data_pagamento"):
+        info_data.append([
+            Paragraph(f"<b>Data para Pagamento:</b> {romaneio_data.get('data_pagamento','')}", styles["Normal"]),
+            Paragraph("", styles["Normal"]),
+        ])
+
     info_table = Table(info_data, colWidths=[270, 270])
     info_table.setStyle(
         TableStyle([
@@ -395,7 +397,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(info_table)
     story.append(Spacer(1, 15))
 
-    # Tabela de Itens Lançados
     table_content = [
         ["Item", "Descrição do Produto", "Qtd / Peso", "UND", "Vl. Unit", "Total"]
     ]
@@ -444,7 +445,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
 
-    # Tratamento e renderização das assinaturas no PDF
     img_conf_pdf = None
     if path_conf and os.path.exists(path_conf):
         try:
@@ -567,7 +567,6 @@ else:
     if menu == "Romaneio de Recebimento - Hortifrúti":
         st.title("Romaneio de Recebimento - Hortifrúti")
 
-        # Inicializa a chave de reset de formulário se não existir
         if "form_key_suffix" not in st.session_state:
             st.session_state["form_key_suffix"] = 0
 
@@ -612,21 +611,32 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                data_rec = st.date_input(
-                    "Data do Recebimento",
-                    datetime.now(),
-                    format="DD/MM/YYYY",
+                # Data de recebimento inserida manualmente e obrigatória
+                data_rec_str = st.text_input(
+                    "Data do Recebimento (DD/MM/AAAA) *",
+                    value=datetime.now().strftime("%d/%m/%Y"),
                     key=f"data_rec_{k_suffix}",
                 )
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
-                tel_fornecedor = st.text_input("Telefone do Fornecedor", key=f"tel_forn_{k_suffix}")
+                # Telefone seguindo a formatação exata solicitada
+                tel_fornecedor = st.text_input(
+                    "Telefone do Fornecedor",
+                    placeholder="(92)99184-1047",
+                    key=f"tel_forn_{k_suffix}",
+                )
 
-            pag_a_vista = st.selectbox("Pagamento à Vista?", ["NÃO", "SIM"], key=f"pag_vista_{k_suffix}")
-            data_pag = st.date_input(
-                "Data para Pagamento", datetime.now(), format="DD/MM/YYYY", key=f"data_pag_{k_suffix}"
-            )
+            pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
+            
+            # Condicional: Data para pagamento só aparece se a opção for "NÃO"
+            data_pag_str = ""
+            if pag_a_vista == "NÃO":
+                data_pag_str = st.text_input(
+                    "Data para Pagamento (DD/MM/AAAA)",
+                    value=datetime.now().strftime("%d/%m/%Y"),
+                    key=f"data_pag_{k_suffix}",
+                )
 
             conferente = st.text_input(
                 "Responsável Rec. Físico",
@@ -735,17 +745,12 @@ else:
             )
 
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
-            if not num_romaneio.strip() or not fornecedor.strip():
-                st.error("Preencha o número do romaneio e o fornecedor.")
+            if not num_romaneio.strip() or not fornecedor.strip() or not data_rec_str.strip():
+                st.error("Preencha o número do romaneio, o fornecedor e a data de recebimento obrigatória.")
             elif not st.session_state["itens_romaneio"]:
                 st.error("Adicione itens ao romaneio.")
             else:
                 try:
-                    # Formatação explícita da data para Dia/Mês/Ano
-                    data_rec_br = data_rec.strftime("%d/%m/%Y")
-                    data_pag_br = data_pag.strftime("%d/%m/%Y")
-
-                    # Processamento e gravação das assinaturas digitais
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
@@ -781,13 +786,13 @@ else:
                         (
                             num_romaneio,
                             loja,
-                            data_rec_br,
+                            data_rec_str,
                             fornecedor,
                             cod_fornecedor,
                             tel_fornecedor,
                             user_info["nome"],
                             pag_a_vista,
-                            data_pag_br,
+                            data_pag_str,
                             caminho_foto_salva,
                             path_ass_conf,
                             path_ass_ent,
@@ -830,13 +835,14 @@ else:
 
                     romaneio_dict_atual = {
                         "numero_romaneio": num_romaneio,
-                        "data_recebimento": data_rec_br,
+                        "data_recebimento": data_rec_str,
                         "fornecedor": fornecedor,
                         "codigo_fornecedor": cod_fornecedor,
                         "telefone_fornecedor": tel_fornecedor,
                         "loja": loja,
                         "conferente": user_info["nome"],
                         "pagamento_a_vista": pag_a_vista,
+                        "data_pagamento": data_pag_str,
                     }
 
                     pdf_buffer_novo = gerar_pdf_romaneio(
@@ -852,7 +858,6 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
 
-                    # Reset automático dos itens e incremento da chave para limpar formulário
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
 
@@ -879,7 +884,7 @@ else:
                     st.write(f"**Conferente:** {row['conferente']}")
                     st.write(
                         f"**Pagamento à Vista:** {row['pagamento_a_vista']} |"
-                        f" **Data Pagamento:** {row['data_pagamento']}"
+                        f" **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}"
                     )
 
                     conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
