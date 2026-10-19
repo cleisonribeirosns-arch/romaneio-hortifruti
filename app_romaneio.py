@@ -20,7 +20,7 @@ import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL (ETAPA 1 INTACTA)
+# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL (ETAPA 1 INTACTA RESTAURADA)
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
@@ -291,7 +291,7 @@ def fazer_login(login, senha):
 
 
 # ---------------------------------------------------------
-# 3. GERADOR DE PDF FORMATADO COM MARCA D'ÁGUA E ASSINATURAS
+# 3. GERADOR DE PDF FORMATADO
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
     buffer = io.BytesIO()
@@ -485,7 +485,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
 
 
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN
+# 4. TELA DE LOGIN (ETAPA 1 INTACTA RESTAURADA)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     col_l1, col_l2, col_l3 = st.columns([0.5, 3, 0.5])
@@ -611,7 +611,6 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Data de recebimento inserida manualmente e obrigatória
                 data_rec_str = st.text_input(
                     "Data do Recebimento (DD/MM/AAAA) *",
                     value=datetime.now().strftime("%d/%m/%Y"),
@@ -620,7 +619,6 @@ else:
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
-                # Telefone seguindo a formatação exata solicitada
                 tel_fornecedor = st.text_input(
                     "Telefone do Fornecedor",
                     placeholder="(92)99184-1047",
@@ -629,7 +627,6 @@ else:
 
             pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
             
-            # Condicional: Data para pagamento só aparece se a opção for "NÃO"
             data_pag_str = ""
             if pag_a_vista == "NÃO":
                 data_pag_str = st.text_input(
