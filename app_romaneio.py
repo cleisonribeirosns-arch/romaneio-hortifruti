@@ -1,8 +1,9 @@
 import base64
-from datetime import date  # <--- ADICIONE ESTA LINHA NO TOPO
+from datetime import date
 import os
 import sqlite3
 import streamlit as st
+
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
@@ -20,11 +21,11 @@ st.set_page_config(
     page_title="Supermercado Super Nova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (ETAPA 1 - INTACTA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -66,13 +67,11 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Reduzindo o espaçamento superior da página no Streamlit */
     .block-container {{
         padding-top: 1.0rem !important;
         padding-bottom: 1rem !important;
     }}
 
-    /* Estilização da Logo: tamanho compacto e responsivo */
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
@@ -84,7 +83,6 @@ st.markdown(
         display: block !important;
     }}
 
-    /* Estilização dos textos estilizados com fontes maiores */
     .titulo-logo {{
         font-size: 2.6rem !important;
         font-weight: 900 !important;
@@ -167,7 +165,6 @@ st.markdown(
         border-color: #FFFFFF !important;
     }}
 
-    /* Ajustes responsivos para celular com fontes proporcionais maiores */
     @media (max-width: 768px) {{
         img[data-testid="stImage"] {{
             max-width: 65px !important;
@@ -194,11 +191,12 @@ st.markdown(
 
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS (INICIALIZAÇÃO)
+# 3. BANCO DE DADOS (INICIALIZAÇÃO COMPLETA)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -213,6 +211,30 @@ def init_db():
         cursor.execute(
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES ('Administrador', 'admin', '1234', 'Gestor')"
         )
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS romaneios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero_romaneio TEXT NOT NULL,
+            fornecedor TEXT NOT NULL,
+            data_recebimento TEXT NOT NULL,
+            conferente TEXT NOT NULL,
+            observacoes TEXT,
+            data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS itens_romaneio (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            romaneio_id INTEGER,
+            produto TEXT NOT NULL,
+            quantidade REAL NOT NULL,
+            unidade TEXT NOT NULL,
+            FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -235,10 +257,12 @@ def fazer_login(login, senha):
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
+
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN
+# 4. CONTROLE DE FLUXO (LOGIN vs ETAPA 2)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
+    # --- TELA DE LOGIN ---
     logo_display = None
     for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png"]:
         if os.path.exists(nome):
@@ -289,21 +313,12 @@ if st.session_state["usuario_logado"] is None:
                         "perfil": usuario[2],
                         "login": login_input,
                     }
-                    st.success(f"Bem-vindo(a), {usuario[1]}!")
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
 
 else:
-    st.write(f"**Usuário:** {st.session_state['usuario_logado']['nome']}")
-    st.write(f"**Perfil:** {st.session_state['usuario_logado']['perfil']}")
-
-    if st.button("Sair / Logout"):
-        st.session_state["usuario_logado"] = None
-        st.rerun()
-# ---------------------------------------------------------
-    # ÁREA DO CONFERENTE E GESTÃO DE ROMANEIOS (ETAPA 2)
-    # ---------------------------------------------------------
+    # --- ETAPA 2: ÁREA DO CONFERENTE E GESTÃO DE ROMANEIOS ---
     st.sidebar.title("Super Nova Cidade")
     st.sidebar.write(f"**Usuário:** {st.session_state['usuario_logado']['nome']}")
     st.sidebar.write(f"**Perfil:** {st.session_state['usuario_logado']['perfil']}")
@@ -317,13 +332,12 @@ else:
     if menu == "🚪 Sair do Sistema":
         st.session_state["usuario_logado"] = None
         st.rerun()
-elif menu == "➕ Novo Romaneio":
-        st.title("🥦 Cadastro de Romaneio - Hortifrúti")
-        st.write("Selecione ou busque o produto por código de barras, código interno ou descrição.")
 
-        # ---------------------------------------------------------
-        # BANCO DE DADOS DE PRODUTOS (BASE CISS HORTIFRÚTI)
-        # ---------------------------------------------------------
+    elif menu == "➕ Novo Romaneio":
+        st.title("🥦 Cadastro de Romaneio - Hortifrúti")
+        st.write("Pesquise o produto por descrição, código interno ou código de barras.")
+
+        # Base oficial de produtos CISS / Hortifrúti
         produtos_hortifruti = [
             {"barras": "58063", "codigo": "82405", "nome": "ABACATE AVOCADO KG", "und": "KG"},
             {"barras": "5884", "codigo": "28920", "nome": "ABACATE FORTUNA KG", "und": "KG"},
@@ -395,33 +409,6 @@ elif menu == "➕ Novo Romaneio":
             {"barras": "1175", "codigo": "41418", "nome": "TOMATE KG", "und": "KG"},
         ]
 
-        # Garantir tabelas no SQLite
-        conn_db = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-        cursor_db = conn_db.cursor()
-        cursor_db.execute("""
-            CREATE TABLE IF NOT EXISTS romaneios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero_romaneio TEXT NOT NULL,
-                fornecedor TEXT NOT NULL,
-                data_recebimento TEXT NOT NULL,
-                conferente TEXT NOT NULL,
-                observacoes TEXT,
-                data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        cursor_db.execute("""
-            CREATE TABLE IF NOT EXISTS itens_romaneio (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                romaneio_id INTEGER,
-                produto TEXT NOT NULL,
-                quantidade REAL NOT NULL,
-                unidade TEXT NOT NULL,
-                FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
-            )
-        """)
-        conn_db.commit()
-        conn_db.close()
-
         with st.form("form_romaneio"):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -434,14 +421,14 @@ elif menu == "➕ Novo Romaneio":
             obs = st.text_area("Observações (Opcional)")
 
             st.divider()
-            st.subheader("📦 Lançamento de Itens por Busca")
+            st.subheader("📦 Lançamento de Itens")
 
             if "itens_temp" not in st.session_state:
                 st.session_state["itens_temp"] = []
 
-            # Campo de busca unificado (pesquisa por nome, código interno ou código de barras)
+            # Seleção inteligente por descrição, código interno ou código de barras
             termo_busca = st.selectbox(
-                "Pesquisar Produto (Digite ou selecione por Descrição, Cód. Barras ou Cód. Interno):",
+                "Pesquisar Produto (Descrição, Cód. Interno ou Cód. de Barras):",
                 options=produtos_hortifruti,
                 format_func=lambda p: f"{p['nome']} | Cód: {p['codigo']} | Barras: {p['barras']}"
             )
@@ -455,7 +442,7 @@ elif menu == "➕ Novo Romaneio":
 
             if btn_add:
                 if not termo_busca:
-                    st.warning("Selecione um produto válido.")
+                    st.warning("Selecione um produto.")
                 else:
                     st.session_state["itens_temp"].append({
                         "produto": termo_busca["nome"],
@@ -465,7 +452,7 @@ elif menu == "➕ Novo Romaneio":
                     st.success(f"Item '{termo_busca['nome']}' ({qtd_input} {termo_busca['und']}) adicionado!")
 
             if st.session_state["itens_temp"]:
-                st.write("### Itens Lançados neste Romaneio:")
+                st.write("### Itens Lançados Neste Romaneio:")
                 for idx, item in enumerate(st.session_state["itens_temp"]):
                     st.write(f"- **{item['produto']}**: {item['quantidade']} {item['unidade']}")
                 
@@ -506,3 +493,31 @@ elif menu == "➕ Novo Romaneio":
                         st.rerun()
                     except Exception as e:
                         st.error(f"Erro ao salvar romaneio: {e}")
+
+    elif menu == "📋 Consultar Romaneios":
+        st.title("📋 Romaneios Lançados")
+        st.write("Consulta rápida dos romaneios salvos no sistema.")
+
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, numero_romaneio, fornecedor, data_recebimento, conferente, observacoes FROM romaneios ORDER BY id DESC")
+        romaneios = cursor.fetchall()
+        conn.close()
+
+        if not romaneios:
+            st.info("Nenhum romaneio cadastrado até o momento.")
+        else:
+            for r in romaneios:
+                with st.expander(f"Romaneio Nº: {r[1]} | Fornecedor: {r[2]} | Data: {r[3]}"):
+                    st.write(f"**Conferente:** {r[4]}")
+                    st.write(f"**Observações:** {r[5] if r[5] else 'Nenhuma'}")
+                    st.write("**Itens Conferidos:**")
+                    
+                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT produto, quantidade, unidade FROM itens_romaneio WHERE romaneio_id = ?", (r[0],))
+                    itens = cursor.fetchall()
+                    conn.close()
+
+                    for it in itens:
+                        st.write(f"- {it[0]}: **{it[1]} {it[2]}**")
