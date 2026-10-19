@@ -21,7 +21,7 @@ st.set_page_config(
     page_title="Supermercado Super Nova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
     layout="wide",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------
@@ -197,7 +197,6 @@ def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
 
-    # Tabela de Usuários
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -213,7 +212,6 @@ def init_db():
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES ('Administrador', 'admin', '1234', 'Gestor')"
         )
 
-    # Tabela de Romaneios (Cabeçalho)
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -226,7 +224,6 @@ def init_db():
         )
     """)
 
-    # Tabela de Itens do Romaneio
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS itens_romaneio (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -316,7 +313,6 @@ if st.session_state["usuario_logado"] is None:
                         "perfil": usuario[2],
                         "login": login_input,
                     }
-                    st.success(f"Bem-vindo(a), {usuario[1]}!")
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
