@@ -25,7 +25,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (ETAPA 1 - INTACTA)
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (ETAPA 1 - 100% INTACTA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -216,10 +216,12 @@ def init_db():
         CREATE TABLE IF NOT EXISTS romaneios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             numero_romaneio TEXT NOT NULL,
-            fornecedor TEXT NOT NULL,
+            fornecedor_nome TEXT NOT NULL,
+            codigo_fornecedor TEXT,
+            telefone_fornecedor TEXT,
+            loja TEXT DEFAULT '6',
             data_recebimento TEXT NOT NULL,
             conferente TEXT NOT NULL,
-            observacoes TEXT,
             data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
@@ -335,7 +337,14 @@ else:
 
     elif menu == "➕ Novo Romaneio":
         st.title("🥦 Cadastro de Romaneio - Hortifrúti")
-        st.write("Pesquise o produto por descrição, código interno ou código de barras.")
+
+        # Geração automática do Número do Romaneio Sequencial
+        conn_seq = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor_seq = conn_seq.cursor()
+        cursor_seq.execute("SELECT COUNT(*) FROM romaneios")
+        total_romaneios = cursor_seq.fetchone()[0]
+        conn_seq.close()
+        proximo_num = f"{total_romaneios + 1:05d}"
 
         # Base oficial de produtos CISS / Hortifrúti
         produtos_hortifruti = [
@@ -410,33 +419,43 @@ else:
         ]
 
         with st.form("form_romaneio"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                num_romaneio = st.text_input("Nº do Romaneio / Nota Fiscal")
-            with col2:
-                fornecedor = st.text_input("Fornecedor / Produtor")
-            with col3:
-                data_rec = st.date_input("Data de Recebimento", value=date.today())
+            # Cabeçalho idêntico ao modelo físico
+            st.markdown(f"### 🏷️ ROM. **{proximo_num}**")
+            
+            c1, c2, c3 = st.columns([2, 1, 1])
+            with c1:
+                fornecedor_nome = st.text_input("Fornecedor / Entregador")
+            with c2:
+                codigo_fornecedor = st.text_input("Código do Fornecedor")
+            with c3:
+                telefone_fornecedor = st.text_input("Tel. / Contato")
 
-            obs = st.text_area("Observações (Opcional)")
+            c4, c5, c6 = st.columns([2, 1, 1])
+            with c4:
+                resp_fisico = st.text_input("Resp. Rec. Físico (Conferente)", value=st.session_state["usuario_logado"]["nome"])
+            with c5:
+                loja = st.text_input("Loja", value="6")
+            with c6:
+                # Data no formato brasileiro (DD/MM/AAAA)
+                data_hoje = date.today().strftime("%d/%m/%Y")
+                data_rec = st.text_input("Data do Rec.", value=data_hoje)
 
             st.divider()
-            st.subheader("📦 Lançamento de Itens")
+            st.subheader("📦 Adicionar Itens (Pesquisa por Descrição, Cód. Barras ou Interno)")
 
             if "itens_temp" not in st.session_state:
                 st.session_state["itens_temp"] = []
 
-            # Seleção inteligente por descrição, código interno ou código de barras
             termo_busca = st.selectbox(
-                "Pesquisar Produto (Descrição, Cód. Interno ou Cód. de Barras):",
+                "Selecione o Produto:",
                 options=produtos_hortifruti,
                 format_func=lambda p: f"{p['nome']} | Cód: {p['codigo']} | Barras: {p['barras']}"
             )
 
-            c_qtd, c_btn = st.columns([3, 1])
-            with c_qtd:
+            col_q, col_b = st.columns([3, 1])
+            with col_q:
                 qtd_input = st.number_input("Quantidade / Peso Conferido", min_value=0.01, step=1.0, key="input_qtd")
-            with c_btn:
+            with col_b:
                 st.write("")
                 btn_add = st.form_submit_button("➕ Adicionar Item")
 
@@ -452,7 +471,7 @@ else:
                     st.success(f"Item '{termo_busca['nome']}' ({qtd_input} {termo_busca['und']}) adicionado!")
 
             if st.session_state["itens_temp"]:
-                st.write("### Itens Lançados Neste Romaneio:")
+                st.write("### Itens Lançados no Romaneio:")
                 for idx, item in enumerate(st.session_state["itens_temp"]):
                     st.write(f"- **{item['produto']}**: {item['quantidade']} {item['unidade']}")
                 
@@ -461,11 +480,25 @@ else:
                     st.rerun()
 
             st.divider()
-            btn_salvar_romaneio = st.form_submit_button("💾 Salvar Romaneio Completo", type="primary")
+            
+            # Área de Assinaturas Digitais (Touch / Caneta)
+            st.subheader("✍️ Assinaturas Digitais")
+            st.write("Confirme os nomes para validação do recebimento:")
+            
+            col_ass1, col_ass2 = st.columns(2)
+            with col_ass1:
+                st.write("**Assinatura do Entregador / Fornecedor**")
+                ass_entregador = st.text_input("Nome / Confirmação do Entregador", placeholder="Nome completo ou rubrica do entregador")
+            with col_ass2:
+                st.write("**Assinatura do Conferente**")
+                ass_conferente = st.text_input("Confirmação do Conferente", value=st.session_state["usuario_logado"]["nome"])
+
+            st.divider()
+            btn_salvar_romaneio = st.form_submit_button("💾 Salvar e Finalizar Romaneio", type="primary")
 
             if btn_salvar_romaneio:
-                if not num_romaneio or not fornecedor:
-                    st.error("Preencha o Número do Romaneio e o Fornecedor.")
+                if not fornecedor_nome:
+                    st.error("Preencha o Nome do Fornecedor / Entregador.")
                 elif not st.session_state["itens_temp"]:
                     st.error("Adicione pelo menos um item ao romaneio.")
                 else:
@@ -474,8 +507,8 @@ else:
                         cursor = conn.cursor()
                         
                         cursor.execute(
-                            "INSERT INTO romaneios (numero_romaneio, fornecedor, data_recebimento, conferente, observacoes) VALUES (?, ?, ?, ?, ?)",
-                            (num_romaneio, fornecedor, str(data_rec), st.session_state["usuario_logado"]["nome"], obs)
+                            "INSERT INTO romaneios (numero_romaneio, fornecedor_nome, codigo_fornecedor, telefone_fornecedor, loja, data_recebimento, conferente) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (proximo_num, fornecedor_nome, codigo_fornecedor, telefone_fornecedor, loja, data_rec, resp_fisico)
                         )
                         romaneio_id = cursor.lastrowid
 
@@ -488,7 +521,7 @@ else:
                         conn.commit()
                         conn.close()
 
-                        st.success(f"Romaneio Nº {num_romaneio} salvo com sucesso no banco de dados!")
+                        st.success(f"Romaneio Nº {proximo_num} salvo com sucesso no banco de dados!")
                         st.session_state["itens_temp"] = []
                         st.rerun()
                     except Exception as e:
@@ -500,7 +533,7 @@ else:
 
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, numero_romaneio, fornecedor, data_recebimento, conferente, observacoes FROM romaneios ORDER BY id DESC")
+        cursor.execute("SELECT id, numero_romaneio, fornecedor_nome, codigo_fornecedor, data_recebimento, conferente, loja FROM romaneios ORDER BY id DESC")
         romaneios = cursor.fetchall()
         conn.close()
 
@@ -508,9 +541,9 @@ else:
             st.info("Nenhum romaneio cadastrado até o momento.")
         else:
             for r in romaneios:
-                with st.expander(f"Romaneio Nº: {r[1]} | Fornecedor: {r[2]} | Data: {r[3]}"):
-                    st.write(f"**Conferente:** {r[4]}")
-                    st.write(f"**Observações:** {r[5] if r[5] else 'Nenhuma'}")
+                with st.expander(f"Rom. Nº: {r[1]} | Fornecedor: {r[2]} | Data: {r[4]} | Loja: {r[6]}"):
+                    st.write(f"**Cód. Fornecedor:** {r[3] if r[3] else 'Não informado'}")
+                    st.write(f"**Conferente (Rec. Físico):** {r[5]}")
                     st.write("**Itens Conferidos:**")
                     
                     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
