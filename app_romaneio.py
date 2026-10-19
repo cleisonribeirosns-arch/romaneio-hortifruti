@@ -315,12 +315,10 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
         if logo_path:
             break
 
-    # Função para desenhar a marca d'água centralizada e o rodapé
     def add_background_and_footer(canvas_obj, doc_obj):
         canvas_obj.saveState()
         if logo_path and os.path.exists(logo_path):
             try:
-                # Marca d'água centralizada com baixa opacidadade simulada ou imagem centralizada
                 canvas_obj.setFillAlpha(0.1)
                 canvas_obj.drawImage(
                     logo_path,
@@ -335,8 +333,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
                 pass
         canvas_obj.restoreState()
 
-    # Cabeçalho com Logo
-    header_data = []
     logo_img = (
         RLImage(logo_path, width=50, height=50)
         if logo_path and os.path.exists(logo_path)
@@ -371,7 +367,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
     story.append(header_table)
     story.append(Spacer(1, 10))
 
-    # Dados do Fornecedor
     info_data = [
         [
             Paragraph(
@@ -415,7 +410,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
     story.append(info_table)
     story.append(Spacer(1, 15))
 
-    # Tabela de Itens
     table_content = [
         ["Item", "Descrição do Produto", "Qtd / Peso", "UND", "Vl. Unit", "Total"]
     ]
@@ -466,7 +460,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
     story.append(total_table)
     story.append(Spacer(1, 20))
 
-    # Assinaturas
     ass_data = [
         [
             Paragraph(
@@ -770,6 +763,7 @@ else:
                     )
                     romaneio_id = cursor.lastrowid
 
+                    itens_salvos_pdf = []
                     for itm in st.session_state["itens_romaneio"]:
                         cursor.execute(
                             """
@@ -786,6 +780,14 @@ else:
                                 itm["valor_total"],
                             ),
                         )
+                        itens_salvos_pdf.append([
+                            None,
+                            itm["produto"],
+                            itm["quantidade"],
+                            itm["unidade"],
+                            itm["valor_unitario"],
+                            itm["valor_total"],
+                        ])
 
                     conn.commit()
                     conn.close()
@@ -794,6 +796,30 @@ else:
                         f"Romaneio {num_romaneio} salvo com sucesso no banco de"
                         " dados!"
                     )
+
+                    # Geração imediata do botão de download do PDF na tela de cadastro
+                    romaneio_dict_atual = {
+                        "numero_romaneio": num_romaneio,
+                        "data_recebimento": str(data_rec),
+                        "fornecedor": fornecedor,
+                        "codigo_fornecedor": cod_fornecedor,
+                        "telefone_fornecedor": tel_fornecedor,
+                        "loja": loja,
+                        "conferente": user_info["nome"],
+                        "pagamento_a_vista": pag_a_vista,
+                    }
+                    pdf_buffer_novo = gerar_pdf_romaneio(
+                        romaneio_dict_atual, itens_salvos_pdf
+                    )
+
+                    st.download_button(
+                        label=f"📥 Baixar PDF do Romaneio {num_romaneio}",
+                        data=pdf_buffer_novo,
+                        file_name=f"{num_romaneio}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                    )
+
                     st.session_state["itens_romaneio"] = []
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
@@ -836,7 +862,6 @@ else:
                     total_rom = df_itens["valor_total"].sum()
                     st.markdown(f"**Total do Romaneio: R$ {total_rom:,.2f}**")
 
-                    # Botão para baixar PDF
                     romaneio_dict = row.to_dict()
                     itens_tuple_list = df_itens.to_records(index=False).tolist()
                     pdf_buffer = gerar_pdf_romaneio(romaneio_dict, itens_tuple_list)
