@@ -20,7 +20,7 @@ import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
 # ---------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL (ETAPA 1 INTACTA RESTAURADA)
+# 1. CONFIGURAÇÃO DA PÁGINA E ESTILO VISUAL (ETAPA 1 ORIGINAL)
 # ---------------------------------------------------------
 logo_page_icon = None
 for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
@@ -99,14 +99,14 @@ st.markdown(
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
-        background-color: #1B5E20 !important;
+        background-color: #C62828 !important;
         color: #FFFFFF !important;
         border: 1px solid #FFFFFF !important;
         font-weight: bold !important;
         border-radius: 6px !important;
     }}
     button[kind="secondary"], .stButton > button[kind="secondary"] {{
-        background-color: #C62828 !important;
+        background-color: #1B5E20 !important;
         color: #FFFFFF !important;
         border: 1px solid #FFFFFF !important;
         font-weight: bold !important;
@@ -485,11 +485,13 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
 
 
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN (ETAPA 1 INTACTA RESTAURADA)
+# 4. TELA DE LOGIN (ETAPA 1 ORIGINAL EXATA DO VÍDEO)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     col_l1, col_l2, col_l3 = st.columns([0.5, 3, 0.5])
     with col_l2:
+        if logo_page_icon and os.path.exists(logo_page_icon):
+            st.image(logo_page_icon, width=220)
         st.title("Supermercado Super Nova Cidade")
         st.subheader("Sistema de Recebimento Hortifrúti")
         st.write("")
