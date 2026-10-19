@@ -260,10 +260,12 @@ def fazer_login(login, senha):
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
+
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN
+# 4. CONTROLE DE FLUXO (LOGIN vs SISTEMA)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
+    # --- TELA DE LOGIN ---
     logo_display = None
     for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png"]:
         if os.path.exists(nome):
@@ -319,11 +321,8 @@ if st.session_state["usuario_logado"] is None:
                 else:
                     st.error("Usuário ou senha incorretos.")
 
-# ---------------------------------------------------------
-# 5. ÁREA DO SISTEMA (PÓS-LOGIN) - ETAPA 2
-# ---------------------------------------------------------
 else:
-    # Barra Superior de Navegação / Perfil
+    # --- ÁREA INTERNA DO SISTEMA (PÓS-LOGIN) ---
     st.sidebar.title("Super Nova Cidade")
     st.sidebar.write(f"**Usuário:** {st.session_state['usuario_logado']['nome']}")
     st.sidebar.write(f"**Perfil:** {st.session_state['usuario_logado']['perfil']}")
@@ -338,7 +337,6 @@ else:
         st.session_state["usuario_logado"] = None
         st.rerun()
 
-    # Módulo 1: Cadastro e Lançamento de Romaneio
     elif menu == "➕ Novo Romaneio":
         st.title("🥦 Cadastro de Romaneio - Hortifrúti")
         st.write("Preencha os dados do fornecedor e lance os itens conferidos.")
@@ -357,7 +355,6 @@ else:
             st.divider()
             st.subheader("📦 Itens do Romaneio")
 
-            # Inicializa lista de itens temporária na sessão
             if "itens_temp" not in st.session_state:
                 st.session_state["itens_temp"] = []
 
@@ -383,7 +380,6 @@ else:
                     })
                     st.success(f"Item '{prod_input}' adicionado com sucesso!")
 
-            # Exibe tabela de itens adicionados
             if st.session_state["itens_temp"]:
                 st.write("### Itens Lançados:")
                 for idx, item in enumerate(st.session_state["itens_temp"]):
@@ -406,14 +402,12 @@ else:
                         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                         cursor = conn.cursor()
                         
-                        # Salva Cabeçalho
                         cursor.execute(
                             "INSERT INTO romaneios (numero_romaneio, fornecedor, data_recebimento, conferente, observacoes) VALUES (?, ?, ?, ?, ?)",
                             (num_romaneio, fornecedor, str(data_rec), st.session_state["usuario_logado"]["nome"], obs)
                         )
                         romaneio_id = cursor.lastrowid
 
-                        # Salva Itens
                         for item in st.session_state["itens_temp"]:
                             cursor.execute(
                                 "INSERT INTO itens_romaneio (romaneio_id, produto, quantidade, unidade) VALUES (?, ?, ?, ?)",
