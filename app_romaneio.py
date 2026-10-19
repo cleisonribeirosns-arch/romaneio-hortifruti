@@ -250,7 +250,7 @@ def init_db():
     for p in produtos_iniciais:
         cursor.execute(
             """
-            OR INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
+            INSERT OR IGNORE INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
             VALUES (?, ?, ?, ?)
         """,
             p,
