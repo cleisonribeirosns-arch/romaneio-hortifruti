@@ -1,8 +1,8 @@
 import base64
+from datetime import date  # <--- ADICIONE ESTA LINHA NO TOPO
 import os
 import sqlite3
 import streamlit as st
-
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
