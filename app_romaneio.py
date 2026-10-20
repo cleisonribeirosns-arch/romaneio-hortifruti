@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, date
+from datetime import datetime
 import io
 import os
 import pandas as pd
@@ -238,86 +238,9 @@ def init_db():
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
-    produtos_iniciais = [
-        ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
-        ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
-        ("17510", "48903", "ABACATE GEADA KG", "KG"),
-        ("2240", "165651", "ABACATE MARGARIDA KG", "KG"),
-        ("9034", "163887", "ABACATE REGIONAL KG", "KG"),
-        ("73677", "90217", "ABACAXI FATIADO KG", "KG"),
-        ("2387", "165662", "ABACAXI KG PERDA", "KG"),
-        ("6156", "30531", "ABACAXI UN", "UN"),
-        ("17503", "48887", "ABOBRINHA CABOTIA KG", "KG"),
-        ("3667", "165723", "ABOBRINHA ITALIANA KG", "KG"),
-        ("2356", "165659", "ABOBRINHA KG", "KG"),
-        ("7898910073589", "165340", "ALFACE AMERICANA", "UN"),
-        ("386296", "165339", "ALFACE ROXA UN", "UN"),
-        ("7898941929398", "90270", "ALFACE VIVA BABY UN", "UN"),
-        ("4275", "187484", "ALHO ROXO KG", "KG"),
-        ("182", "131307", "BANANA NANICA KG", "KG"),
-        ("1038", "165575", "BANANA PACOVAN KG", "KG"),
-        ("2073", "165634", "BANANA PRATA KG", "KG"),
-        ("2219", "165648", "BATATA DOCE BRANCA KG", "KG"),
-        ("5104", "28298", "BATATA DOCE ROXA KG", "KG"),
-        ("2233", "163880", "BATATA PORTUGUESA KG", "KG"),
-        ("2349", "165658", "BERINJELA KG", "KG"),
-        ("2165", "165643", "BETERRABA KG", "KG"),
-        ("4480", "165766", "BROCOLIS NINJA KG", "KG"),
-        ("2691", "165686", "CARA KG", "KG"),
-        ("2028", "165629", "CEBOLA KG", "KG"),
-        ("674", "131654", "CEBOLA ROXA KG", "KG"),
-        ("2226", "165649", "CENOURA KG", "KG"),
-        ("2127", "165639", "CHEIRO VERDE UN", "UN"),
-        ("949", "165567", "CHUCHU KG", "KG"),
-        ("6705", "165863", "COCO SECO UN", "UN"),
-        ("2172", "165644", "COUVE FLOR KG", "KG"),
-        ("2202", "165647", "FEIJAO VERDE UN", "UN"),
-        ("22392", "166819", "GENGIBRE KG", "KG"),
-        ("4268", "165758", "GOIABA KG", "KG"),
-        ("3247", "165708", "HORTELA KG", "KG"),
-        ("4565", "137074", "INHAME KG", "KG"),
-        ("12508", "36027", "JENIPAPO KG", "KG"),
-        ("2196", "165646", "JERIMUM KG", "KG"),
-        ("8747", "165943", "KIWI KG", "KG"),
-        ("9690", "35740", "LARANJA BAHIA KG", "KG"),
-        ("61827", "86243", "LARANJA PAULISTA PCT KG", "KG"),
-        ("2080", "165635", "LARANJA REGIONAL KG", "KG"),
-        ("2059", "165632", "LIMAO KG", "KG"),
-        ("4312", "28071", "MACA KG", "KG"),
-        ("1007", "165572", "MACA RED KG", "KG"),
-        ("2332", "165657", "MACAXEIRA KG", "KG"),
-        ("2363", "165660", "MAMAO KG", "KG"),
-        ("201", "178998", "MANGA TOMMY KG", "KG"),
-        ("2264", "165653", "MARACUJA KG", "KG"),
-        ("2158", "165642", "MAXIXE KG", "KG"),
-        ("75404", "24094", "MELANCIA KG", "KG"),
-        ("2370", "165661", "MELAO COMUM KG", "KG"),
-        ("8686", "165939", "MORANGO BDJ KG", "KG"),
-        ("40141454058", "71563", "OVOS AMAZONAS BRANCO C/30UN", "UN"),
-        ("7898141930071", "156390", "OVOS CARTELA C/30UN BRANCO SAO PEDRO", "UN"),
-        ("2066", "165633", "PEPINO COMUM KG", "KG"),
-        ("4398", "28079", "PERA DANJOU KG", "KG"),
-        ("675369", "163735", "PIMENTA DE CHEIRO KG", "KG"),
-        ("703", "165548", "PIMENTAO COLORIDO KG", "KG"),
-        ("2110", "165638", "PIMENTAO VERDE KG", "KG"),
-        ("2134", "165640", "QUIABO KG", "KG"),
-        ("4459", "165764", "REPOLHO ROXO KG", "KG"),
-        ("2097", "165636", "REPOLHO VERDE KG", "KG"),
-        ("3254", "165709", "RUCULA KG", "KG"),
-        ("9621", "165976", "SALSA KG", "KG"),
-        ("2516", "165674", "TANGERINA IMPORTADA KG", "KG"),
-        ("1175", "41418", "TOMATE KG", "KG"),
-    ]
-    for p in produtos_iniciais:
-        cursor.execute(
-            """
-            INSERT OR IGNORE INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
-            VALUES (?, ?, ?, ?)
-        """,
-            p,
-        )
     conn.commit()
     conn.close()
+
 init_db()
 
 if not os.path.exists("uploads"):
@@ -655,59 +578,57 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Data do Recebimento formatada corretamente no padrão DD/MM/AAAA
-                data_rec_obj = st.date_input(
-                    "Data do Recebimento",
-                    value=date.today(),
+                # Data de Recebimento obrigatória que inicia vazia ("zerada")
+                data_rec_val = st.date_input(
+                    "Data do Recebimento (Obrigatório)",
+                    value=None,
                     format="DD/MM/YYYY",
-                    key=f"data_rec_obj_{k_suffix}",
+                    key=f"data_rec_{k_suffix}",
                 )
-                data_rec_str = data_rec_obj.strftime("%d/%m/%Y")
+                data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
 
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
                 
-                # Máscara exata para Telefone do Fornecedor baseada na regra digitada
-                if f"tel_input_val_{k_suffix}" not in st.session_state:
-                    st.session_state[f"tel_input_val_{k_suffix}"] = ""
-                
-                def atualizar_telefone():
-                    val_atual = st.session_state.get(f"raw_tel_{k_suffix}", "")
-                    raw = "".join(filter(str.isdigit, val_atual))
+                # Máscara automática interativa para Telefone (Digitando 1º abre '(', 2º fecha ') ', após 5º insere '-')
+                tel_key = f"tel_input_{k_suffix}"
+                if tel_key not in st.session_state:
+                    st.session_state[tel_key] = ""
+
+                def formatar_tel():
+                    val = st.session_state.get(tel_key, "")
+                    raw = "".join(filter(str.isdigit, val))
                     if len(raw) > 11:
                         raw = raw[:11]
                     
-                    formatted = ""
+                    fmt = ""
                     if len(raw) > 0:
-                        formatted += f"({raw[:2]}"
+                        fmt += f"({raw[:2]}"
                     if len(raw) >= 3:
-                        formatted += f") {raw[2:7]}"
+                        fmt += f") {raw[2:7]}"
                     if len(raw) >= 8:
-                        formatted += f"-{raw[7:]}"
-                    
-                    st.session_state[f"tel_input_val_{k_suffix}"] = formatted
+                        fmt += f"-{raw[7:]}"
+                    st.session_state[tel_key] = fmt
 
-                tel_input_val = st.text_input(
+                tel_fornecedor = st.text_input(
                     "Telefone do Fornecedor",
-                    value=st.session_state[f"tel_input_val_{k_suffix}"],
                     placeholder="(00) 00000-0000",
-                    key=f"raw_tel_{k_suffix}",
-                    on_change=atualizar_telefone,
+                    key=tel_key,
+                    on_change=formatar_tel,
                 )
-                tel_fornecedor = st.session_state[f"tel_input_val_{k_suffix}"]
 
             pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
             
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag_obj = st.date_input(
-                    "Data para Pagamento",
-                    value=date.today(),
+                data_pag_val = st.date_input(
+                    "Data para Pagamento (Obrigatório)",
+                    value=None,
                     format="DD/MM/YYYY",
-                    key=f"data_pag_obj_{k_suffix}",
+                    key=f"data_pag_{k_suffix}",
                 )
-                data_pag_str = data_pag_obj.strftime("%d/%m/%Y")
+                data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
 
             conferente = st.text_input(
                 "Responsável Rec. Físico",
@@ -816,8 +737,12 @@ else:
             )
 
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
-            if not num_romaneio.strip() or not fornecedor.strip() or not data_rec_str.strip():
-                st.error("Preencha o número do romaneio, o fornecedor e a data do recebimento.")
+            if not num_romaneio.strip() or not fornecedor.strip():
+                st.error("Preencha o número do romaneio e o fornecedor.")
+            elif not data_rec_str:
+                st.error("A Data do Recebimento é obrigatória! Selecione a data no calendário.")
+            elif pag_a_vista == "NÃO" and not data_pag_str:
+                st.error("A Data para Pagamento é obrigatória para compras a prazo! Selecione a data.")
             elif not st.session_state["itens_romaneio"]:
                 st.error("Adicione itens ao romaneio.")
             else:
@@ -923,10 +848,8 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
                     
-                    # Limpeza completa e incremento do sufixo para resetar o formulário para o próximo romaneio
+                    # Limpeza completa dos campos e avanço do sufixo para o próximo romaneio
                     st.session_state["itens_romaneio"] = []
-                    if f"tel_input_val_{k_suffix}" in st.session_state:
-                        st.session_state[f"tel_input_val_{k_suffix}"] = ""
                     st.session_state["form_key_suffix"] += 1
                     st.rerun()
                     
@@ -983,7 +906,7 @@ else:
                     )
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
-    elif menu == "Relatórios & Gráficos" & eh_gestor:
+    elif menu == "Relatórios & Gráficos" and eh_gestor:
         st.title("📊 Relatórios e Análise Gráfica")
         st.info("Módulo restrito de relatórios gerenciais.")
     elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
