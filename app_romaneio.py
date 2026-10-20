@@ -708,18 +708,24 @@ else:
                     st.warning("Informe uma quantidade maior que zero.")
 
         if st.session_state["itens_romaneio"]:
-            st.markdown("**Itens adicionados (você pode remover um item específico abaixo):**")
+            st.markdown("**Itens adicionados (clique na lixeira ao lado da linha para remover um item específico):**")
+            
+            # Exibe os itens em formato de tabela interativa com botões de exclusão por linha
             total_geral_temp = 0.0
             for i, itm in enumerate(st.session_state["itens_romaneio"]):
-                col_item_info, col_item_btn = st.columns([5, 1])
-                with col_item_info:
-                    st.text(f"{i+1}. Produto: {itm['produto']} | Qtd: {itm['quantidade']:,.3f} {itm['unidade']} | V.Unit: R$ {itm['valor_unitario']:,.2f} | Total: R$ {itm['valor_total']:,.2f}")
-                with col_item_btn:
-                    if st.button("🗑️", key=f"del_item_{k_suffix}_{i}", help="Remover este item"):
-                        st.session_state["itens_romaneio"].pop(i)
-                        st.rerun()
+                c_idx, c_prod, c_qtd, c_und, c_vunit, c_vtot, c_btn = st.columns([0.5, 3.5, 1.5, 1, 1.5, 1.5, 0.8])
+                c_idx.write(f"**{i+1}**")
+                c_prod.write(itm['produto'])
+                c_qtd.write(f"{itm['quantidade']:,.3f}")
+                c_und.write(itm['unidade'])
+                c_vunit.write(f"R$ {itm['valor_unitario']:,.2f}")
+                c_vtot.write(f"R$ {itm['valor_total']:,.2f}")
+                if c_btn.button("🗑️", key=f"del_item_{k_suffix}_{i}", help=f"Remover item {i+1}"):
+                    st.session_state["itens_romaneio"].pop(i)
+                    st.rerun()
                 total_geral_temp += itm['valor_total']
             
+            st.divider()
             st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
@@ -872,7 +878,7 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
                     
-                    # Limpa os itens do romaneio atual e atualiza a chave para reiniciar o formulário limpo
+                    # Limpa os itens e atualiza o sufixo para reiniciar o form limpo
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     
