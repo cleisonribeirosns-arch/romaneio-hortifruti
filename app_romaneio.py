@@ -291,11 +291,11 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             canvas_obj.saveState()
             try:
                 canvas_obj.setFillAlpha(0.12)
-                # Posicionamento centralizado exatamente na área da tabela e itens
+                # Marca d'água posicionada perfeitamente no centro superior da tabela/itens (subida em relação à versão anterior)
                 canvas_obj.drawImage(
                     logo_path,
                     letter[0] / 2 - 140,
-                    letter[1] / 2 - 40,
+                    letter[1] / 2 + 30,
                     width=280,
                     height=280,
                     preserveAspectRatio=True,
