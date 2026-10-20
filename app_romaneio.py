@@ -173,6 +173,14 @@ st.markdown(
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
+    /* Estilização compacta com bordas/barras verticais e horizontais para a tabela de itens */
+    .tabela-container {{
+        background-color: rgba(20, 20, 20, 0.75);
+        border: 1px solid #1B5E20;
+        border-radius: 6px;
+        padding: 6px 10px;
+        margin-bottom: 6px;
+    }}
     {css_fundo}
     </style>
 """,
@@ -708,35 +716,40 @@ else:
                     st.warning("Informe uma quantidade maior que zero.")
 
         if st.session_state["itens_romaneio"]:
-            st.markdown("**Itens adicionados (clique na lixeira ao lado da linha para remover um item específico):**")
-            st.divider()
+            st.markdown("**Itens adicionados (clique na lixeira para remover):**")
             
-            # Cabeçalho da tabela com divisor
-            h_idx, h_prod, h_qtd, h_und, h_vunit, h_vtot, h_btn = st.columns([0.5, 3.5, 1.5, 1, 1.5, 1.5, 0.8])
-            h_idx.markdown("**#**")
-            h_prod.markdown("**Descrição do Produto**")
-            h_qtd.markdown("**Qtd / Peso**")
-            h_und.markdown("**UND**")
-            h_vunit.markdown("**Vl. Unit**")
-            h_vtot.markdown("**Total**")
-            h_btn.markdown("**Ação**")
-            st.divider()
+            # Cabeçalho da tabela com fundo verde corporativo e barras divisorias claras
+            st.markdown("""
+                <div style="display: flex; background-color: #1B5E20; color: white; font-weight: bold; padding: 8px 10px; border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 14px; align-items: center; border-bottom: 2px solid #FFFFFF;">
+                    <div style="width: 6%;">#</div>
+                    <div style="width: 38%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px;">Descrição do Produto</div>
+                    <div style="width: 15%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: center;">Qtd / Peso</div>
+                    <div style="width: 10%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: center;">UND</div>
+                    <div style="width: 15%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: right;">Vl. Unit</div>
+                    <div style="width: 16%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: right;">Total</div>
+                </div>
+            """, unsafe_allow_html=True)
             
-            # Exibe cada item com linha separadora (st.divider)
             total_geral_temp = 0.0
             for i, itm in enumerate(st.session_state["itens_romaneio"]):
-                c_idx, c_prod, c_qtd, c_und, c_vunit, c_vtot, c_btn = st.columns([0.5, 3.5, 1.5, 1, 1.5, 1.5, 0.8])
-                c_idx.write(f"**{i+1}**")
-                c_prod.write(itm['produto'])
-                c_qtd.write(f"{itm['quantidade']:,.3f}")
-                c_und.write(itm['unidade'])
-                c_vunit.write(f"R$ {itm['valor_unitario']:,.2f}")
-                c_vtot.write(f"R$ {itm['valor_total']:,.2f}")
-                if c_btn.button("🗑️", key=f"del_item_{k_suffix}_{i}", help=f"Remover item {i+1}"):
-                    st.session_state["itens_romaneio"].pop(i)
-                    st.rerun()
+                # Linhas da tabela compactas com barras divisórias verticais entre as colunas
+                col_row_info, col_row_btn = st.columns([11, 1])
+                with col_row_info:
+                    st.markdown(f"""
+                        <div style="display: flex; background-color: rgba(255, 255, 255, 0.92); color: #000; padding: 6px 10px; align-items: center; border-bottom: 1px solid #CCCCCC; border-left: 1px solid #CCCCCC; border-right: 1px solid #CCCCCC; font-size: 14px;">
+                            <div style="width: 6%; font-weight: bold;">{i+1}</div>
+                            <div style="width: 38%; border-left: 1px solid #D0D0D0; padding-left: 8px; font-weight: 500;">{itm['produto']}</div>
+                            <div style="width: 15%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: center;">{itm['quantidade']:,.3f}</div>
+                            <div style="width: 10%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: center;">{itm['unidade']}</div>
+                            <div style="width: 15%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: right;">R$ {itm['valor_unitario']:,.2f}</div>
+                            <div style="width: 16%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: right; font-weight: bold;">R$ {itm['valor_total']:,.2f}</div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with col_row_btn:
+                    if st.button("🗑️", key=f"del_item_{k_suffix}_{i}", help=f"Remover item {i+1}"):
+                        st.session_state["itens_romaneio"].pop(i)
+                        st.rerun()
                 total_geral_temp += itm['valor_total']
-                st.divider()
             
             st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
@@ -890,7 +903,6 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
                     
-                    # Limpa os itens e atualiza o sufixo para reiniciar o form limpo
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     
