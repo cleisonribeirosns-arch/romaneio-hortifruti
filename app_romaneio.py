@@ -668,12 +668,10 @@ else:
                 key=f"und_sel_{k_suffix}",
             )
         with col_p3:
-            # Quantidade em branco (valor 0.0 mas sem valor fixo pré-preenchido)
             qtd_input = st.number_input(
                 "Qtd / Peso", min_value=0.0, value=0.0, step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
             )
         with col_p4:
-            # Valor Unitário em branco (valor 0.0)
             val_unit = st.number_input(
                 "Valor Unit. (R$)", min_value=0.0, value=0.0, step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
             )
@@ -696,7 +694,6 @@ else:
 
         if st.session_state["itens_romaneio"]:
             df_itens = pd.DataFrame(st.session_state["itens_romaneio"])
-            # Ajustando a numeração do índice da tabela para começar de 1 em diante
             df_itens.index = range(1, len(df_itens) + 1)
             st.dataframe(df_itens, use_container_width=True)
             st.markdown(
@@ -725,6 +722,7 @@ else:
                 background_color="#FFFFFF",
                 height=120,
                 width=280,
+                return_image_data=True,  # Corrigido para capturar a imagem da assinatura
                 key=f"canv_conf_{k_suffix}",
             )
         with col_ass2:
@@ -735,6 +733,7 @@ else:
                 background_color="#FFFFFF",
                 height=120,
                 width=280,
+                return_image_data=True,  # Corrigido para capturar a imagem da assinatura
                 key=f"canv_ent_{k_suffix}",
             )
 
