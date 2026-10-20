@@ -655,10 +655,11 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Seletor de data nativo para Data do Recebimento
+                # Data do Recebimento formatada corretamente no padrão DD/MM/AAAA
                 data_rec_obj = st.date_input(
                     "Data do Recebimento",
                     value=date.today(),
+                    format="DD/MM/YYYY",
                     key=f"data_rec_obj_{k_suffix}",
                 )
                 data_rec_str = data_rec_obj.strftime("%d/%m/%Y")
@@ -667,7 +668,7 @@ else:
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
                 
-                # Máscara automática robusta para Telefone do Fornecedor ((00) 00000-0000)
+                # Máscara exata para Telefone do Fornecedor baseada na regra digitada
                 if f"tel_input_val_{k_suffix}" not in st.session_state:
                     st.session_state[f"tel_input_val_{k_suffix}"] = ""
                 
@@ -677,14 +678,14 @@ else:
                     if len(raw) > 11:
                         raw = raw[:11]
                     
-                    if len(raw) > 6:
-                        formatted = f"({raw[:2]}) {raw[2:7]}-{raw[7:]}"
-                    elif len(raw) > 2:
-                        formatted = f"({raw[:2]}) {raw[2:]}"
-                    elif len(raw) > 0:
-                        formatted = f"({raw}"
-                    else:
-                        formatted = ""
+                    formatted = ""
+                    if len(raw) > 0:
+                        formatted += f"({raw[:2]}"
+                    if len(raw) >= 3:
+                        formatted += f") {raw[2:7]}"
+                    if len(raw) >= 8:
+                        formatted += f"-{raw[7:]}"
+                    
                     st.session_state[f"tel_input_val_{k_suffix}"] = formatted
 
                 tel_input_val = st.text_input(
@@ -703,6 +704,7 @@ else:
                 data_pag_obj = st.date_input(
                     "Data para Pagamento",
                     value=date.today(),
+                    format="DD/MM/YYYY",
                     key=f"data_pag_obj_{k_suffix}",
                 )
                 data_pag_str = data_pag_obj.strftime("%d/%m/%Y")
@@ -981,7 +983,7 @@ else:
                     )
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
-    elif menu == "Relatórios & Gráficos" and eh_gestor:
+    elif menu == "Relatórios & Gráficos" & eh_gestor:
         st.title("📊 Relatórios e Análise Gráfica")
         st.info("Módulo restrito de relatórios gerenciais.")
     elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
