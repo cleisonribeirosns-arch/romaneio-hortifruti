@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, date
 import io
 import os
 import pandas as pd
@@ -18,6 +18,7 @@ from reportlab.platypus import (
 import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
+
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
@@ -38,6 +39,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 # ---------------------------------------------------------
 # 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
 # ---------------------------------------------------------
@@ -176,6 +178,7 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
 # ---------------------------------------------------------
 # 3. BANCO DE DADOS E INICIALIZAÇÃO
 # ---------------------------------------------------------
@@ -316,10 +319,13 @@ def init_db():
     conn.commit()
     conn.close()
 init_db()
+
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
+
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
+
 def fazer_login(login, senha):
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
@@ -330,6 +336,7 @@ def fazer_login(login, senha):
     usr = cursor.fetchone()
     conn.close()
     return usr
+
 # ---------------------------------------------------------
 # 4. GERADOR DE PDF FORMATADO
 # ---------------------------------------------------------
@@ -508,6 +515,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
     buffer.seek(0)
     return buffer
+
 # ---------------------------------------------------------
 # 5. TELA DE LOGIN
 # ---------------------------------------------------------
@@ -600,6 +608,7 @@ else:
             "Gerenciar Usuários & Permissões",
         ])
     menu = st.sidebar.radio("Navegação", opcoes_menu)
+    
     # ---------------------------------------------------------
     # 6. MÓDULOS DO SISTEMA
     # ---------------------------------------------------------
@@ -608,6 +617,7 @@ else:
         if "form_key_suffix" not in st.session_state:
             st.session_state["form_key_suffix"] = 0
         k_suffix = st.session_state["form_key_suffix"]
+        
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
         cursor.execute(
@@ -621,6 +631,7 @@ else:
             label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
         prod_nomes_keys = list(prod_dict.keys())
+
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -644,43 +655,28 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Máscara automática para Data do Recebimento (00/00/0000)
-                if f"data_rec_val_{k_suffix}" not in st.session_state:
-                    st.session_state[f"data_rec_val_{k_suffix}"] = ""
-                def formatar_data_rec():
-                    raw = "".join(filter(str.isdigit, st.session_state[f"raw_data_rec_{k_suffix}"]))
-                    if len(raw) > 8:
-                        raw = raw[:8]
-                    if len(raw) > 4:
-                        formatted = f"{raw[:2]}/{raw[2:4]}/{raw[4:]}"
-                    elif len(raw) > 2:
-                        formatted = f"{raw[:2]}/{raw[2:]}"
-                    elif len(raw) > 0:
-                        formatted = f"{raw}"
-                    else:
-                        formatted = ""
-                    st.session_state[f"data_rec_val_{k_suffix}"] = formatted
-                
-                st.text_input(
-                    "Data do Recebimento (DD/MM/AAAA)",
-                    value=st.session_state[f"data_rec_val_{k_suffix}"],
-                    placeholder="00/00/0000",
-                    key=f"raw_data_rec_{k_suffix}",
-                    on_change=formatar_data_rec,
+                # Seletor de data nativo para Data do Recebimento
+                data_rec_obj = st.date_input(
+                    "Data do Recebimento",
+                    value=date.today(),
+                    key=f"data_rec_obj_{k_suffix}",
                 )
-                data_rec_str = st.session_state[f"data_rec_val_{k_suffix}"]
+                data_rec_str = data_rec_obj.strftime("%d/%m/%Y")
 
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
                 
-                # Máscara automática para Telefone do Fornecedor ((00) 00000-0000)
+                # Máscara automática robusta para Telefone do Fornecedor ((00) 00000-0000)
                 if f"tel_input_val_{k_suffix}" not in st.session_state:
                     st.session_state[f"tel_input_val_{k_suffix}"] = ""
-                def formatar_telefone():
-                    raw = "".join(filter(str.isdigit, st.session_state[f"raw_tel_{k_suffix}"]))
+                
+                def atualizar_telefone():
+                    val_atual = st.session_state.get(f"raw_tel_{k_suffix}", "")
+                    raw = "".join(filter(str.isdigit, val_atual))
                     if len(raw) > 11:
                         raw = raw[:11]
+                    
                     if len(raw) > 6:
                         formatted = f"({raw[:2]}) {raw[2:7]}-{raw[7:]}"
                     elif len(raw) > 2:
@@ -691,12 +687,12 @@ else:
                         formatted = ""
                     st.session_state[f"tel_input_val_{k_suffix}"] = formatted
 
-                st.text_input(
+                tel_input_val = st.text_input(
                     "Telefone do Fornecedor",
                     value=st.session_state[f"tel_input_val_{k_suffix}"],
                     placeholder="(00) 00000-0000",
                     key=f"raw_tel_{k_suffix}",
-                    on_change=formatar_telefone,
+                    on_change=atualizar_telefone,
                 )
                 tel_fornecedor = st.session_state[f"tel_input_val_{k_suffix}"]
 
@@ -704,31 +700,12 @@ else:
             
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                # Máscara automática para Data de Pagamento (00/00/0000)
-                if f"data_pag_val_{k_suffix}" not in st.session_state:
-                    st.session_state[f"data_pag_val_{k_suffix}"] = ""
-                def formatar_data_pag():
-                    raw = "".join(filter(str.isdigit, st.session_state[f"raw_data_pag_{k_suffix}"]))
-                    if len(raw) > 8:
-                        raw = raw[:8]
-                    if len(raw) > 4:
-                        formatted = f"{raw[:2]}/{raw[2:4]}/{raw[4:]}"
-                    elif len(raw) > 2:
-                        formatted = f"{raw[:2]}/{raw[2:]}"
-                    elif len(raw) > 0:
-                        formatted = f"{raw}"
-                    else:
-                        formatted = ""
-                    st.session_state[f"data_pag_val_{k_suffix}"] = formatted
-
-                st.text_input(
-                    "Data para Pagamento (DD/MM/AAAA)",
-                    value=st.session_state[f"data_pag_val_{k_suffix}"],
-                    placeholder="00/00/0000",
-                    key=f"raw_data_pag_{k_suffix}",
-                    on_change=formatar_data_pag,
+                data_pag_obj = st.date_input(
+                    "Data para Pagamento",
+                    value=date.today(),
+                    key=f"data_pag_obj_{k_suffix}",
                 )
-                data_pag_str = st.session_state[f"data_pag_val_{k_suffix}"]
+                data_pag_str = data_pag_obj.strftime("%d/%m/%Y")
 
             conferente = st.text_input(
                 "Responsável Rec. Físico",
@@ -736,9 +713,11 @@ else:
                 disabled=True,
                 key=f"conf_{k_suffix}",
             )
+
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
+        
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
@@ -791,6 +770,7 @@ else:
                     st.rerun()
                 else:
                     st.warning("Informe uma quantidade maior que zero.")
+
         if st.session_state["itens_romaneio"]:
             df_itens = pd.DataFrame(st.session_state["itens_romaneio"])
             st.dataframe(df_itens, use_container_width=True)
@@ -801,6 +781,7 @@ else:
             if st.button("🗑️ Limpar Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
+
         st.subheader("3. Anexo de Fotos / Comprovantes")
         fotos_upload = st.file_uploader(
             "Fotos da Nota / Canhoto",
@@ -808,6 +789,7 @@ else:
             accept_multiple_files=True,
             key=f"fotos_{k_suffix}",
         )
+
         st.subheader("4. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
@@ -830,6 +812,7 @@ else:
                 width=280,
                 key=f"canv_ent_{k_suffix}",
             )
+
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip() or not data_rec_str.strip():
                 st.error("Preencha o número do romaneio, o fornecedor e a data do recebimento.")
@@ -842,11 +825,13 @@ else:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_romaneio}.png")
                         img_c.save(path_ass_conf)
+                    
                     path_ass_ent = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_romaneio}.png")
                         img_e.save(path_ass_ent)
+                    
                     caminho_foto_salva = ""
                     if fotos_upload:
                         for f in fotos_upload:
@@ -854,6 +839,7 @@ else:
                             with open(path_f, "wb") as f_out:
                                 f_out.write(f.getbuffer())
                             caminho_foto_salva = path_f
+                    
                     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     cursor = conn.cursor()
                     cursor.execute(
@@ -908,9 +894,9 @@ else:
                         ])
                     conn.commit()
                     conn.close()
-                    st.success(
-                        f"Romaneio {num_romaneio} salvo com sucesso no banco de dados!"
-                    )
+                    
+                    st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco de dados!")
+                    
                     romaneio_dict_atual = {
                         "numero_romaneio": num_romaneio,
                         "data_recebimento": data_rec_str,
@@ -925,6 +911,7 @@ else:
                     pdf_buffer_novo = gerar_pdf_romaneio(
                         romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent
                     )
+                    
                     st.download_button(
                         label=f"📥 Baixar PDF do Romaneio {num_romaneio}",
                         data=pdf_buffer_novo,
@@ -933,10 +920,17 @@ else:
                         type="primary",
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
+                    
+                    # Limpeza completa e incremento do sufixo para resetar o formulário para o próximo romaneio
                     st.session_state["itens_romaneio"] = []
+                    if f"tel_input_val_{k_suffix}" in st.session_state:
+                        st.session_state[f"tel_input_val_{k_suffix}"] = ""
                     st.session_state["form_key_suffix"] += 1
+                    st.rerun()
+                    
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
+
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
