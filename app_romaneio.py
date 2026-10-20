@@ -709,8 +709,20 @@ else:
 
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados (clique na lixeira ao lado da linha para remover um item específico):**")
+            st.divider()
             
-            # Exibe os itens em formato de tabela interativa com botões de exclusão por linha
+            # Cabeçalho da tabela com divisor
+            h_idx, h_prod, h_qtd, h_und, h_vunit, h_vtot, h_btn = st.columns([0.5, 3.5, 1.5, 1, 1.5, 1.5, 0.8])
+            h_idx.markdown("**#**")
+            h_prod.markdown("**Descrição do Produto**")
+            h_qtd.markdown("**Qtd / Peso**")
+            h_und.markdown("**UND**")
+            h_vunit.markdown("**Vl. Unit**")
+            h_vtot.markdown("**Total**")
+            h_btn.markdown("**Ação**")
+            st.divider()
+            
+            # Exibe cada item com linha separadora (st.divider)
             total_geral_temp = 0.0
             for i, itm in enumerate(st.session_state["itens_romaneio"]):
                 c_idx, c_prod, c_qtd, c_und, c_vunit, c_vtot, c_btn = st.columns([0.5, 3.5, 1.5, 1, 1.5, 1.5, 0.8])
@@ -724,8 +736,8 @@ else:
                     st.session_state["itens_romaneio"].pop(i)
                     st.rerun()
                 total_geral_temp += itm['valor_total']
+                st.divider()
             
-            st.divider()
             st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
