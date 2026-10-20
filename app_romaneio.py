@@ -872,9 +872,11 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
                     
-                    if st.button("➕ Iniciar Novo Romaneio", key=f"novo_rom_{k_suffix}"):
-                        st.session_state["itens_romaneio"] = []
-                        st.session_state["form_key_suffix"] += 1
+                    # Limpa os itens do romaneio atual e atualiza a chave para reiniciar o formulário limpo
+                    st.session_state["itens_romaneio"] = []
+                    st.session_state["form_key_suffix"] += 1
+                    
+                    if st.button("➕ Iniciar Novo Romaneio Agora", key=f"novo_rom_{k_suffix}"):
                         st.rerun()
                     
                 except Exception as e:
