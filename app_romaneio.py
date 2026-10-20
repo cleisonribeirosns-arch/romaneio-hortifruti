@@ -291,12 +291,13 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             canvas_obj.saveState()
             try:
                 canvas_obj.setFillAlpha(0.12)
+                # Posicionamento centralizado exatamente na área da tabela e itens
                 canvas_obj.drawImage(
                     logo_path,
-                    letter[0] / 2 - 130,
-                    letter[1] / 2 - 180,
-                    width=260,
-                    height=260,
+                    letter[0] / 2 - 140,
+                    letter[1] / 2 - 40,
+                    width=280,
+                    height=280,
                     preserveAspectRatio=True,
                     mask="auto",
                 )
