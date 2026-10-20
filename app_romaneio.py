@@ -365,13 +365,14 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     ]
     total_geral = 0.0
     for idx, item in enumerate(itens_data, 1):
-        v_unit = item[4] if len(item) > 4 and item[4] else 0.0
-        v_tot = item[5] if len(item) > 5 and item[5] else 0.0
+        v_unit = float(item[4]) if len(item) > 4 and item[4] is not None else 0.0
+        v_tot = float(item[5]) if len(item) > 5 and item[5] is not None else 0.0
+        qtd_val = float(item[2]) if len(item) > 2 and item[2] is not None else 0.0
         total_geral += v_tot
         table_content.append([
             str(idx),
             str(item[1]),
-            f"{item[2]:,.3f}",
+            f"{qtd_val:,.3f}",
             str(item[3]),
             f"R$ {v_unit:,.2f}",
             f"R$ {v_tot:,.2f}",
@@ -722,7 +723,7 @@ else:
                 background_color="#FFFFFF",
                 height=120,
                 width=280,
-                return_image_data=True,  # Corrigido para capturar a imagem da assinatura
+                return_image_data=True,
                 key=f"canv_conf_{k_suffix}",
             )
         with col_ass2:
@@ -733,7 +734,7 @@ else:
                 background_color="#FFFFFF",
                 height=120,
                 width=280,
-                return_image_data=True,  # Corrigido para capturar a imagem da assinatura
+                return_image_data=True,
                 key=f"canv_ent_{k_suffix}",
             )
 
@@ -886,12 +887,22 @@ else:
                     )
                     conn_i.close()
                     st.markdown("**Itens Conferidos:**")
-                    df_itens.index = range(1, len(df_itens) + 1)
-                    st.dataframe(df_itens, use_container_width=True)
+                    
+                    # Exibição segura da tabela na consulta
+                    df_itens_ex = df_itens.copy()
+                    df_itens_ex.index = range(1, len(df_itens_ex) + 1)
+                    st.dataframe(df_itens_ex, use_container_width=True)
+                    
                     total_rom = df_itens["valor_total"].sum()
                     st.markdown(f"**Total do Romaneio: R$ {total_rom:,.2f}**")
+                    
                     romaneio_dict = row.to_dict()
-                    itens_tuple_list = df_itens.to_records(index=False).tolist()
+                    # Conversão segura para lista de tuplas para o PDF
+                    itens_tuple_list = [
+                        (None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total'])
+                        for _, r in df_itens.iterrows()
+                    ]
+                    
                     pdf_buffer = gerar_pdf_romaneio(
                         romaneio_dict,
                         itens_tuple_list,
