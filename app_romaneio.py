@@ -414,17 +414,19 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
 
+    safe_path_conf = str(path_conf) if path_conf else ""
     img_conf_pdf = None
-    if path_conf and os.path.exists(path_conf):
+    if safe_path_conf and os.path.exists(safe_path_conf):
         try:
-            img_conf_pdf = RLImage(path_conf, width=160, height=45)
+            img_conf_pdf = RLImage(safe_path_conf, width=160, height=45)
         except Exception:
             pass
 
+    safe_path_ent = str(path_ent) if path_ent else ""
     img_ent_pdf = None
-    if path_ent and os.path.exists(path_ent):
+    if safe_path_ent and os.path.exists(safe_path_ent):
         try:
-            img_ent_pdf = RLImage(path_ent, width=160, height=45)
+            img_ent_pdf = RLImage(safe_path_ent, width=160, height=45)
         except Exception:
             pass
 
@@ -943,12 +945,11 @@ else:
                     cursor = conn.cursor()
                     try:
                         cursor.execute(
-                            "INSERT INTO produtos (nome, unidade_padrao) VALUES"
-                            " (?, ?)",
+                            "INSERT INTO produtos (nome, unidade_padrao) VALUES (?, ?)",
                             (nome_p.strip(), und_p),
                         )
                         conn.commit()
-                        st.success(f"Produto '{nome_p}' cadastrado!")
+                        st.success(f"Produto '{nome_p}' cadastrado com sucesso!")
                         st.rerun()
                     except:
                         st.error("Produto já cadastrado.")
