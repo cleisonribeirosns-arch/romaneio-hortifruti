@@ -83,7 +83,7 @@ st.markdown(
         background-color: #F4F6F4 !important;
         border-right: 3px solid #1B5E20 !important;
     }}
-    header[data-testid="stHeader"], footer, div[data-testid="stToolbar"], div[class*="viewerBadge"], button[kind="header"] {{
+    header[data-testid="stHeader"], footer, div[data-testid="stToolbar"] {{
         display: none !important;
         visibility: hidden !important;
     }}
@@ -538,8 +538,6 @@ else:
         st.session_state["usuario_logado"] = None
         st.rerun()
     st.sidebar.divider()
-    
-    # Menu visível e otimizado para qualquer tela (computador ou celular)
     opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios"]
     if eh_gestor:
         opcoes_menu.extend([
@@ -656,12 +654,6 @@ else:
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
         
-        # Gerenciamento de chaves para resetar campos Qtd e Valor após Add
-        if f"qtd_val_{k_suffix}" not in st.session_state:
-            st.session_state[f"qtd_val_{k_suffix}"] = 0.0
-        if f"vunit_val_{k_suffix}" not in st.session_state:
-            st.session_state[f"vunit_val_{k_suffix}"] = 0.0
-
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
@@ -692,11 +684,11 @@ else:
             )
         with col_p3:
             qtd_input = st.number_input(
-                "Qtd / Peso", min_value=0.0, value=st.session_state[f"qtd_val_{k_suffix}"], step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
+                "Qtd / Peso", min_value=0.0, value=0.0, step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
             )
         with col_p4:
             val_unit = st.number_input(
-                "Valor Unit. (R$)", min_value=0.0, value=st.session_state[f"vunit_val_{k_suffix}"], step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
+                "Valor Unit. (R$)", min_value=0.0, value=0.0, step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
             )
         with col_p5:
             st.write("")
@@ -711,30 +703,42 @@ else:
                         "valor_unitario": val_unit,
                         "valor_total": v_tot,
                     })
-                    # Reseta os campos para vazio/zero para o próximo item
-                    st.session_state[f"qtd_val_{k_suffix}"] = 0.0
-                    st.session_state[f"vunit_val_{k_suffix}"] = 0.0
                     st.rerun()
                 else:
                     st.warning("Informe uma quantidade maior que zero.")
 
         if st.session_state["itens_romaneio"]:
-            st.markdown("**Itens adicionados (otimizado para celular e PC):**")
+            st.markdown("**Itens adicionados (clique na lixeira para remover):**")
             
-            # Exibição responsiva otimizada para telas menores (celular) e computadores
-            for i, itm in enumerate(st.session_state["itens_romaneio"]):
-                st.markdown(f"""
-                    <div style="background-color: rgba(255, 255, 255, 0.95); color: #000; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 5px solid #1B5E20; box-shadow: 0px 2px 5px rgba(0,0,0,0.3);">
-                        <div style="font-weight: bold; font-size: 14px; color: #1B5E20;">Item {i+1}: {itm['produto']}</div>
-                        <div style="display: flex; justify-content: space-between; font-size: 13px; margin-top: 4px; border-top: 1px solid #ddd; padding-top: 4px;">
-                            <span><b>Qtd:</b> {itm['quantidade']:,.3f} {itm['unidade']}</span>
-                            <span><b>V.Unit:</b> R$ {itm['valor_unitario']:,.2f}</span>
-                            <span><b>Total:</b> R$ {itm['valor_total']:,.2f}</span>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
-
-            # Seleção para remoção individual
+            # Monta o DataFrame com a coluna "Item" em vez de "#" e formata os valores
+            dados_tabela = []
+            for i, itm in enumerate(st.session_state["itens_romaneio"], 1):
+                dados_tabela.append({
+                    "Item": i,
+                    "Descrição do Produto": itm["produto"],
+                    "Qtd / Peso": f"{itm['quantidade']:,.3f}",
+                    "UND": itm["unidade"],
+                    "Vl. Unit": f"R$ {itm['valor_unitario']:,.2f}",
+                    "Total": f"R$ {itm['valor_total']:,.2f}"
+                })
+            df_exibicao = pd.DataFrame(dados_tabela)
+            
+            # Exibe a tabela nativa do Streamlit perfeitamente alinhada
+            st.dataframe(
+                df_exibicao,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Item": st.column_config.NumberColumn("Item", width="small"),
+                    "Descrição do Produto": st.column_config.TextColumn("Descrição do Produto", width="large"),
+                    "Qtd / Peso": st.column_config.TextColumn("Qtd / Peso", width="medium"),
+                    "UND": st.column_config.TextColumn("UND", width="small"),
+                    "Vl. Unit": st.column_config.TextColumn("Vl. Unit", width="medium"),
+                    "Total": st.column_config.TextColumn("Total", width="medium"),
+                }
+            )
+            
+            # Botões para remover item individualmente por índice
             col_rem_labels, col_rem_btns = st.columns([3, 1])
             with col_rem_labels:
                 item_para_remover = st.selectbox(
@@ -746,7 +750,7 @@ else:
             with col_rem_btns:
                 st.write("")
                 st.write("")
-                if st.button("🗑️ Remover", key=f"btn_rem_esp_{k_suffix}", type="secondary"):
+                if st.button("🗑️ Remover Selecionado", key=f"btn_rem_esp_{k_suffix}", type="secondary"):
                     st.session_state["itens_romaneio"].pop(item_para_remover - 1)
                     st.rerun()
 
