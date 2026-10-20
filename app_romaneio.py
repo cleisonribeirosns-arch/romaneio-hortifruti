@@ -414,7 +414,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
 
-    # Renderização precisa das assinaturas exatamente no espaço indicado
     safe_path_conf = str(path_conf) if path_conf else ""
     img_conf_pdf = None
     if safe_path_conf and os.path.exists(safe_path_conf):
@@ -709,14 +708,20 @@ else:
                     st.warning("Informe uma quantidade maior que zero.")
 
         if st.session_state["itens_romaneio"]:
-            df_itens = pd.DataFrame(st.session_state["itens_romaneio"])
-            df_itens.index = range(1, len(df_itens) + 1)
-            st.dataframe(df_itens, use_container_width=True)
-            st.markdown(
-                f"### **Total Geral: R$"
-                f" {df_itens['valor_total'].sum():,.2f}**"
-            )
-            if st.button("🗑️ Limpar Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
+            st.markdown("**Itens adicionados (você pode remover um item específico abaixo):**")
+            total_geral_temp = 0.0
+            for i, itm in enumerate(st.session_state["itens_romaneio"]):
+                col_item_info, col_item_btn = st.columns([5, 1])
+                with col_item_info:
+                    st.text(f"{i+1}. Produto: {itm['produto']} | Qtd: {itm['quantidade']:,.3f} {itm['unidade']} | V.Unit: R$ {itm['valor_unitario']:,.2f} | Total: R$ {itm['valor_total']:,.2f}")
+                with col_item_btn:
+                    if st.button("🗑️", key=f"del_item_{k_suffix}_{i}", help="Remover este item"):
+                        st.session_state["itens_romaneio"].pop(i)
+                        st.rerun()
+                total_geral_temp += itm['valor_total']
+            
+            st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
+            if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
 
@@ -739,6 +744,7 @@ else:
                 height=120,
                 width=280,
                 drawing_mode="freedraw",
+                return_image_data=True,
                 key=f"canv_conf_{k_suffix}",
             )
         with col_ass2:
@@ -750,6 +756,7 @@ else:
                 height=120,
                 width=280,
                 drawing_mode="freedraw",
+                return_image_data=True,
                 key=f"canv_ent_{k_suffix}",
             )
 
@@ -923,13 +930,29 @@ else:
                         row.get("assinatura_conferente"),
                         row.get("assinatura_entregador"),
                     )
-                    st.download_button(
-                        label=f"📥 Baixar PDF - {row['numero_romaneio']}",
-                        data=pdf_buffer,
-                        file_name=f"{row['numero_romaneio']}.pdf",
-                        mime="application/pdf",
-                        key=f"pdf_btn_cons_{row['id']}",
-                    )
+                    
+                    col_dl, col_del = st.columns([4, 1])
+                    with col_dl:
+                        st.download_button(
+                            label=f"📥 Baixar PDF - {row['numero_romaneio']}",
+                            data=pdf_buffer,
+                            file_name=f"{row['numero_romaneio']}.pdf",
+                            mime="application/pdf",
+                            key=f"pdf_btn_cons_{row['id']}",
+                        )
+                    with col_del:
+                        if st.button("🗑️ Excluir Romaneio", key=f"btn_excluir_rom_{row['id']}", type="secondary", help="Excluir este romaneio incorreto/teste"):
+                            try:
+                                conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                                cursor_del = conn_del.cursor()
+                                cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = ?", (row["id"],))
+                                cursor_del.execute("DELETE FROM romaneios WHERE id = ?", (row["id"],))
+                                conn_del.commit()
+                                conn_del.close()
+                                st.success(f"Romaneio {row['numero_romaneio']} excluído com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao excluir romaneio: {e}")
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
     elif menu == "Relatórios & Gráficos" and eh_gestor:
