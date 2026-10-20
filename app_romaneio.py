@@ -578,7 +578,6 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Data de Recebimento obrigatória que inicia vazia ("zerada")
                 data_rec_val = st.date_input(
                     "Data do Recebimento (Obrigatório)",
                     value=None,
@@ -591,7 +590,6 @@ else:
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
                 
-                # Máscara automática interativa para Telefone (Digitando 1º abre '(', 2º fecha ') ', após 5º insere '-')
                 tel_key = f"tel_input_{k_suffix}"
                 if tel_key not in st.session_state:
                     st.session_state[tel_key] = ""
@@ -670,12 +668,14 @@ else:
                 key=f"und_sel_{k_suffix}",
             )
         with col_p3:
+            # Quantidade em branco (valor 0.0 mas sem valor fixo pré-preenchido)
             qtd_input = st.number_input(
-                "Qtd / Peso", min_value=0.0, step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
+                "Qtd / Peso", min_value=0.0, value=0.0, step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
             )
         with col_p4:
+            # Valor Unitário em branco (valor 0.0)
             val_unit = st.number_input(
-                "Valor Unit. (R$)", min_value=0.0, step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
+                "Valor Unit. (R$)", min_value=0.0, value=0.0, step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
             )
         with col_p5:
             st.write("")
@@ -696,6 +696,8 @@ else:
 
         if st.session_state["itens_romaneio"]:
             df_itens = pd.DataFrame(st.session_state["itens_romaneio"])
+            # Ajustando a numeração do índice da tabela para começar de 1 em diante
+            df_itens.index = range(1, len(df_itens) + 1)
             st.dataframe(df_itens, use_container_width=True)
             st.markdown(
                 f"### **Total Geral: R$"
@@ -848,7 +850,6 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
                     
-                    # Limpeza completa dos campos e avanço do sufixo para o próximo romaneio
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.rerun()
@@ -886,6 +887,7 @@ else:
                     )
                     conn_i.close()
                     st.markdown("**Itens Conferidos:**")
+                    df_itens.index = range(1, len(df_itens) + 1)
                     st.dataframe(df_itens, use_container_width=True)
                     total_rom = df_itens["valor_total"].sum()
                     st.markdown(f"**Total do Romaneio: R$ {total_rom:,.2f}**")
