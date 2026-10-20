@@ -173,14 +173,6 @@ st.markdown(
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
-    /* Estilização compacta com bordas/barras verticais e horizontais para a tabela de itens */
-    .tabela-container {{
-        background-color: rgba(20, 20, 20, 0.75);
-        border: 1px solid #1B5E20;
-        border-radius: 6px;
-        padding: 6px 10px;
-        margin-bottom: 6px;
-    }}
     {css_fundo}
     </style>
 """,
@@ -718,40 +710,53 @@ else:
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados (clique na lixeira para remover):**")
             
-            # Cabeçalho da tabela com fundo verde corporativo e barras divisorias claras
-            st.markdown("""
-                <div style="display: flex; background-color: #1B5E20; color: white; font-weight: bold; padding: 8px 10px; border-top-left-radius: 6px; border-top-right-radius: 6px; font-size: 14px; align-items: center; border-bottom: 2px solid #FFFFFF;">
-                    <div style="width: 6%;">#</div>
-                    <div style="width: 38%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px;">Descrição do Produto</div>
-                    <div style="width: 15%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: center;">Qtd / Peso</div>
-                    <div style="width: 10%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: center;">UND</div>
-                    <div style="width: 15%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: right;">Vl. Unit</div>
-                    <div style="width: 16%; border-left: 1px solid rgba(255,255,255,0.4); padding-left: 8px; text-align: right;">Total</div>
-                </div>
-            """, unsafe_allow_html=True)
+            # Monta o DataFrame com a coluna "Item" em vez de "#" e formata os valores
+            dados_tabela = []
+            for i, itm in enumerate(st.session_state["itens_romaneio"], 1):
+                dados_tabela.append({
+                    "Item": i,
+                    "Descrição do Produto": itm["produto"],
+                    "Qtd / Peso": f"{itm['quantidade']:,.3f}",
+                    "UND": itm["unidade"],
+                    "Vl. Unit": f"R$ {itm['valor_unitario']:,.2f}",
+                    "Total": f"R$ {itm['valor_total']:,.2f}"
+                })
+            df_exibicao = pd.DataFrame(dados_tabela)
             
-            total_geral_temp = 0.0
-            for i, itm in enumerate(st.session_state["itens_romaneio"]):
-                # Linhas da tabela compactas com barras divisórias verticais entre as colunas
-                col_row_info, col_row_btn = st.columns([11, 1])
-                with col_row_info:
-                    st.markdown(f"""
-                        <div style="display: flex; background-color: rgba(255, 255, 255, 0.92); color: #000; padding: 6px 10px; align-items: center; border-bottom: 1px solid #CCCCCC; border-left: 1px solid #CCCCCC; border-right: 1px solid #CCCCCC; font-size: 14px;">
-                            <div style="width: 6%; font-weight: bold;">{i+1}</div>
-                            <div style="width: 38%; border-left: 1px solid #D0D0D0; padding-left: 8px; font-weight: 500;">{itm['produto']}</div>
-                            <div style="width: 15%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: center;">{itm['quantidade']:,.3f}</div>
-                            <div style="width: 10%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: center;">{itm['unidade']}</div>
-                            <div style="width: 15%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: right;">R$ {itm['valor_unitario']:,.2f}</div>
-                            <div style="width: 16%; border-left: 1px solid #D0D0D0; padding-left: 8px; text-align: right; font-weight: bold;">R$ {itm['valor_total']:,.2f}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                with col_row_btn:
-                    if st.button("🗑️", key=f"del_item_{k_suffix}_{i}", help=f"Remover item {i+1}"):
-                        st.session_state["itens_romaneio"].pop(i)
-                        st.rerun()
-                total_geral_temp += itm['valor_total']
+            # Exibe a tabela nativa do Streamlit perfeitamente alinhada
+            st.dataframe(
+                df_exibicao,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Item": st.column_config.NumberColumn("Item", width="small"),
+                    "Descrição do Produto": st.column_config.TextColumn("Descrição do Produto", width="large"),
+                    "Qtd / Peso": st.column_config.TextColumn("Qtd / Peso", width="medium"),
+                    "UND": st.column_config.TextColumn("UND", width="small"),
+                    "Vl. Unit": st.column_config.TextColumn("Vl. Unit", width="medium"),
+                    "Total": st.column_config.TextColumn("Total", width="medium"),
+                }
+            )
             
+            # Botões para remover item individualmente por índice
+            col_rem_labels, col_rem_btns = st.columns([3, 1])
+            with col_rem_labels:
+                item_para_remover = st.selectbox(
+                    "Selecionar Item para Remover",
+                    options=range(1, len(st.session_state["itens_romaneio"]) + 1),
+                    format_func=lambda x: f"Item {x}: {st.session_state['itens_romaneio'][x-1]['produto']}",
+                    key=f"sel_rem_{k_suffix}"
+                )
+            with col_rem_btns:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ Remover Selecionado", key=f"btn_rem_esp_{k_suffix}", type="secondary"):
+                    st.session_state["itens_romaneio"].pop(item_para_remover - 1)
+                    st.rerun()
+
+            total_geral_temp = sum(itm['valor_total'] for itm in st.session_state["itens_romaneio"])
             st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
+            
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
