@@ -291,7 +291,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             canvas_obj.saveState()
             try:
                 canvas_obj.setFillAlpha(0.12)
-                # Marca d'água posicionada perfeitamente no centro superior da tabela/itens (subida em relação à versão anterior)
                 canvas_obj.drawImage(
                     logo_path,
                     letter[0] / 2 - 140,
@@ -415,11 +414,12 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
 
+    # Renderização precisa das assinaturas exatamente no espaço indicado
     safe_path_conf = str(path_conf) if path_conf else ""
     img_conf_pdf = None
     if safe_path_conf and os.path.exists(safe_path_conf):
         try:
-            img_conf_pdf = RLImage(safe_path_conf, width=160, height=45)
+            img_conf_pdf = RLImage(safe_path_conf, width=180, height=45)
         except Exception:
             pass
 
@@ -427,7 +427,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     img_ent_pdf = None
     if safe_path_ent and os.path.exists(safe_path_ent):
         try:
-            img_ent_pdf = RLImage(safe_path_ent, width=160, height=45)
+            img_ent_pdf = RLImage(safe_path_ent, width=180, height=45)
         except Exception:
             pass
 
@@ -738,7 +738,7 @@ else:
                 background_color="#FFFFFF",
                 height=120,
                 width=280,
-                return_image_data=True,
+                drawing_mode="freedraw",
                 key=f"canv_conf_{k_suffix}",
             )
         with col_ass2:
@@ -749,7 +749,7 @@ else:
                 background_color="#FFFFFF",
                 height=120,
                 width=280,
-                return_image_data=True,
+                drawing_mode="freedraw",
                 key=f"canv_ent_{k_suffix}",
             )
 
