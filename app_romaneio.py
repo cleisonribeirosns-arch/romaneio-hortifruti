@@ -18,7 +18,6 @@ from reportlab.platypus import (
 import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
-
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
@@ -33,14 +32,12 @@ for nome in [
     if os.path.exists(nome):
         logo_icon = nome
         break
-
 st.set_page_config(
     page_title="Supermercado Super Nova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
     layout="wide",
     initial_sidebar_state="expanded",
 )
-
 # ---------------------------------------------------------
 # 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
 # ---------------------------------------------------------
@@ -55,7 +52,6 @@ for nome_bg in [
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
         break
-
 css_fundo = ""
 if bg_login_path:
     with open(bg_login_path, "rb") as img_f:
@@ -76,7 +72,6 @@ else:
             background-attachment: fixed !important;
         }
     """
-
 st.markdown(
     f"""
     <style>
@@ -90,12 +85,10 @@ st.markdown(
         display: none !important;
         visibility: hidden !important;
     }}
-
     .block-container {{
         padding-top: 1.0rem !important;
         padding-bottom: 1rem !important;
     }}
-
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
@@ -106,7 +99,6 @@ st.markdown(
         margin: 0 auto !important;
         display: block !important;
     }}
-
     .titulo-logo {{
         font-size: 2.6rem !important;
         font-weight: 900 !important;
@@ -114,7 +106,6 @@ st.markdown(
         margin-bottom: 0px !important;
         font-family: 'Arial Black', Gadget, sans-serif !important;
     }}
-
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
         font-size: 1.35rem !important;
@@ -124,7 +115,6 @@ st.markdown(
             -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
-
     .palavra-super {{
         color: #2E7D32 !important;
         font-style: italic !important;
@@ -132,7 +122,6 @@ st.markdown(
             -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
-
     .palavra-nova {{
         color: #FF3D00 !important;
         font-style: italic !important;
@@ -141,7 +130,6 @@ st.markdown(
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
-
     .palavra-cidade {{
         color: #111111 !important;
         font-style: italic !important;
@@ -149,7 +137,6 @@ st.markdown(
         font-size: 3.2rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
-
     .stApp h3 {{
         color: #000000 !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
@@ -158,21 +145,18 @@ st.markdown(
         margin-top: 2px !important;
         margin-bottom: 8px !important;
     }}
-
     .stApp label {{
         color: #FFFFFF !important;
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         font-size: 15px !important;
         font-weight: bold !important;
     }}
-
     div[data-baseweb="input"] input {{
         color: #000000 !important;
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
-
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -183,26 +167,21 @@ st.markdown(
         width: 100% !important;
         box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
     }}
-    
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
-
     {css_fundo}
     </style>
 """,
     unsafe_allow_html=True,
 )
-
-
 # ---------------------------------------------------------
 # 3. BANCO DE DADOS E INICIALIZAÇÃO
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -212,7 +191,6 @@ def init_db():
             perfil TEXT NOT NULL
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS produtos (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -222,7 +200,6 @@ def init_db():
             unidade_padrao TEXT NOT NULL
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -240,7 +217,6 @@ def init_db():
             assinatura_entregador TEXT
         )
     """)
-
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS romaneio_itens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -253,14 +229,12 @@ def init_db():
             FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
         )
     """)
-
     cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
     if not cursor.fetchone():
         cursor.execute(
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
-
     produtos_iniciais = [
         ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
@@ -331,7 +305,6 @@ def init_db():
         ("2516", "165674", "TANGERINA IMPORTADA KG", "KG"),
         ("1175", "41418", "TOMATE KG", "KG"),
     ]
-
     for p in produtos_iniciais:
         cursor.execute(
             """
@@ -340,20 +313,13 @@ def init_db():
         """,
             p,
         )
-
     conn.commit()
     conn.close()
-
-
 init_db()
-
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
-
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
-
-
 def fazer_login(login, senha):
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
@@ -364,8 +330,6 @@ def fazer_login(login, senha):
     usr = cursor.fetchone()
     conn.close()
     return usr
-
-
 # ---------------------------------------------------------
 # 4. GERADOR DE PDF FORMATADO
 # ---------------------------------------------------------
@@ -381,7 +345,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story = []
     styles = getSampleStyleSheet()
-
     logo_path = None
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
         for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
@@ -391,7 +354,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
                 break
         if logo_path:
             break
-
     def add_watermark(canvas_obj, doc_obj):
         if logo_path and os.path.exists(logo_path):
             canvas_obj.saveState()
@@ -409,12 +371,10 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             except Exception:
                 pass
             canvas_obj.restoreState()
-
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
         logo_img_header = Paragraph("<b>SUPER NOVA<br/>CIDADE</b>", styles["Normal"])
-
     header_table = Table(
         [
             [
@@ -441,7 +401,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(header_table)
     story.append(Spacer(1, 10))
-
     info_data = [
         [
             Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"]),
@@ -461,7 +420,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             Paragraph(f"<b>Data para Pagamento:</b> {romaneio_data.get('data_pagamento','')}", styles["Normal"]),
             Paragraph("", styles["Normal"]),
         ])
-
     info_table = Table(info_data, colWidths=[270, 270])
     info_table.setStyle(
         TableStyle([
@@ -472,7 +430,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(info_table)
     story.append(Spacer(1, 15))
-
     table_content = [
         ["Item", "Descrição do Produto", "Qtd / Peso", "UND", "Vl. Unit", "Total"]
     ]
@@ -489,7 +446,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             f"R$ {v_unit:,.2f}",
             f"R$ {v_tot:,.2f}",
         ])
-
     itens_table = Table(table_content, colWidths=[35, 215, 75, 50, 75, 90])
     itens_table.setStyle(
         TableStyle([
@@ -503,7 +459,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         ])
     )
     story.append(itens_table)
-
     story.append(Spacer(1, 8))
     total_table = Table(
         [[f"TOTAL GERAL DO ROMANEIO: R$ {total_geral:,.2f}"]], colWidths=[540]
@@ -520,21 +475,18 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(total_table)
     story.append(Spacer(1, 15))
-
     img_conf_pdf = None
     if path_conf and os.path.exists(path_conf):
         try:
             img_conf_pdf = RLImage(path_conf, width=180, height=50)
         except Exception:
             pass
-
     img_ent_pdf = None
     if path_ent and os.path.exists(path_ent):
         try:
             img_ent_pdf = RLImage(path_ent, width=180, height=50)
         except Exception:
             pass
-
     col_conf_cell = [
         img_conf_pdf if img_conf_pdf else Spacer(1, 40),
         Paragraph(f"<b>Conferente:</b> {romaneio_data.get('conferente','')}", styles["Normal"]),
@@ -543,7 +495,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         img_ent_pdf if img_ent_pdf else Spacer(1, 40),
         Paragraph(f"<b>Entregador / Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"]),
     ]
-
     ass_table = Table([[col_conf_cell, col_ent_cell]], colWidths=[270, 270])
     ass_table.setStyle(
         TableStyle([
@@ -554,14 +505,11 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         ])
     )
     story.append(ass_table)
-
     doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
     buffer.seek(0)
     return buffer
-
-
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (COM A SUA ESTRUTURA ORIGINAL EXATA)
+# 5. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -569,9 +517,7 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
-
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
-
     with col_central:
         if logo_display:
             col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
@@ -599,12 +545,10 @@ if st.session_state["usuario_logado"] is None:
                 unsafe_allow_html=True
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
             senha_input = st.text_input("Senha", type="password")
             btn_entrar = st.form_submit_button("Entrar no Sistema", type="primary")
-
             if btn_entrar:
                 usuario = fazer_login(login_input, senha_input)
                 if usuario:
@@ -618,45 +562,36 @@ if st.session_state["usuario_logado"] is None:
                     st.rerun()
                 else:
                     st.error("Usuário ou senha incorretos.")
-
 else:
     user_info = st.session_state["usuario_logado"]
-
     st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
-
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (
         user_info["login"].lower() == "admin"
         or "gestor" in perfil_db
         or "adm" in perfil_db
     )
-
     if is_admin:
         st.sidebar.success("🔒 Perfil: Gestor / Administrador")
         eh_gestor = True
     else:
         st.sidebar.info("👤 Perfil: Conferente")
         eh_gestor = False
-
     if eh_gestor:
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         total_romaneios_db = pd.read_sql_query(
             "SELECT COUNT(*) as qtd FROM romaneios", conn
         ).iloc[0]["qtd"]
         conn.close()
-
         st.sidebar.divider()
         st.sidebar.markdown(
             f"🔔 **Painel de Alertas:**<br>📦 Romaneios: **{total_romaneios_db}**",
             unsafe_allow_html=True,
         )
-
     if st.sidebar.button("Sair / Logout", type="secondary"):
         st.session_state["usuario_logado"] = None
         st.rerun()
-
     st.sidebar.divider()
-
     opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios"]
     if eh_gestor:
         opcoes_menu.extend([
@@ -664,20 +599,15 @@ else:
             "Gerenciar Cadastros (Produtos)",
             "Gerenciar Usuários & Permissões",
         ])
-
     menu = st.sidebar.radio("Navegação", opcoes_menu)
-
     # ---------------------------------------------------------
     # 6. MÓDULOS DO SISTEMA
     # ---------------------------------------------------------
     if menu == "Romaneio de Recebimento - Hortifrúti":
         st.title("Romaneio de Recebimento - Hortifrúti")
-
         if "form_key_suffix" not in st.session_state:
             st.session_state["form_key_suffix"] = 0
-
         k_suffix = st.session_state["form_key_suffix"]
-
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
         cursor.execute(
@@ -686,14 +616,11 @@ else:
         )
         produtos_lista = cursor.fetchall()
         conn.close()
-
         prod_dict = {}
         for p in produtos_lista:
             label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
-
         prod_nomes_keys = list(prod_dict.keys())
-
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -717,21 +644,39 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                # Data em branco para preenchimento manual do conferente
-                data_rec_str = st.text_input(
+                # Máscara automática para Data do Recebimento (00/00/0000)
+                if f"data_rec_val_{k_suffix}" not in st.session_state:
+                    st.session_state[f"data_rec_val_{k_suffix}"] = ""
+                def formatar_data_rec():
+                    raw = "".join(filter(str.isdigit, st.session_state[f"raw_data_rec_{k_suffix}"]))
+                    if len(raw) > 8:
+                        raw = raw[:8]
+                    if len(raw) > 4:
+                        formatted = f"{raw[:2]}/{raw[2:4]}/{raw[4:]}"
+                    elif len(raw) > 2:
+                        formatted = f"{raw[:2]}/{raw[2:]}"
+                    elif len(raw) > 0:
+                        formatted = f"{raw}"
+                    else:
+                        formatted = ""
+                    st.session_state[f"data_rec_val_{k_suffix}"] = formatted
+                
+                st.text_input(
                     "Data do Recebimento (DD/MM/AAAA)",
-                    value="",
-                    placeholder="Ex: 19/10/2026",
-                    key=f"data_rec_{k_suffix}",
+                    value=st.session_state[f"data_rec_val_{k_suffix}"],
+                    placeholder="00/00/0000",
+                    key=f"raw_data_rec_{k_suffix}",
+                    on_change=formatar_data_rec,
                 )
+                data_rec_str = st.session_state[f"data_rec_val_{k_suffix}"]
+
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
                 
-                # Telefone com formatação automática enquanto digita
+                # Máscara automática para Telefone do Fornecedor ((00) 00000-0000)
                 if f"tel_input_val_{k_suffix}" not in st.session_state:
                     st.session_state[f"tel_input_val_{k_suffix}"] = ""
-
                 def formatar_telefone():
                     raw = "".join(filter(str.isdigit, st.session_state[f"raw_tel_{k_suffix}"]))
                     if len(raw) > 11:
@@ -749,7 +694,7 @@ else:
                 st.text_input(
                     "Telefone do Fornecedor",
                     value=st.session_state[f"tel_input_val_{k_suffix}"],
-                    placeholder="(92) 00000-0000",
+                    placeholder="(00) 00000-0000",
                     key=f"raw_tel_{k_suffix}",
                     on_change=formatar_telefone,
                 )
@@ -759,12 +704,31 @@ else:
             
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag_str = st.text_input(
+                # Máscara automática para Data de Pagamento (00/00/0000)
+                if f"data_pag_val_{k_suffix}" not in st.session_state:
+                    st.session_state[f"data_pag_val_{k_suffix}"] = ""
+                def formatar_data_pag():
+                    raw = "".join(filter(str.isdigit, st.session_state[f"raw_data_pag_{k_suffix}"]))
+                    if len(raw) > 8:
+                        raw = raw[:8]
+                    if len(raw) > 4:
+                        formatted = f"{raw[:2]}/{raw[2:4]}/{raw[4:]}"
+                    elif len(raw) > 2:
+                        formatted = f"{raw[:2]}/{raw[2:]}"
+                    elif len(raw) > 0:
+                        formatted = f"{raw}"
+                    else:
+                        formatted = ""
+                    st.session_state[f"data_pag_val_{k_suffix}"] = formatted
+
+                st.text_input(
                     "Data para Pagamento (DD/MM/AAAA)",
-                    value="",
-                    placeholder="Ex: 26/10/2026",
-                    key=f"data_pag_{k_suffix}",
+                    value=st.session_state[f"data_pag_val_{k_suffix}"],
+                    placeholder="00/00/0000",
+                    key=f"raw_data_pag_{k_suffix}",
+                    on_change=formatar_data_pag,
                 )
+                data_pag_str = st.session_state[f"data_pag_val_{k_suffix}"]
 
             conferente = st.text_input(
                 "Responsável Rec. Físico",
@@ -772,11 +736,9 @@ else:
                 disabled=True,
                 key=f"conf_{k_suffix}",
             )
-
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
-
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
@@ -829,7 +791,6 @@ else:
                     st.rerun()
                 else:
                     st.warning("Informe uma quantidade maior que zero.")
-
         if st.session_state["itens_romaneio"]:
             df_itens = pd.DataFrame(st.session_state["itens_romaneio"])
             st.dataframe(df_itens, use_container_width=True)
@@ -840,7 +801,6 @@ else:
             if st.button("🗑️ Limpar Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
-
         st.subheader("3. Anexo de Fotos / Comprovantes")
         fotos_upload = st.file_uploader(
             "Fotos da Nota / Canhoto",
@@ -848,7 +808,6 @@ else:
             accept_multiple_files=True,
             key=f"fotos_{k_suffix}",
         )
-
         st.subheader("4. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
@@ -871,7 +830,6 @@ else:
                 width=280,
                 key=f"canv_ent_{k_suffix}",
             )
-
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip() or not data_rec_str.strip():
                 st.error("Preencha o número do romaneio, o fornecedor e a data do recebimento.")
@@ -884,13 +842,11 @@ else:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_romaneio}.png")
                         img_c.save(path_ass_conf)
-
                     path_ass_ent = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_romaneio}.png")
                         img_e.save(path_ass_ent)
-
                     caminho_foto_salva = ""
                     if fotos_upload:
                         for f in fotos_upload:
@@ -898,10 +854,8 @@ else:
                             with open(path_f, "wb") as f_out:
                                 f_out.write(f.getbuffer())
                             caminho_foto_salva = path_f
-
                     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     cursor = conn.cursor()
-
                     cursor.execute(
                         """
                         INSERT INTO romaneios (
@@ -927,7 +881,6 @@ else:
                         ),
                     )
                     romaneio_id = cursor.lastrowid
-
                     itens_salvos_pdf = []
                     for itm in st.session_state["itens_romaneio"]:
                         cursor.execute(
@@ -953,14 +906,11 @@ else:
                             itm["valor_unitario"],
                             itm["valor_total"],
                         ])
-
                     conn.commit()
                     conn.close()
-
                     st.success(
                         f"Romaneio {num_romaneio} salvo com sucesso no banco de dados!"
                     )
-
                     romaneio_dict_atual = {
                         "numero_romaneio": num_romaneio,
                         "data_recebimento": data_rec_str,
@@ -972,11 +922,9 @@ else:
                         "pagamento_a_vista": pag_a_vista,
                         "data_pagamento": data_pag_str,
                     }
-
                     pdf_buffer_novo = gerar_pdf_romaneio(
                         romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent
                     )
-
                     st.download_button(
                         label=f"📥 Baixar PDF do Romaneio {num_romaneio}",
                         data=pdf_buffer_novo,
@@ -985,19 +933,15 @@ else:
                         type="primary",
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
-
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
-
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
-
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
-
         if not df_rom.empty:
             for idx, row in df_rom.iterrows():
                 with st.expander(
@@ -1014,7 +958,6 @@ else:
                         f"**Pagamento à Vista:** {row['pagamento_a_vista']} |"
                         f" **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}"
                     )
-
                     conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     df_itens = pd.read_sql_query(
                         "SELECT produto, quantidade, unidade, valor_unitario,"
@@ -1023,13 +966,10 @@ else:
                         params=(row["id"],),
                     )
                     conn_i.close()
-
                     st.markdown("**Itens Conferidos:**")
                     st.dataframe(df_itens, use_container_width=True)
-
                     total_rom = df_itens["valor_total"].sum()
                     st.markdown(f"**Total do Romaneio: R$ {total_rom:,.2f}**")
-
                     romaneio_dict = row.to_dict()
                     itens_tuple_list = df_itens.to_records(index=False).tolist()
                     pdf_buffer = gerar_pdf_romaneio(
@@ -1038,7 +978,6 @@ else:
                         row.get("assinatura_conferente"),
                         row.get("assinatura_entregador"),
                     )
-
                     st.download_button(
                         label=f"📥 Baixar PDF - {row['numero_romaneio']}",
                         data=pdf_buffer,
@@ -1048,11 +987,9 @@ else:
                     )
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
-
     elif menu == "Relatórios & Gráficos" and eh_gestor:
         st.title("📊 Relatórios e Análise Gráfica")
         st.info("Módulo restrito de relatórios gerenciais.")
-
     elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
         st.title("🥦 Gerenciamento de Produtos")
         with st.form("cad_prod"):
@@ -1075,7 +1012,6 @@ else:
                         st.error("Produto já cadastrado.")
                     finally:
                         conn.close()
-
     elif menu == "Gerenciar Usuários & Permissões" and eh_gestor:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
