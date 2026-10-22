@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (COM ADAPTAÇÃO MOBILE)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -248,6 +248,45 @@ def init_db():
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
+    
+    # Carga automática dos produtos padrão de hortifrúti
+    cursor.execute("SELECT COUNT(*) FROM produtos")
+    if cursor.fetchone()[0] == 0:
+        produtos_iniciais = [
+            ("TOMATE", "KG"),
+            ("CEBOLA BRANCA", "KG"),
+            ("BATATA INGLESA", "KG"),
+            ("BANANA NANICA", "KG"),
+            ("BANANA PRATA", "KG"),
+            ("MACA GALA", "KG"),
+            ("MACA FUJI", "KG"),
+            ("LARANJA PERA", "KG"),
+            ("LIMAO TAHITI", "KG"),
+            ("MAMAO", "KG"),
+            ("MAMAO PAPAIA", "KG"),
+            ("ABACATE", "KG"),
+            ("ABACATE AVOCADO", "KG"),
+            ("ALFACE", "UNID"),
+            ("COUVE", "UNID"),
+            ("REPOLHO", "KG"),
+            ("CENOURA", "KG"),
+            ("BETERRABA", "KG"),
+            ("PEPINO", "KG"),
+            ("PIMENTAO VERDE", "KG"),
+            ("MELANCIA", "KG"),
+            ("MELAO", "KG"),
+            ("MORANGO", "CX"),
+            ("OVO BRANCO CX", "CX"),
+        ]
+        for p_nome, p_und in produtos_iniciais:
+            try:
+                cursor.execute(
+                    "INSERT INTO produtos (nome, unidade_padrao) VALUES (?, ?)",
+                    (p_nome, p_und),
+                )
+            except:
+                pass
+
     conn.commit()
     conn.close()
 
@@ -611,7 +650,6 @@ else:
                     key=f"data_rec_{k_suffix}",
                 )
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
-
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
@@ -619,7 +657,6 @@ else:
                 tel_key = f"tel_input_{k_suffix}"
                 if tel_key not in st.session_state:
                     st.session_state[tel_key] = ""
-
                 def formatar_tel():
                     val = st.session_state.get(tel_key, "")
                     raw = "".join(filter(str.isdigit, val))
@@ -634,14 +671,12 @@ else:
                     if len(raw) >= 8:
                         fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
-
                 tel_fornecedor = st.text_input(
                     "Telefone do Fornecedor",
                     placeholder="(00) 00000-0000",
                     key=tel_key,
                     on_change=formatar_tel,
                 )
-
             pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
             
             data_pag_str = ""
@@ -653,7 +688,6 @@ else:
                     key=f"data_pag_{k_suffix}",
                 )
                 data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
-
             conferente = st.text_input(
                 "Responsável Rec. Físico",
                 value=user_info["nome"],
@@ -1001,7 +1035,7 @@ else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
     # ---------------------------------------------------------
-    # MÓDULOS GERENCIAIS - ETAPA 3
+    # MÓDULOS GERENCIAIS - ETAPA 3 (Relatórios & Gráficos com Filtro por Produto)
     # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and eh_gestor:
         st.title("📊 Painel Gerencial - Relatórios & Gráficos")
@@ -1014,7 +1048,6 @@ else:
         if df_r.empty or df_i.empty:
             st.info("Nenhum dado cadastrado no banco de dados para gerar relatórios.")
         else:
-            # Filtros Avançados (Incluindo Produto)
             with st.expander("🔍 Filtros de Análise", expanded=True):
                 c_f1, c_f2, c_f3, c_f4 = st.columns(4)
                 with c_f1:
@@ -1030,7 +1063,6 @@ else:
                     pag_opt = ["Todos os Pagamentos", "SIM", "NÃO"]
                     pag_sel = st.selectbox("Pagamento à Vista?", pag_opt)
 
-            # Aplicação dos Filtros em Romaneios e Itens
             df_r_filtrado = df_r.copy()
             if loja_sel != "Todas as Lojas":
                 df_r_filtrado = df_r_filtrado[df_r_filtrado["loja"] == loja_sel]
@@ -1043,7 +1075,6 @@ else:
             if prod_sel != "Todos os Produtos":
                 df_full = df_full[df_full["produto"] == prod_sel]
 
-            # Métricas / KPIs
             total_romaneios = df_full["romaneio_id"].nunique() if not df_full.empty else 0
             valor_total_acumulado = df_full["valor_total"].sum() if not df_full.empty else 0.0
             total_volumes = df_full["quantidade"].sum() if not df_full.empty else 0.0
@@ -1058,7 +1089,6 @@ else:
 
             st.divider()
 
-            # Visualizações Gráficas
             st.subheader("📈 Análises Gráficas")
             col_g1, col_g2 = st.columns(2)
 
@@ -1080,7 +1110,6 @@ else:
 
             st.divider()
 
-            # Exportação de Dados para Excel/CSV
             st.subheader("📥 Exportação de Dados para a Diretoria")
             if not df_full.empty:
                 df_exp = df_full[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "conferente", "produto", "quantidade", "unidade", "valor_unitario", "valor_total"]].copy()
