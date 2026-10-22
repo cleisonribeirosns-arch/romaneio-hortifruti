@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, date
 import io
 import os
 import pandas as pd
@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (COM ADAPTAÇÃO MOBILE)
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -174,7 +174,6 @@ st.markdown(
         border-color: #FFFFFF !important;
     }}
     
-    /* ADAPTAÇÃO AUTOMÁTICA PARA DISPOSITIVOS MÓVEIS (CELULARES) */
     @media only screen and (max-width: 768px) {{
         .stDataFrame {{
             font-size: 11px !important;
@@ -666,7 +665,6 @@ else:
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
         
-        # Gerenciamento de chaves para resetar Qtd e Valor em branco após Add
         if f"qtd_val_{k_suffix}" not in st.session_state:
             st.session_state[f"qtd_val_{k_suffix}"] = 0.0
         if f"vunit_val_{k_suffix}" not in st.session_state:
@@ -730,7 +728,6 @@ else:
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados:**")
             
-            # Utiliza a tabela padrão com suporte responsivo automático do Streamlit
             dados_tabela = []
             for i, itm in enumerate(st.session_state["itens_romaneio"], 1):
                 dados_tabela.append({
@@ -1002,9 +999,105 @@ else:
                                 st.error(f"Erro ao excluir romaneio: {e}")
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
+
+    # ---------------------------------------------------------
+    # MÓDULOS GERENCIAIS - ETAPA 3
+    # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and eh_gestor:
-        st.title("📊 Relatórios e Análise Gráfica")
-        st.info("Módulo restrito de relatórios gerenciais.")
+        st.title("📊 Painel Gerencial - Relatórios & Gráficos")
+        
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        df_r = pd.read_sql_query("SELECT * FROM romaneios", conn)
+        df_i = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
+        conn.close()
+
+        if df_r.empty or df_i.empty:
+            st.info("Nenhum dado cadastrado no banco de dados para gerar relatórios.")
+        else:
+            # Filtros Avançados (Incluindo Produto)
+            with st.expander("🔍 Filtros de Análise", expanded=True):
+                c_f1, c_f2, c_f3, c_f4 = st.columns(4)
+                with c_f1:
+                    lojas_opt = ["Todas as Lojas"] + sorted(list(df_r["loja"].unique()))
+                    loja_sel = st.selectbox("Filtrar por Loja", lojas_opt)
+                with c_f2:
+                    forn_opt = ["Todos os Fornecedores"] + sorted(list(df_r["fornecedor"].dropna().unique()))
+                    forn_sel = st.selectbox("Filtrar por Fornecedor", forn_opt)
+                with c_f3:
+                    prod_opt = ["Todos os Produtos"] + sorted(list(df_i["produto"].dropna().unique()))
+                    prod_sel = st.selectbox("Filtrar por Produto", prod_opt)
+                with c_f4:
+                    pag_opt = ["Todos os Pagamentos", "SIM", "NÃO"]
+                    pag_sel = st.selectbox("Pagamento à Vista?", pag_opt)
+
+            # Aplicação dos Filtros em Romaneios e Itens
+            df_r_filtrado = df_r.copy()
+            if loja_sel != "Todas as Lojas":
+                df_r_filtrado = df_r_filtrado[df_r_filtrado["loja"] == loja_sel]
+            if forn_sel != "Todos os Fornecedores":
+                df_r_filtrado = df_r_filtrado[df_r_filtrado["fornecedor"] == forn_sel]
+            if pag_sel != "Todos os Pagamentos":
+                df_r_filtrado = df_r_filtrado[df_r_filtrado["pagamento_a_vista"] == pag_sel]
+
+            df_full = pd.merge(df_i, df_r_filtrado, left_on="romaneio_id", right_on="id", how="inner")
+            if prod_sel != "Todos os Produtos":
+                df_full = df_full[df_full["produto"] == prod_sel]
+
+            # Métricas / KPIs
+            total_romaneios = df_full["romaneio_id"].nunique() if not df_full.empty else 0
+            valor_total_acumulado = df_full["valor_total"].sum() if not df_full.empty else 0.0
+            total_volumes = df_full["quantidade"].sum() if not df_full.empty else 0.0
+            ticket_medio = (valor_total_acumulado / total_romaneios) if total_romaneios > 0 else 0.0
+
+            st.subheader("📌 Indicadores Chave (KPIs)")
+            kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+            kpi1.metric("📦 Romaneios Envolvidos", f"{total_romaneios}")
+            kpi2.metric("💰 Valor Acumulado (R$)", f"R$ {valor_total_acumulado:,.2f}")
+            kpi3.metric("⚖️ Qtd Total / Peso", f"{total_volumes:,.2f}")
+            kpi4.metric("📊 Méd. por Romaneio", f"R$ {ticket_medio:,.2f}")
+
+            st.divider()
+
+            # Visualizações Gráficas
+            st.subheader("📈 Análises Gráficas")
+            col_g1, col_g2 = st.columns(2)
+
+            with col_g1:
+                st.markdown("**Valores Acumulados por Loja (R$)**")
+                if not df_full.empty:
+                    df_loja_val = df_full.groupby("loja")["valor_total"].sum().reset_index()
+                    st.bar_chart(data=df_loja_val, x="loja", y="valor_total", color="#1B5E20")
+                else:
+                    st.warning("Sem dados para o filtro selecionado.")
+
+            with col_g2:
+                st.markdown("**Top Produtos Mais Recebidos (R$)**")
+                if not df_full.empty:
+                    df_prod_val = df_full.groupby("produto")["valor_total"].sum().sort_values(ascending=False).head(10).reset_index()
+                    st.bar_chart(data=df_prod_val, x="produto", y="valor_total", color="#C62828")
+                else:
+                    st.warning("Sem dados para o filtro selecionado.")
+
+            st.divider()
+
+            # Exportação de Dados para Excel/CSV
+            st.subheader("📥 Exportação de Dados para a Diretoria")
+            if not df_full.empty:
+                df_exp = df_full[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "conferente", "produto", "quantidade", "unidade", "valor_unitario", "valor_total"]].copy()
+                df_exp.columns = ["Romaneio", "Loja", "Data Recebimento", "Fornecedor", "Conferente", "Produto", "Qtd/Peso", "UND", "Vl. Unitário", "Vl. Total"]
+                
+                csv_buffer = df_exp.to_csv(index=False).encode('utf-8')
+                
+                col_exp1, _ = st.columns([2, 2])
+                with col_exp1:
+                    st.download_button(
+                        label="📥 Baixar Relatório Filtrado (CSV / Excel)",
+                        data=csv_buffer,
+                        file_name=f"relatorio_hortifruti_{datetime.now().strftime('%Y%m%d')}.csv",
+                        mime="text/csv",
+                        type="primary"
+                    )
+
     elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
         st.title("🥦 Gerenciamento de Produtos")
         with st.form("cad_prod"):
@@ -1026,6 +1119,7 @@ else:
                         st.error("Produto já cadastrado.")
                     finally:
                         conn.close()
+
     elif menu == "Gerenciar Usuários & Permissões" and eh_gestor:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
