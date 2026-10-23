@@ -19,7 +19,6 @@ from reportlab.platypus import (
 import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
-
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
@@ -41,13 +40,11 @@ st.set_page_config(
 )
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
-
 # ---------------------------------------------------------
 # CONTROLE DE TEMA (CLARO / ESCURO) COM ÍCONES ☀️ / 🌙
 # ---------------------------------------------------------
 if "tema_app" not in st.session_state:
     st.session_state["tema_app"] = "🌙 Modo Escuro"
-
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
 # ---------------------------------------------------------
@@ -57,9 +54,8 @@ def exibir_foto_modal(caminho_foto):
         st.image(caminho_foto, use_container_width=True, caption="Comprovante / Nota Anexada")
     else:
         st.error("Arquivo de imagem não encontrado no servidor.")
-
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS (SEPARAÇÃO RIGOROSA DA TELA DE LOGIN VS PAINEL INTERNO)
+# 2. ESTILOS CSS DINÂMICOS (ALTA VISIBILIDADE EM AMBOS OS TEMAS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -72,9 +68,7 @@ for nome_bg in [
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
         break
-
 is_escuro = "Escuro" in st.session_state["tema_app"]
-
 if is_escuro:
     if bg_login_path:
         with open(bg_login_path, "rb") as img_f:
@@ -121,7 +115,6 @@ else:
     plotly_grid_color = "rgba(0,0,0,0.15)"
     kpi_bg = "#FFFFFF"
     kpi_border = "2px solid #1B5E20"
-
 st.markdown(
     f"""
     <style>
@@ -180,7 +173,7 @@ st.markdown(
         font-size: 3.0rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{
+    .stApp h1, .stApp h2, .stApp h3 {{
         color: {cor_texto} !important;
         text-shadow: {sombra_texto} !important;
         font-weight: 800 !important;
@@ -189,19 +182,6 @@ st.markdown(
         color: {cor_subtitulo} !important;
         font-weight: bold !important;
     }}
-    
-    /* PRESENÇA EXCLUSIVA DA TELA DE LOGIN (FUNDO BRANCO E TEXTO ESCURO GARANTIDOS) */
-    form[key="form_login"] div[data-baseweb="input"] input,
-    form[key="form_login"] div[data-baseweb="base-input"] {{
-        background-color: #FFFFFF !important;
-        color: #111111 !important;
-        font-weight: bold !important;
-    }}
-    form[key="form_login"] label p {{
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important;
-    }}
-
     /* Ajuste visual dos cards de métricas (KPIs) */
     div[data-testid="stMetric"] {{
         background-color: {kpi_bg} !important;
@@ -220,20 +200,12 @@ st.markdown(
         font-size: 1.7rem !important;
         font-weight: 900 !important;
     }}
-
-    /* Inputs, Date Inputs e Selectbox adaptativos ao tema (somente no painel do sistema) */
-    div[data-baseweb="input"] input, 
-    div[data-baseweb="select"] div,
-    div[data-testid="stDateInput"] input {{
+    /* Inputs e Seletores com borda e fundo nítidos */
+    div[data-baseweb="input"] input, div[data-baseweb="select"] div {{
         color: {cor_input_texto} !important;
         background-color: {bg_input} !important;
         border-radius: 6px !important;
         font-size: 15px !important;
-        font-weight: bold !important;
-    }}
-    div[data-baseweb="base-input"] {{
-        background-color: {bg_input} !important;
-        border-radius: 6px !important;
     }}
     div[data-testid="stRadio"] div[role="radiogroup"] {{
         background-color: {bg_radio} !important;
@@ -261,7 +233,6 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
-
 # ---------------------------------------------------------
 # 3. BANCO DE DADOS E CATÁLOGO
 # ---------------------------------------------------------
@@ -594,12 +565,9 @@ def init_db():
             pass
     conn.commit()
     conn.close()
-
 init_db()
-
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
-
 def fazer_login(login, senha):
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
@@ -610,7 +578,6 @@ def fazer_login(login, senha):
     usr = cursor.fetchone()
     conn.close()
     return usr
-
 def fmt_ptbr(val, decimais=2):
     try:
         f = float(val)
@@ -618,7 +585,6 @@ def fmt_ptbr(val, decimais=2):
         return s.replace(",", "X").replace(".", ",").replace("X", ".")
     except Exception:
         return "0,00"
-
 def remover_fundo_branco(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
         return caminho_imagem
@@ -637,7 +603,6 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_transparente
     except Exception:
         return caminho_imagem
-
 # ---------------------------------------------------------
 # 4. GERADOR DE PDF FORMATADO
 # ---------------------------------------------------------
@@ -831,7 +796,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
     buffer.seek(0)
     return buffer
-
 # ---------------------------------------------------------
 # 5. TELA DE LOGIN
 # ---------------------------------------------------------
@@ -899,6 +863,7 @@ else:
     )
     
     st.markdown("---")
+    # Proporções ajustadas para o campo do tema ficar compacto e proporcional
     col_info_usr, col_tema, col_logout = st.columns([3.2, 1.0, 0.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
