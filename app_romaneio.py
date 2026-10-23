@@ -45,10 +45,10 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
-# CONTROLE DE TEMA (CLARO / ESCURO)
+# CONTROLE DE TEMA (CLARO / ESCURO) COM ÍCONES ☀️ / 🌙
 # ---------------------------------------------------------
 if "tema_app" not in st.session_state:
-    st.session_state["tema_app"] = "Escuro"
+    st.session_state["tema_app"] = "🌙 Modo Escuro"
 
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
@@ -61,7 +61,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS (ALTA VISIBILIDADE)
+# 2. ESTILOS CSS DINÂMICOS (ALTA VISIBILIDADE EM AMBOS OS TEMAS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -75,7 +75,9 @@ for nome_bg in [
         bg_login_path = nome_bg
         break
 
-if st.session_state["tema_app"] == "Escuro":
+is_escuro = "Escuro" in st.session_state["tema_app"]
+
+if is_escuro:
     if bg_login_path:
         with open(bg_login_path, "rb") as img_f:
             b64_img = base64.b64encode(img_f.read()).decode()
@@ -96,29 +98,31 @@ if st.session_state["tema_app"] == "Escuro":
             }
         """
     cor_texto = "#FFFFFF"
-    cor_subtitulo = "#E0E0E0"
+    cor_subtitulo = "#F0F0F0"
     sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
     bg_input = "rgba(255, 255, 255, 0.95)"
     cor_input_texto = "#000000"
     bg_radio = "rgba(0, 0, 0, 0.4)"
     plotly_font_color = "#FFFFFF"
-    kpi_bg = "rgba(0, 0, 0, 0.35)"
-    kpi_border = "1px solid rgba(255, 255, 255, 0.2)"
+    plotly_grid_color = "rgba(255,255,255,0.2)"
+    kpi_bg = "rgba(0, 0, 0, 0.4)"
+    kpi_border = "1px solid rgba(255, 255, 255, 0.3)"
 else:
     css_fundo = """
         .stApp {
-            background: #F4F6F9 !important;
+            background: #F8F9FA !important;
         }
     """
     cor_texto = "#1B5E20"
     cor_subtitulo = "#111111"
     sombra_texto = "none"
     bg_input = "#FFFFFF"
-    cor_input_texto = "#000000"
+    cor_input_texto = "#111111"
     bg_radio = "#FFFFFF"
     plotly_font_color = "#111111"
+    plotly_grid_color = "rgba(0,0,0,0.15)"
     kpi_bg = "#FFFFFF"
-    kpi_border = "1px solid #D0D7DE"
+    kpi_border = "2px solid #1B5E20"
 
 st.markdown(
     f"""
@@ -201,24 +205,25 @@ st.markdown(
     div[data-testid="stMetric"] {{
         background-color: {kpi_bg} !important;
         border: {kpi_border} !important;
-        padding: 12px !important;
-        border-radius: 8px !important;
-        box-shadow: 0px 2px 6px rgba(0,0,0,0.1) !important;
+        padding: 14px !important;
+        border-radius: 10px !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.08) !important;
     }}
 
     div[data-testid="stMetricLabel"] p {{
         color: {cor_texto} !important;
-        font-size: 0.95rem !important;
+        font-size: 1.0rem !important;
         font-weight: 800 !important;
     }}
 
     div[data-testid="stMetricValue"] div {{
         color: {cor_subtitulo} !important;
-        font-size: 1.6rem !important;
+        font-size: 1.7rem !important;
         font-weight: 900 !important;
     }}
 
-    div[data-baseweb="input"] input {{
+    /* Inputs e Seletores com borda e fundo nítidos */
+    div[data-baseweb="input"] input, div[data-baseweb="select"] div {{
         color: {cor_input_texto} !important;
         background-color: {bg_input} !important;
         border-radius: 6px !important;
@@ -229,7 +234,7 @@ st.markdown(
         background-color: {bg_radio} !important;
         padding: 8px 12px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(0, 0, 0, 0.1) !important;
+        border: 1px solid rgba(0, 0, 0, 0.15) !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -907,15 +912,15 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_tema, col_logout = st.columns([2.2, 1.2, 0.8])
+    col_info_usr, col_tema, col_logout = st.columns([2.0, 1.4, 0.8])
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_tema:
         novo_tema = st.selectbox(
-            "Tema",
-            ["Escuro", "Claro"],
-            index=0 if st.session_state["tema_app"] == "Escuro" else 1,
+            "Tema Visual",
+            ["🌙 Modo Escuro", "☀️ Modo Claro"],
+            index=0 if "Escuro" in st.session_state["tema_app"] else 1,
             key="select_tema_app",
             label_visibility="collapsed"
         )
@@ -1534,7 +1539,8 @@ else:
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
                         font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35)
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_val, use_container_width=True)
 
@@ -1555,7 +1561,8 @@ else:
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
                         font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35)
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_qtd, use_container_width=True)
 
@@ -1578,7 +1585,8 @@ else:
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
                         font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35)
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_forn, use_container_width=True)
 
@@ -1599,7 +1607,8 @@ else:
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
                         font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35)
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
 
