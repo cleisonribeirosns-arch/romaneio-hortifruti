@@ -4,6 +4,7 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+import plotly.express as px
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -33,15 +34,19 @@ for nome in [
     if os.path.exists(nome):
         logo_icon = nome
         break
-
 st.set_page_config(
     page_title="Supermercado Supernova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
     layout="wide",
 )
-
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
+
+# ---------------------------------------------------------
+# CONTROLE DE TEMA (CLARO / ESCURO)
+# ---------------------------------------------------------
+if "tema_app" not in st.session_state:
+    st.session_state["tema_app"] = "🌙 Modo Escuro"
 
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
@@ -54,7 +59,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA
+# 2. ESTILOS CSS (TELA DE LOGIN ORIGINAL + ADAPTAÇÃO DO PAINEL)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -68,26 +73,64 @@ for nome_bg in [
         bg_login_path = nome_bg
         break
 
-css_fundo = ""
-if bg_login_path:
-    with open(bg_login_path, "rb") as img_f:
-        b64_img = base64.b64encode(img_f.read()).decode()
-    css_fundo = f"""
-        .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
-            background-size: cover !important;
-            background-position: center !important;
-            background-repeat: no-repeat !important;
-            background-attachment: fixed !important;
-        }}
-    """
+is_escuro = "Escuro" in st.session_state["tema_app"]
+
+if st.session_state["usuario_logado"] is None:
+    # Fundo fixo original da tela de login
+    if bg_login_path:
+        with open(bg_login_path, "rb") as img_f:
+            b64_img = base64.b64encode(img_f.read()).decode()
+        css_fundo = f"""
+            .stApp {{
+                background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-repeat: no-repeat !important;
+                background-attachment: fixed !important;
+            }}
+        """
+    else:
+        css_fundo = """
+            .stApp {
+                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+                background-attachment: fixed !important;
+            }
+        """
 else:
-    css_fundo = """
-        .stApp {
-            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
-            background-attachment: fixed !important;
-        }
-    """
+    # Fundo adaptativo para o painel interno conforme o tema escolhido
+    if is_escuro:
+        css_fundo = """
+            .stApp {
+                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+                background-attachment: fixed !important;
+            }
+        """
+        cor_texto = "#FFFFFF"
+        cor_subtitulo = "#F0F0F0"
+        sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
+        bg_input = "rgba(255, 255, 255, 0.95)"
+        cor_input_texto = "#000000"
+        bg_radio = "rgba(0, 0, 0, 0.4)"
+        plotly_font_color = "#FFFFFF"
+        plotly_grid_color = "rgba(255,255,255,0.2)"
+        kpi_bg = "rgba(0, 0, 0, 0.4)"
+        kpi_border = "1px solid rgba(255, 255, 255, 0.3)"
+    else:
+        css_fundo = """
+            .stApp {
+                background: #F8F9FA !important;
+            }
+        """
+        cor_texto = "#1B5E20"
+        cor_subtitulo = "#111111"
+        sombra_texto = "none"
+        bg_input = "#FFFFFF"
+        cor_input_texto = "#111111"
+        bg_radio = "#FFFFFF"
+        plotly_font_color = "#111111"
+        plotly_grid_color = "rgba(0,0,0,0.15)"
+        kpi_bg = "#FFFFFF"
+        kpi_border = "2px solid #1B5E20"
 
 st.markdown(
     f"""
@@ -96,11 +139,9 @@ st.markdown(
         display: none !important;
         visibility: hidden !important;
     }}
-
     header[data-testid="stHeader"] {{
         background-color: transparent !important;
     }}
-
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
@@ -111,7 +152,6 @@ st.markdown(
         margin: 0 auto !important;
         display: block !important;
     }}
-
     .titulo-logo {{
         font-size: 2.4rem !important;
         font-weight: 900 !important;
@@ -119,7 +159,6 @@ st.markdown(
         margin-bottom: 0px !important;
         font-family: 'Arial Black', Gadget, sans-serif !important;
     }}
-
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
         font-size: 1.25rem !important;
@@ -129,7 +168,6 @@ st.markdown(
             -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
-
     .palavra-super {{
         color: #2E7D32 !important;
         font-style: italic !important;
@@ -137,7 +175,6 @@ st.markdown(
             -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
-
     .palavra-nova {{
         color: #FF3D00 !important;
         font-style: italic !important;
@@ -146,7 +183,6 @@ st.markdown(
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
-
     .palavra-cidade {{
         color: #111111 !important;
         font-style: italic !important;
@@ -154,7 +190,6 @@ st.markdown(
         font-size: 3.0rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
-
     .stApp h3 {{
         color: #FFFFFF !important;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
@@ -163,46 +198,18 @@ st.markdown(
         margin-top: 4px !important;
         margin-bottom: 10px !important;
     }}
-
     .stApp label {{
         color: #FFFFFF !important;
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         font-size: 16px !important;
         font-weight: bold !important;
     }}
-
     div[data-baseweb="input"] input {{
         color: #000000 !important;
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
-
-    div[data-baseweb="input"] input::placeholder {{
-        color: transparent !important;
-    }}
-
-    div[data-testid="stRadio"] label p {{
-        font-size: 1.1rem !important;
-        font-weight: 800 !important;
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important;
-    }}
-
-    div[data-testid="stRadio"] div[role="radiogroup"] {{
-        background-color: rgba(0, 0, 0, 0.4) !important;
-        padding: 8px 12px !important;
-        border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }}
-
-    div[data-testid="stExpander"] summary span p {{
-        font-size: 1.15rem !important;
-        font-weight: 800 !important;
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
-    }}
-
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -213,20 +220,9 @@ st.markdown(
         width: 100% !important;
         box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
     }}
-
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
-    }}
-    
-    @media only screen and (max-width: 768px) {{
-        .stDataFrame {{
-            font-size: 11px !important;
-            overflow-x: auto !important;
-        }}
-        div[data-testid="stHorizontalBlock"] {{
-            flex-direction: column !important;
-        }}
     }}
     {css_fundo}
     </style>
@@ -235,7 +231,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E CATÁLOGO (PRODUTOS OFICIAIS CISS)
+# 3. BANCO DE DADOS E CATÁLOGO
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -564,7 +560,6 @@ def init_db():
             )
         except Exception:
             pass
-
     conn.commit()
     conn.close()
 
@@ -631,7 +626,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
     style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
     style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-
+    
     logo_path = None
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
         for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
@@ -691,7 +686,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(header_table)
     story.append(Spacer(1, 10))
-
     info_data = [
         [
             Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"]),
@@ -721,7 +715,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(info_table)
     story.append(Spacer(1, 15))
-
     table_content = [
         [
             Paragraph("Item", style_header_center),
@@ -760,7 +753,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(itens_table)
     story.append(Spacer(1, 8))
-
     total_table = Table(
         [[f"TOTAL GERAL DO ROMANEIO: R$ {fmt_ptbr(total_geral, 2)}"]], colWidths=[540]
     )
@@ -776,24 +768,22 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     )
     story.append(total_table)
     story.append(Spacer(1, 15))
-
+    
     path_conf_transp = remover_fundo_branco(path_conf)
     path_ent_transp = remover_fundo_branco(path_ent)
-
     img_conf_pdf = None
     if path_conf_transp and os.path.exists(path_conf_transp):
         try:
             img_conf_pdf = RLImage(path_conf_transp, width=180, height=45)
         except Exception:
             pass
-
     img_ent_pdf = None
     if path_ent_transp and os.path.exists(path_ent_transp):
         try:
             img_ent_pdf = RLImage(path_ent_transp, width=180, height=45)
         except Exception:
             pass
-
+            
     col_conf_cell = [
         img_conf_pdf if img_conf_pdf else Spacer(1, 45),
         Paragraph(f"<b>Assinatura do Conferente:</b><br/>{romaneio_data.get('conferente','')}", styles["Normal"]),
@@ -802,7 +792,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         img_ent_pdf if img_ent_pdf else Spacer(1, 45),
         Paragraph(f"<b>Assinatura do Entregador / Fornecedor:</b><br/>{romaneio_data.get('fornecedor','')}", styles["Normal"]),
     ]
-
     ass_table = Table([[col_conf_cell, col_ent_cell]], colWidths=[270, 270])
     ass_table.setStyle(
         TableStyle([
@@ -813,13 +802,12 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         ])
     )
     story.append(ass_table)
-
     doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
     buffer.seek(0)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN
+# 5. TELA DE LOGIN ORIGINAL
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -827,7 +815,6 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
-
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
@@ -856,7 +843,6 @@ if st.session_state["usuario_logado"] is None:
                 unsafe_allow_html=True
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
             senha_input = st.text_input("Senha", type="password")
@@ -876,7 +862,7 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     # ---------------------------------------------------------
-    # 6. PAINEL INTERNO
+    # 6. PAINEL INTERNO COMPLETO
     # ---------------------------------------------------------
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
@@ -887,16 +873,26 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_logout = st.columns([3, 1])
+    col_info_usr, col_tema, col_logout = st.columns([3.2, 1.0, 0.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
-        st.markdown(f"**Usuário Logado:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+    with col_tema:
+        novo_tema = st.selectbox(
+            "Tema Visual",
+            ["🌙 Modo Escuro", "☀️ Modo Claro"],
+            index=0 if "Escuro" in st.session_state["tema_app"] else 1,
+            key="select_tema_app",
+            label_visibility="collapsed"
+        )
+        if novo_tema != st.session_state["tema_app"]:
+            st.session_state["tema_app"] = novo_tema
+            st.rerun()
     with col_logout:
-        # CORREÇÃO AQUI: adicionado key única no botão de sair para eliminar o erro
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
             st.rerun()
-
+            
     opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios"]
     if is_admin:
         opcoes_menu.extend([
@@ -914,7 +910,6 @@ else:
             st.session_state["form_key_suffix"] = 0
         if "item_key_suffix" not in st.session_state:
             st.session_state["item_key_suffix"] = 0
-
         k_suffix = st.session_state["form_key_suffix"]
         i_suffix = st.session_state["item_key_suffix"]
         
@@ -933,7 +928,6 @@ else:
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
             
         prod_nomes_keys = list(prod_dict.keys())
-
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1008,11 +1002,10 @@ else:
                 disabled=True,
                 key=f"conf_{k_suffix}",
             )
-
+            
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
-
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
@@ -1027,7 +1020,6 @@ else:
             prod_nome_real = (
                 prod_dict[prod_label_sel][0] if prod_label_sel and prod_dict else ""
             )
-
         with col_p2:
             und_padrao = (
                 prod_dict[prod_label_sel][1]
@@ -1067,13 +1059,11 @@ else:
                     qtd_input = float(qtd_limpa)
                 except ValueError:
                     qtd_input = 0.0
-
                 try:
                     vunit_limpo = val_unit_str_input.replace(".", "").replace(",", ".") if val_unit_str_input else "0"
                     val_unit_val = float(vunit_limpo)
                 except ValueError:
                     val_unit_val = 0.0
-
                 if not prod_nome_real:
                     st.warning("Selecione um produto antes de adicionar.")
                 elif qtd_input <= 0:
@@ -1089,7 +1079,7 @@ else:
                     })
                     st.session_state["item_key_suffix"] += 1
                     st.rerun()
-
+                    
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados:**")
             
@@ -1125,14 +1115,13 @@ else:
                 if st.button("🗑️ Remover", key=f"btn_rem_esp_{k_suffix}", type="secondary"):
                     st.session_state["itens_romaneio"].pop(item_para_remover - 1)
                     st.rerun()
-
             total_geral_temp = sum(itm['valor_total'] for itm in st.session_state["itens_romaneio"])
             st.markdown(f"### **Total Geral: R$ {fmt_ptbr(total_geral_temp, 2)}**")
             
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
-
+                
         st.subheader("3. Anexo de Fotos / Comprovantes")
         fotos_upload = st.file_uploader(
             "Fotos da Nota / Canhoto",
@@ -1140,7 +1129,7 @@ else:
             accept_multiple_files=True,
             key=f"fotos_{k_suffix}",
         )
-
+        
         st.subheader("4. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
@@ -1167,7 +1156,7 @@ else:
                 return_image_data=True,
                 key=f"canv_ent_{k_suffix}",
             )
-
+            
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip():
                 st.error("Preencha o número do romaneio e o fornecedor.")
@@ -1181,7 +1170,6 @@ else:
                 try:
                     if not os.path.exists("uploads"):
                         os.makedirs("uploads")
-
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
@@ -1284,7 +1272,7 @@ else:
                     
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
-
+                    
         if "ultimo_pdf_bytes" in st.session_state and "ultimo_num_romaneio" in st.session_state:
             st.markdown("---")
             st.success(f"📄 Romaneio **{st.session_state['ultimo_num_romaneio']}** pronto para download!")
@@ -1295,7 +1283,7 @@ else:
                 mime="application/pdf",
                 type="primary",
             )
-
+            
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         
@@ -1310,11 +1298,11 @@ else:
             with col_f4:
                 filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
                 filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
-
+                
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
-
+        
         if not df_rom.empty:
             if filtro_num.strip():
                 df_rom = df_rom[df_rom["numero_romaneio"].str.contains(filtro_num.strip(), case=False, na=False)]
@@ -1324,7 +1312,7 @@ else:
                 df_rom = df_rom[df_rom["codigo_fornecedor"].astype(str).str.contains(filtro_cod_forn.strip(), case=False, na=False)]
             if filtro_data_str:
                 df_rom = df_rom[df_rom["data_recebimento"] == filtro_data_str]
-
+                
         if not df_rom.empty:
             st.markdown(f"**Total de romaneios encontrados:** {len(df_rom)}")
             st.markdown("---")
@@ -1332,7 +1320,6 @@ else:
                 fornecedor_txt = row['fornecedor'] if row['fornecedor'] else 'N/A'
                 if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip():
                     fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
-
                 with st.expander(
                     f"Romaneio: {row['numero_romaneio']} | Fornecedor:"
                     f" {fornecedor_txt} | Data: {row['data_recebimento']}"
@@ -1353,7 +1340,7 @@ else:
                         st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
                         if st.button("🔍 Ampliar Foto da Nota (Tela Cheia)", key=f"btn_ampliar_foto_{row['id']}"):
                             exibir_foto_modal(row['caminho_foto'])
-
+                            
                     conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     df_itens = pd.read_sql_query(
                         "SELECT produto, quantidade, unidade, valor_unitario,"
@@ -1413,7 +1400,7 @@ else:
                                 st.error(f"Erro ao excluir romaneio: {e}")
         else:
             st.info("Nenhum romaneio encontrado com os filtros informados.")
-
+            
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
         
@@ -1421,13 +1408,12 @@ else:
         df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
         df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
         conn.close()
-
+        
         if df_roms.empty or df_itens.empty:
             st.warning("Ainda não existem dados de recebimento cadastrados para gerar relatórios e gráficos. Cadastre alguns romaneios na aba principal para visualizar a análise.")
         else:
             df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
             df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
-
             st.markdown("### 🔍 Filtros da Análise Gerencial")
             col_f1, col_f2, col_f3, col_f4 = st.columns(4)
             
@@ -1446,21 +1432,18 @@ else:
             with col_f4:
                 dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now()
                 dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
-
+                
             df_filtrado = df_full.copy()
-            
             if loja_sel != "TODAS AS LOJAS":
                 df_filtrado = df_filtrado[df_filtrado["loja"] == loja_sel]
-                
             if prod_sel != "TODOS OS PRODUTOS":
                 df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
-            
             if dt_inicio and dt_fim:
                 df_filtrado = df_filtrado[
                     (df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & 
                     (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))
                 ]
-
+                
             if df_filtrado.empty:
                 st.info("Nenhum registro encontrado para os filtros selecionados.")
             else:
@@ -1471,44 +1454,108 @@ else:
                 total_val = df_filtrado["valor_total"].sum()
                 qtd_roms = df_filtrado["numero_romaneio"].nunique()
                 qtd_peso_total = df_filtrado["quantidade"].sum()
-                
                 top_fornecedor = (
                     df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() 
                     if not df_filtrado.empty else "N/A"
                 )
-
+                
                 kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(total_val, 2)}")
                 kpi2.metric("Total de Romaneios", f"{qtd_roms} romaneios")
                 kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(qtd_peso_total, 3)}")
                 kpi4.metric("Principal Fornecedor", str(top_fornecedor))
-
                 st.markdown("---")
-                st.subheader("📊 Visualizações Gráficas")
+                st.subheader("📊 Visualizações Gráficas Profissionais (BI)")
                 
                 col_g1, col_g2 = st.columns(2)
-                
                 with col_g1:
                     st.markdown("**Top Produtos por Valor Financeiro (R$)**")
                     top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
-                    st.bar_chart(top_prods_val.set_index("produto"))
-
+                    fig_val = px.bar(
+                        top_prods_val, 
+                        x="produto", 
+                        y="valor_total",
+                        text_auto=".2f",
+                        color="valor_total",
+                        color_continuous_scale="Greens"
+                    )
+                    fig_val.update_layout(
+                        xaxis_title="Produto", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                    )
+                    st.plotly_chart(fig_val, use_container_width=True)
+                    
                 with col_g2:
                     st.markdown("**Top Produtos por Volume / Quantidade**")
                     top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
-                    st.bar_chart(top_prods_qtd.set_index("produto"))
-
+                    fig_qtd = px.bar(
+                        top_prods_qtd, 
+                        x="produto", 
+                        y="quantidade",
+                        text_auto=".2f",
+                        color="quantidade",
+                        color_continuous_scale="Reds"
+                    )
+                    fig_qtd.update_layout(
+                        xaxis_title="Produto", 
+                        yaxis_title="Qtd / Peso",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                    )
+                    st.plotly_chart(fig_qtd, use_container_width=True)
+                    
                 col_g3, col_g4 = st.columns(2)
-                
                 with col_g3:
                     st.markdown("**Participação Financeira por Fornecedor (R$)**")
                     forn_val = df_filtrado.groupby("fornecedor")["valor_total"].sum().reset_index()
-                    st.bar_chart(forn_val.set_index("fornecedor"))
-
+                    fig_forn = px.bar(
+                        forn_val, 
+                        x="fornecedor", 
+                        y="valor_total",
+                        text_auto=".2f",
+                        color="valor_total",
+                        color_continuous_scale="Viridis"
+                    )
+                    fig_forn.update_layout(
+                        xaxis_title="Fornecedor", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                    )
+                    st.plotly_chart(fig_forn, use_container_width=True)
+                    
                 with col_g4:
                     st.markdown("**Evolução Diária dos Recebimentos (R$)**")
                     diario_val = df_filtrado.groupby("data_recebimento")["valor_total"].sum().reset_index()
-                    st.line_chart(diario_val.set_index("data_recebimento"))
-
+                    fig_line = px.line(
+                        diario_val, 
+                        x="data_recebimento", 
+                        y="valor_total",
+                        markers=True,
+                        line_shape="spline"
+                    )
+                    fig_line.update_traces(line_color="#1B5E20", line_width=3)
+                    fig_line.update_layout(
+                        xaxis_title="Data do Recebimento", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                    )
+                    st.plotly_chart(fig_line, use_container_width=True)
+                    
                 st.markdown("---")
                 st.subheader("📋 Tabela Consolidada & Exportação")
                 
@@ -1535,16 +1582,15 @@ else:
                 
                 st.dataframe(df_export, use_container_width=True, hide_index=True)
                 
-                csv_buffer = df_export.to_csv(index=False).encode('utf-8-sig')
+                csv_buffer = df_export.to_csv(index=False, sep=';').encode('utf-8-sig')
                 st.download_button(
-                    label="📥 Baixar Relatório Consolidado (CSV / Excel)",
+                    label="📥 Baixar Relatório Consolidado (Excel / CSV)",
                     data=csv_buffer,
                     file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
                     type="primary",
                     key="btn_download_csv_relatorio"
                 )
-
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("🥦 Gerenciamento de Produtos")
         with st.form("cad_prod"):
@@ -1566,7 +1612,6 @@ else:
                         st.error(f"Erro ao cadastrar produto: {e}")
                     finally:
                         conn.close()
-
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
