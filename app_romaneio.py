@@ -61,7 +61,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS (ALTA VISIBILIDADE EM AMBOS OS TEMAS)
+# 2. ESTILOS CSS DINÂMICOS
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -136,14 +136,15 @@ st.markdown(
         background-color: transparent !important;
     }}
 
-    img[data-testid="stImage"] {{
+    /* Estilo Ajustado para Imagem da Logo no Login */
+    .logo-login-container img {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
         filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 85px !important;
+        max-width: 280px !important;
         width: 100% !important;
         height: auto !important;
-        margin: 0 auto !important;
+        margin: 0 auto 15px auto !important;
         display: block !important;
     }}
 
@@ -201,7 +202,7 @@ st.markdown(
         font-weight: bold !important;
     }}
 
-    /* Ajuste visual dos cards de métricas (KPIs) */
+    /* Card de Métricas (KPIs) */
     div[data-testid="stMetric"] {{
         background-color: {kpi_bg} !important;
         border: {kpi_border} !important;
@@ -222,7 +223,7 @@ st.markdown(
         font-weight: 900 !important;
     }}
 
-    /* Inputs e Seletores com borda e fundo nítidos */
+    /* Inputs e Seletores */
     div[data-baseweb="input"] input, div[data-baseweb="select"] div {{
         color: {cor_input_texto} !important;
         background-color: {bg_input} !important;
@@ -844,7 +845,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN
+# 5. TELA DE LOGIN (COM LOGO GRANDE RESTAURADA)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -856,31 +857,20 @@ if st.session_state["usuario_logado"] is None:
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
-            col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
-            with col_logo:
-                st.image(logo_display, use_container_width=True)
-            with col_titulo:
-                st.markdown(
-                    """<div class='titulo-logo'>
-                    <span class='palavra-sup-mercado'>Supermercado</span><br>
-                    <span class='palavra-super'>SUPER</span> 
-                    <span class='palavra-nova'>NOVA</span><br>
-                    <span class='palavra-cidade'>Cidade</span>
-                    </div>""",
-                    unsafe_allow_html=True
-                )
-                st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-        else:
-            st.markdown(
-                """<div class='titulo-logo'>
-                <span class='palavra-sup-mercado'>Supermercado</span><br>
-                <span class='palavra-super'>SUPER</span> 
-                <span class='palavra-nova'>NOVA</span><br>
-                <span class='palavra-cidade'>Cidade</span>
-                </div>""",
-                unsafe_allow_html=True
-            )
-            st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+            st.markdown("<div class='logo-login-container'>", unsafe_allow_html=True)
+            st.image(logo_display, use_container_width=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown(
+            """<div class='titulo-logo' style='text-align: center;'>
+            <span class='palavra-sup-mercado'>Supermercado</span><br>
+            <span class='palavra-super'>SUPER</span> 
+            <span class='palavra-nova'>NOVA</span><br>
+            <span class='palavra-cidade'>Cidade</span>
+            </div>""",
+            unsafe_allow_html=True
+        )
+        st.markdown("<h3 style='text-align: center;'>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
