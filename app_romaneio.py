@@ -130,7 +130,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -198,7 +198,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E CATÁLOGO REVISADO (SEM OVOS, COM CÓDIGOS REAIS DO CISS)
+# 3. BANCO DE DADOS E CATÁLOGO (APENAS PRODUTOS COM CÓDIGOS VÁLIDOS)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -250,6 +250,10 @@ def init_db():
             FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
         )
     """)
+    
+    # Remove produtos antigos que ficaram sem código ("S/N") do banco de dados existente
+    cursor.execute("DELETE FROM produtos WHERE codigo_produto = 'S/N' OR codigo_barras = 'S/N' OR codigo_produto IS NULL OR codigo_barras IS NULL")
+    
     cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
     if not cursor.fetchone():
         cursor.execute(
@@ -257,7 +261,7 @@ def init_db():
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
     
-    # Catálogo extraído diretamente das páginas 1 a 8 do PDF do CISS (sem ovos)
+    # Catálogo oficial completo (excluindo ovos e garantindo códigos em todos)
     produtos_iniciais = [
         ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
@@ -518,12 +522,10 @@ def init_db():
     ]
     
     for cod_b, cod_p, nome_prod, und_p in produtos_iniciais:
-        cb = cod_b if cod_b else "S/N"
-        cp = cod_p if cod_p else "S/N"
         try:
             cursor.execute(
                 "INSERT OR IGNORE INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
-                (cb, cp, nome_prod, und_p)
+                (cod_b, cod_p, nome_prod, und_p)
             )
         except Exception:
             pass
@@ -844,15 +846,13 @@ else:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM"
-            " produtos ORDER BY nome"
+            " produtos WHERE codigo_produto != 'S/N' ORDER BY nome"
         )
         produtos_lista = cursor.fetchall()
         conn.close()
         prod_dict = {}
         for p in produtos_lista:
-            c_prod = p[2] if p[2] and p[2] != "S/N" else "S/N"
-            c_bar = p[3] if p[3] and p[3] != "S/N" else "S/N"
-            label = f"{p[0]} | Cód: {c_prod} | Barras: {c_bar}"
+            label = f"{p[0]} | Cód: {p[2]} | Barras: {p[3]}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
         prod_nomes_keys = list(prod_dict.keys())
 
