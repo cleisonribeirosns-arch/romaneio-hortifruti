@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS (TELA DE LOGIN ORIGINAL RESTAURADA)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -61,7 +61,7 @@ if bg_login_path:
         b64_img = base64.b64encode(img_f.read()).decode()
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(10,40,10,0.92), rgba(90,10,10,0.92)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -88,6 +88,108 @@ st.markdown(
         background-color: transparent !important;
     }}
 
+    img[data-testid="stImage"] {{
+        background: transparent !important;
+        mix-blend-mode: multiply !important;
+        filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
+        max-width: 85px !important;
+        width: 100% !important;
+        height: auto !important;
+        margin: 0 auto !important;
+        display: block !important;
+    }}
+
+    .titulo-logo {{
+        font-size: 2.4rem !important;
+        font-weight: 900 !important;
+        line-height: 1.1 !important;
+        margin-bottom: 0px !important;
+        font-family: 'Arial Black', Gadget, sans-serif !important;
+    }}
+
+    .palavra-sup-mercado {{
+        color: #2E7D32 !important;
+        font-size: 1.25rem !important;
+        font-weight: 800 !important;
+        font-style: italic !important;
+        text-shadow: 
+            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
+            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+    }}
+
+    .palavra-super {{
+        color: #2E7D32 !important;
+        font-style: italic !important;
+        text-shadow: 
+            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
+            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+    }}
+
+    .palavra-nova {{
+        color: #FF3D00 !important;
+        font-style: italic !important;
+        text-shadow: 
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
+            3px 3px 5px rgba(0, 0, 0, 0.6) !important;
+    }}
+
+    .palavra-cidade {{
+        color: #111111 !important;
+        font-style: italic !important;
+        font-family: 'Brush Script MT', cursive, sans-serif !important;
+        font-size: 3.0rem !important;
+        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
+    }}
+
+    .stApp h3 {{
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
+        font-weight: 800 !important;
+        font-size: 1.4rem !important;
+        margin-top: 4px !important;
+        margin-bottom: 10px !important;
+    }}
+
+    .stApp label {{
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+    }}
+
+    div[data-baseweb="input"] input {{
+        color: #000000 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 6px !important;
+        font-size: 15px !important;
+    }}
+
+    button[kind="primary"], .stButton > button[kind="primary"] {{
+        background-color: #1B5E20 !important;
+        color: #FFFFFF !important;
+        border: 2px solid #FFFFFF !important;
+        font-weight: bold !important;
+        font-size: 16px !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
+    }}
+
+    button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
+        background-color: #2E7D32 !important;
+        border-color: #FFFFFF !important;
+    }}
+    
+    @media only screen and (max-width: 768px) {{
+        .stDataFrame {{
+            font-size: 11px !important;
+            overflow-x: auto !important;
+        }}
+        div[data-testid="stHorizontalBlock"] {{
+            flex-direction: column !important;
+        }}
+    }}
     {css_fundo}
     </style>
 """,
@@ -447,6 +549,7 @@ def fazer_login(login, senha):
     conn.close()
     return usr
 
+# Funções auxiliares para formatação de valores no padrão brasileiro (1.234,56)
 def fmt_ptbr(val, decimais=2):
     try:
         f = float(val)
@@ -667,7 +770,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (ORIGINAL EXATA, SEM NENHUMA ALTERAÇÃO)
+# 5. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -675,7 +778,6 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
-
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
@@ -704,7 +806,6 @@ if st.session_state["usuario_logado"] is None:
                 unsafe_allow_html=True
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
             senha_input = st.text_input("Senha", type="password")
@@ -723,9 +824,6 @@ if st.session_state["usuario_logado"] is None:
                 else:
                     st.error("Usuário ou senha incorretos.")
 else:
-    # ---------------------------------------------------------
-    # 6. PAINEL INTERNO ORIGINAL
-    # ---------------------------------------------------------
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (
@@ -734,6 +832,9 @@ else:
         or "adm" in perfil_db
     )
     
+    # ---------------------------------------------------------
+    # 6. MENU SUPERIOR FIXO (COMPUTADORES E CELULARES)
+    # ---------------------------------------------------------
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3, 1])
     with col_info_usr:
@@ -755,6 +856,9 @@ else:
     menu = st.radio("Menu de Navegação Principal", opcoes_menu, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
     
+    # ---------------------------------------------------------
+    # 7. MÓDULOS DO SISTEMA
+    # ---------------------------------------------------------
     if menu == "Romaneio de Recebimento - Hortifrúti":
         st.title("Romaneio de Recebimento - Hortifrúti")
         if "form_key_suffix" not in st.session_state:
@@ -1221,6 +1325,9 @@ else:
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
+    # ---------------------------------------------------------
+    # ETAPA 3: RELATÓRIOS & GRÁFICOS DE ANÁLISE
+    # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
         
