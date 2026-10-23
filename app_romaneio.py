@@ -254,12 +254,13 @@ init_db()
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
-def fazer_login(login, senha):
+def fazer_login(login_ou_nome, senha):
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     cursor = conn.cursor()
+    # Permite buscar pelo Login EXATO ou pelo Nome Completo (ignorando maiúsculas/minúsculas)
     cursor.execute(
-        "SELECT id, nome, perfil FROM usuarios WHERE login = ? AND senha = ?",
-        (login, senha),
+        "SELECT id, nome, perfil, login FROM usuarios WHERE (login = ? OR nome COLLATE NOCASE = ?) AND senha = ?",
+        (login_ou_nome.strip(), login_ou_nome.strip(), senha),
     )
     usr = cursor.fetchone()
     conn.close()
@@ -644,7 +645,7 @@ if st.session_state["usuario_logado"] is None:
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
         with st.form("form_login"):
-            login_input = st.text_input("Usuário / Login")
+            login_input = st.text_input("Usuário / Login ou Nome Completo")
             senha_input = st.text_input("Senha", type="password")
             btn_entrar = st.form_submit_button("Entrar no Sistema", type="primary")
             if btn_entrar:
@@ -654,7 +655,7 @@ if st.session_state["usuario_logado"] is None:
                         "id": usuario[0],
                         "nome": usuario[1],
                         "perfil": usuario[2],
-                        "login": login_input,
+                        "login": usuario[3],
                     }
                     st.success(f"Bem-vindo(a), {usuario[1]}!")
                     st.rerun()
@@ -1519,34 +1520,45 @@ else:
             st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True)
             
             st.markdown("---")
-            st.subheader("✏️ Alterar Senha de Usuário")
-            with st.form("form_alterar_senha"):
-                col_alt1, col_alt2 = st.columns([2, 2])
-                with col_alt1:
-                    usr_para_alterar = st.selectbox(
-                        "Selecione o usuário",
+            st.subheader("✏️ Editar Usuário (Nome, Login e Senha)")
+            with st.form("form_editar_usuario"):
+                col_e1, col_e2 = st.columns([2, 2])
+                with col_e1:
+                    usr_para_editar = st.selectbox(
+                        "Selecione o usuário para editar",
                         options=usuarios_com_id_ajustado,
                         format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]})",
-                        key="sel_usr_alt"
+                        key="sel_usr_edit"
                     )
-                with col_alt2:
-                    nova_senha_input = st.text_input("Nova Senha", type="password")
+                with col_e2:
+                    novo_nome_edit = st.text_input("Novo Nome Completo", value=usr_para_editar[1] if usr_para_editar else "")
                 
-                btn_salvar_senha = st.form_submit_button("🔑 Salvar Nova Senha", type="primary")
-                if btn_salvar_senha:
-                    if not nova_senha_input.strip():
-                        st.error("Digite a nova senha.")
+                col_e3, col_e4 = st.columns([2, 2])
+                with col_e3:
+                    novo_login_edit = st.text_input("Novo Login", value=usr_para_editar[2] if usr_para_editar else "")
+                with col_e4:
+                    nova_senha_edit = st.text_input("Nova Senha", value=usr_para_editar[3] if usr_para_editar else "", type="password")
+                
+                btn_salvar_edicao = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                if btn_salvar_edicao:
+                    if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip():
+                        st.error("Preencha todos os campos para salvar.")
                     else:
                         try:
-                            conn_alt = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-                            cursor_alt = conn_alt.cursor()
-                            cursor_alt.execute("UPDATE usuarios SET senha = ? WHERE id = ?", (nova_senha_input.strip(), usr_para_alterar[5]))
-                            conn_alt.commit()
-                            conn_alt.close()
-                            st.success(f"Senha do usuário '{usr_para_alterar[1]}' alterada com sucesso!")
+                            conn_ed = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                            cursor_ed = conn_ed.cursor()
+                            cursor_ed.execute(
+                                "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?",
+                                (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), usr_para_editar[5])
+                            )
+                            conn_ed.commit()
+                            conn_ed.close()
+                            st.success(f"Dados do usuário atualizados com sucesso!")
                             st.rerun()
+                        except sqlite3.IntegrityError:
+                            st.error("Erro: O Login informado já está em uso por outro usuário.")
                         except Exception as e:
-                            st.error(f"Erro ao alterar senha: {e}")
+                            st.error(f"Erro ao atualizar usuário: {e}")
             
             st.markdown("---")
             st.subheader("🗑️ Excluir Usuário")
