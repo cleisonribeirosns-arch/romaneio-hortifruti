@@ -45,10 +45,10 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
-# CONTROLE DE TEMA (CLARO / ESCURO) COM ÍCONES ☀️ / 🌙
+# CONTROLE DE TEMA (CLARO / ESCURO)
 # ---------------------------------------------------------
 if "tema_app" not in st.session_state:
-    st.session_state["tema_app"] = "🌙 Modo Escuro"
+    st.session_state["tema_app"] = "Escuro"
 
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
@@ -61,7 +61,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS
+# 2. ESTILOS CSS DINÂMICOS (MODO CLARO / ESCURO)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -75,9 +75,8 @@ for nome_bg in [
         bg_login_path = nome_bg
         break
 
-is_escuro = "Escuro" in st.session_state["tema_app"]
-
-if is_escuro:
+css_fundo = ""
+if st.session_state["tema_app"] == "Escuro":
     if bg_login_path:
         with open(bg_login_path, "rb") as img_f:
             b64_img = base64.b64encode(img_f.read()).decode()
@@ -98,31 +97,22 @@ if is_escuro:
             }
         """
     cor_texto = "#FFFFFF"
-    cor_subtitulo = "#F0F0F0"
     sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
     bg_input = "rgba(255, 255, 255, 0.95)"
     cor_input_texto = "#000000"
     bg_radio = "rgba(0, 0, 0, 0.4)"
-    plotly_font_color = "#FFFFFF"
-    plotly_grid_color = "rgba(255,255,255,0.2)"
-    kpi_bg = "rgba(0, 0, 0, 0.4)"
-    kpi_border = "1px solid rgba(255, 255, 255, 0.3)"
 else:
     css_fundo = """
         .stApp {
-            background: #F8F9FA !important;
+            background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 50%, #FFEBEE 100%) !important;
+            background-attachment: fixed !important;
         }
     """
     cor_texto = "#1B5E20"
-    cor_subtitulo = "#111111"
-    sombra_texto = "none"
-    bg_input = "#FFFFFF"
+    sombra_texto = "1px 1px 2px rgba(255, 255, 255, 0.8)"
+    bg_input = "rgba(255, 255, 255, 0.98)"
     cor_input_texto = "#111111"
-    bg_radio = "#FFFFFF"
-    plotly_font_color = "#111111"
-    plotly_grid_color = "rgba(0,0,0,0.15)"
-    kpi_bg = "#FFFFFF"
-    kpi_border = "2px solid #1B5E20"
+    bg_radio = "rgba(255, 255, 255, 0.7)"
 
 st.markdown(
     f"""
@@ -136,15 +126,14 @@ st.markdown(
         background-color: transparent !important;
     }}
 
-    /* Estilo Ajustado para Imagem da Logo no Login */
-    .logo-login-container img {{
+    img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
         filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 280px !important;
+        max-width: 85px !important;
         width: 100% !important;
         height: auto !important;
-        margin: 0 auto 15px auto !important;
+        margin: 0 auto !important;
         display: block !important;
     }}
 
@@ -191,51 +180,48 @@ st.markdown(
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
 
-    .stApp h1, .stApp h2, .stApp h3 {{
+    .stApp h3 {{
         color: {cor_texto} !important;
         text-shadow: {sombra_texto} !important;
         font-weight: 800 !important;
+        font-size: 1.4rem !important;
+        margin-top: 4px !important;
+        margin-bottom: 10px !important;
     }}
 
-    .stApp p, .stApp span, .stApp label {{
-        color: {cor_subtitulo} !important;
+    .stApp label {{
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
+        font-size: 16px !important;
         font-weight: bold !important;
     }}
 
-    /* Card de Métricas (KPIs) */
-    div[data-testid="stMetric"] {{
-        background-color: {kpi_bg} !important;
-        border: {kpi_border} !important;
-        padding: 14px !important;
-        border-radius: 10px !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.08) !important;
-    }}
-
-    div[data-testid="stMetricLabel"] p {{
-        color: {cor_texto} !important;
-        font-size: 1.0rem !important;
-        font-weight: 800 !important;
-    }}
-
-    div[data-testid="stMetricValue"] div {{
-        color: {cor_subtitulo} !important;
-        font-size: 1.7rem !important;
-        font-weight: 900 !important;
-    }}
-
-    /* Inputs e Seletores */
-    div[data-baseweb="input"] input, div[data-baseweb="select"] div {{
+    div[data-baseweb="input"] input {{
         color: {cor_input_texto} !important;
         background-color: {bg_input} !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
 
+    div[data-testid="stRadio"] label p {{
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
+    }}
+
     div[data-testid="stRadio"] div[role="radiogroup"] {{
         background-color: {bg_radio} !important;
         padding: 8px 12px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(0, 0, 0, 0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }}
+
+    div[data-testid="stExpander"] summary span p {{
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -246,7 +232,7 @@ st.markdown(
         font-size: 16px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 8px rgba(0,0,0,0.2) !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
     }}
 
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
@@ -845,7 +831,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (COM LOGO GRANDE RESTAURADA)
+# 5. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -857,20 +843,31 @@ if st.session_state["usuario_logado"] is None:
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
-            st.markdown("<div class='logo-login-container'>", unsafe_allow_html=True)
-            st.image(logo_display, use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown(
-            """<div class='titulo-logo' style='text-align: center;'>
-            <span class='palavra-sup-mercado'>Supermercado</span><br>
-            <span class='palavra-super'>SUPER</span> 
-            <span class='palavra-nova'>NOVA</span><br>
-            <span class='palavra-cidade'>Cidade</span>
-            </div>""",
-            unsafe_allow_html=True
-        )
-        st.markdown("<h3 style='text-align: center;'>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+            col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
+            with col_logo:
+                st.image(logo_display, use_container_width=True)
+            with col_titulo:
+                st.markdown(
+                    """<div class='titulo-logo'>
+                    <span class='palavra-sup-mercado'>Supermercado</span><br>
+                    <span class='palavra-super'>SUPER</span> 
+                    <span class='palavra-nova'>NOVA</span><br>
+                    <span class='palavra-cidade'>Cidade</span>
+                    </div>""",
+                    unsafe_allow_html=True
+                )
+                st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+        else:
+            st.markdown(
+                """<div class='titulo-logo'>
+                <span class='palavra-sup-mercado'>Supermercado</span><br>
+                <span class='palavra-super'>SUPER</span> 
+                <span class='palavra-nova'>NOVA</span><br>
+                <span class='palavra-cidade'>Cidade</span>
+                </div>""",
+                unsafe_allow_html=True
+            )
+            st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
@@ -902,15 +899,15 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_tema, col_logout = st.columns([2.0, 1.4, 0.8])
+    col_info_usr, col_tema, col_logout = st.columns([2.2, 1.2, 0.8])
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_tema:
         novo_tema = st.selectbox(
-            "Tema Visual",
-            ["🌙 Modo Escuro", "☀️ Modo Claro"],
-            index=0 if "Escuro" in st.session_state["tema_app"] else 1,
+            "Tema",
+            ["Escuro", "Claro"],
+            index=0 if st.session_state["tema_app"] == "Escuro" else 1,
             key="select_tema_app",
             label_visibility="collapsed"
         )
@@ -1528,9 +1525,8 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_val, use_container_width=True)
 
@@ -1550,9 +1546,8 @@ else:
                         yaxis_title="Qtd / Peso",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_qtd, use_container_width=True)
 
@@ -1574,9 +1569,8 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_forn, use_container_width=True)
 
@@ -1590,15 +1584,14 @@ else:
                         markers=True,
                         line_shape="spline"
                     )
-                    fig_line.update_traces(line_color="#1B5E20", line_width=3)
+                    fig_line.update_traces(line_color="#00E676", line_width=3)
                     fig_line.update_layout(
                         xaxis_title="Data do Recebimento", 
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
 
@@ -1628,6 +1621,7 @@ else:
                 
                 st.dataframe(df_export, use_container_width=True, hide_index=True)
                 
+                # CORREÇÃO AQUI: Alterado separador do CSV para ponto e vírgula (;) para abrir perfeitamente em colunas no Excel brasileiro
                 csv_buffer = df_export.to_csv(index=False, sep=';').encode('utf-8-sig')
                 st.download_button(
                     label="📥 Baixar Relatório Consolidado (Excel / CSV)",
