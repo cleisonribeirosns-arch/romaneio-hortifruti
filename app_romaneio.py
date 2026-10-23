@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 import os
 import pandas as pd
@@ -198,7 +198,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E CATÁLOGO (APENAS PRODUTOS COM CÓDIGOS VÁLIDOS)
+# 3. BANCO DE DADOS E CATÁLOGO (PRODUTOS OFICIAIS CISS)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -251,7 +251,6 @@ def init_db():
         )
     """)
     
-    # Remove produtos antigos que ficaram sem código ("S/N") do banco de dados existente
     cursor.execute("DELETE FROM produtos WHERE codigo_produto = 'S/N' OR codigo_barras = 'S/N' OR codigo_produto IS NULL OR codigo_barras IS NULL")
     
     cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
@@ -261,7 +260,6 @@ def init_db():
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
     
-    # Catálogo oficial completo (excluindo ovos e garantindo códigos em todos)
     produtos_iniciais = [
         ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
@@ -810,7 +808,7 @@ else:
     )
     
     # ---------------------------------------------------------
-    # 6. MENU SUPERIOR FIXO (VISÍVEL EM COMPUTADORES E CELULARES)
+    # 6. MENU SUPERIOR FIXO (COMPUTADORES E CELULARES)
     # ---------------------------------------------------------
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3, 1])
@@ -1270,9 +1268,133 @@ else:
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
+    # ---------------------------------------------------------
+    # ETAPA 3: RELATÓRIOS & GRÁFICOS DE ANÁLISE (COM FILTROS COMPLETOS)
+    # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and is_admin:
-        st.title("📊 Relatórios e Análise Gráfica")
-        st.info("Módulo restrito de relatórios gerenciais.")
+        st.title("📊 Relatórios e Análise Gerencial de Recebimento")
+        
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
+        df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
+        conn.close()
+
+        if df_roms.empty or df_itens.empty:
+            st.warning("Ainda não existem dados de recebimento cadastrados para gerar relatórios e gráficos. Cadastre alguns romaneios na aba principal para visualizar a análise.")
+        else:
+            df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
+            df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
+
+            st.markdown("### 🔍 Filtros da Análise Gerencial")
+            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            
+            with col_f1:
+                lojas_disp = ["TODAS AS LOJAS"] + list(df_roms["loja"].unique())
+                loja_sel = st.selectbox("Filtrar por Loja", lojas_disp)
+                
+            with col_f2:
+                prods_disp = ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique()))
+                prod_sel = st.selectbox("Filtrar por Produto", prods_disp)
+                
+            with col_f3:
+                dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now()
+                dt_inicio = st.date_input("Data Início", value=dt_min, format="DD/MM/YYYY")
+                
+            with col_f4:
+                dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now()
+                dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY")
+
+            df_filtrado = df_full.copy()
+            
+            if loja_sel != "TODAS AS LOJAS":
+                df_filtrado = df_filtrado[df_filtrado["loja"] == loja_sel]
+                
+            if prod_sel != "TODOS OS PRODUTOS":
+                df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
+            
+            if dt_inicio and dt_fim:
+                df_filtrado = df_filtrado[
+                    (df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & 
+                    (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))
+                ]
+
+            if df_filtrado.empty:
+                st.info("Nenhum registro encontrado para os filtros selecionados.")
+            else:
+                st.markdown("---")
+                st.subheader("📈 Indicadores Principais (KPIs)")
+                kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                
+                total_val = df_filtrado["valor_total"].sum()
+                qtd_roms = df_filtrado["numero_romaneio"].nunique()
+                qtd_peso_total = df_filtrado["quantidade"].sum()
+                
+                top_fornecedor = (
+                    df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() 
+                    if not df_filtrado.empty else "N/A"
+                )
+
+                kpi1.metric("Valor Total Recebido", f"R$ {total_val:,.2f}")
+                kpi2.metric("Total de Romaneios", f"{qtd_roms} romaneios")
+                kpi3.metric("Qtd / Peso Total", f"{qtd_peso_total:,.2f}")
+                kpi4.metric("Principal Fornecedor", str(top_fornecedor))
+
+                st.markdown("---")
+                st.subheader("📊 Visualizações Gráficas")
+                
+                col_g1, col_g2 = st.columns(2)
+                
+                with col_g1:
+                    st.markdown("**Top Produtos por Valor Financeiro (R$)**")
+                    top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
+                    st.bar_chart(top_prods_val.set_index("produto"))
+
+                with col_g2:
+                    st.markdown("**Top Produtos por Volume / Quantidade**")
+                    top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
+                    st.bar_chart(top_prods_qtd.set_index("produto"))
+
+                col_g3, col_g4 = st.columns(2)
+                
+                with col_g3:
+                    st.markdown("**Participação Financeira por Fornecedor (R$)**")
+                    forn_val = df_filtrado.groupby("fornecedor")["valor_total"].sum().reset_index()
+                    st.bar_chart(forn_val.set_index("fornecedor"))
+
+                with col_g4:
+                    st.markdown("**Evolução Diária dos Recebimentos (R$)**")
+                    diario_val = df_filtrado.groupby("data_recebimento")["valor_total"].sum().reset_index()
+                    st.line_chart(diario_val.set_index("data_recebimento"))
+
+                st.markdown("---")
+                st.subheader("📋 Tabela Consolidada & Exportação")
+                
+                df_export = df_filtrado[[
+                    "numero_romaneio", "loja", "data_recebimento", "fornecedor", 
+                    "produto", "quantidade", "unidade", "valor_unitario", "valor_total", "conferente"
+                ]].rename(columns={
+                    "numero_romaneio": "Romaneio",
+                    "loja": "Loja",
+                    "data_recebimento": "Data Rec.",
+                    "fornecedor": "Fornecedor",
+                    "produto": "Produto",
+                    "quantidade": "Qtd/Peso",
+                    "unidade": "UND",
+                    "valor_unitario": "Vl. Unit (R$)",
+                    "valor_total": "Vl. Total (R$)",
+                    "conferente": "Conferente"
+                })
+                
+                st.dataframe(df_export, use_container_width=True, hide_index=True)
+                
+                csv_buffer = df_export.to_csv(index=False).encode('utf-8-sig')
+                st.download_button(
+                    label="📥 Baixar Relatório Consolidado (CSV / Excel)",
+                    data=csv_buffer,
+                    file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv",
+                    mime="text/csv",
+                    type="primary",
+                )
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("🥦 Gerenciamento de Produtos")
