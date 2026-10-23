@@ -42,7 +42,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (MENU FIXO E VISÍVEL)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -80,6 +80,7 @@ else:
 st.markdown(
     f"""
     <style>
+    /* Força a exibição e largura ideal da barra lateral de menu */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -144,7 +145,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -212,7 +213,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E INICIALIZAÇÃO (CATÁLOGO ATUALIZADO SEM OVOS)
+# 3. BANCO DE DADOS E INICIALIZAÇÃO (COM TRATAMENTO DE CÓDIGOS VAZIOS)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -271,7 +272,6 @@ def init_db():
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
     
-    # Lista de produtos atualizada do novo PDF do CISS (excluindo qualquer menção a ovos/ovo)
     produtos_iniciais = [
         ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
@@ -532,10 +532,13 @@ def init_db():
     ]
     
     for cod_b, cod_p, nome_prod, und_p in produtos_iniciais:
+        # Se o código do produto for vazio ou N/A, tratamos para exibir corretamente no selectbox
+        cb = cod_b if cod_b else "S/N"
+        cp = cod_p if cod_p else "S/N"
         try:
             cursor.execute(
                 "INSERT OR IGNORE INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
-                (cod_b, cod_p, nome_prod, und_p)
+                (cb, cp, nome_prod, und_p)
             )
         except Exception:
             pass
@@ -869,7 +872,10 @@ else:
         conn.close()
         prod_dict = {}
         for p in produtos_lista:
-            label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
+            # Exibe de forma limpa os códigos disponíveis no CISS
+            c_prod = p[2] if p[2] and p[2] != "S/N" else "S/N"
+            c_bar = p[3] if p[3] and p[3] != "S/N" else "S/N"
+            label = f"{p[0]} | Cód: {c_prod} | Barras: {c_bar}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
         prod_nomes_keys = list(prod_dict.keys())
 
@@ -1205,7 +1211,7 @@ else:
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     
-                    if st.button("➕ Iniciar Novo Romaneio Agora", key=f"novo_rom_{k_suffix}"):
+                    if st.button("➕ Iniciar Novo Romaneio Agora", key=f"novo_rom_{k_suffix}اعات"):
                         st.rerun()
                     
                 except Exception as e:
