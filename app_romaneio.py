@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA (CORREÇÃO TOTAL DA FAIXA BRANCA)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA (LOGIN ORIGINAL SEM FAIXA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -82,16 +82,6 @@ st.markdown(
     footer, div[data-testid="stToolbar"], div[class*="viewerBadge"] {{
         display: none !important;
         visibility: hidden !important;
-    }}
-
-    /* Força transparência total nos containers de topo do Streamlit */
-    .block-container, div[data-testid="stMainBlockContainer"], div[data-testid="stVerticalBlock"] {{
-        background: transparent !important;
-    }}
-
-    .block-container {{
-        padding-top: 0.8rem !important;
-        padding-bottom: 1rem !important;
     }}
 
     img[data-testid="stImage"] {{
