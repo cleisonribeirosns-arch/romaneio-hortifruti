@@ -549,7 +549,6 @@ def fazer_login(login, senha):
     conn.close()
     return usr
 
-# Funções auxiliares para formatação de valores no padrão brasileiro (1.234,56)
 def fmt_ptbr(val, decimais=2):
     try:
         f = float(val)
@@ -561,6 +560,27 @@ def fmt_ptbr(val, decimais=2):
         return s
     except Exception:
         return "0,00"
+
+def remover_fundo_branco(caminho_imagem):
+    """Converte o fundo branco de uma imagem de assinatura em transparente."""
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return caminho_imagem
+    try:
+        img = Image.open(caminho_imagem).convert("RGBA")
+        datas = img.getdata()
+        newData = []
+        for item in datas:
+            # Se o pixel for muito claro/branco (R, G, B > 200), torna transparente
+            if item[0] > 200 and item[1] > 200 and item[2] > 200:
+                newData.append((255, 255, 255, 0))
+            else:
+                newData.append(item)
+        img.putdata(newData)
+        caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
+        img.save(caminho_transparente, "PNG")
+        return caminho_transparente
+    except Exception:
+        return caminho_imagem
 
 # ---------------------------------------------------------
 # 4. GERADOR DE PDF FORMATADO
@@ -729,19 +749,21 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
 
-    safe_path_conf = str(path_conf) if path_conf else ""
+    # Aplica transparência no fundo branco da assinatura antes de jogar no PDF
+    path_conf_transp = remover_fundo_branco(path_conf)
+    path_ent_transp = remover_fundo_branco(path_ent)
+
     img_conf_pdf = None
-    if safe_path_conf and os.path.exists(safe_path_conf):
+    if path_conf_transp and os.path.exists(path_conf_transp):
         try:
-            img_conf_pdf = RLImage(safe_path_conf, width=180, height=45)
+            img_conf_pdf = RLImage(path_conf_transp, width=180, height=45)
         except Exception:
             pass
 
-    safe_path_ent = str(path_ent) if path_ent else ""
     img_ent_pdf = None
-    if safe_path_ent and os.path.exists(safe_path_ent):
+    if path_ent_transp and os.path.exists(path_ent_transp):
         try:
-            img_ent_pdf = RLImage(safe_path_ent, width=180, height=45)
+            img_ent_pdf = RLImage(path_ent_transp, width=180, height=45)
         except Exception:
             pass
 
@@ -770,7 +792,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN
+# 5. TELA DE LOGIN ORIGINAL
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -778,6 +800,7 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
+
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
@@ -806,6 +829,7 @@ if st.session_state["usuario_logado"] is None:
                 unsafe_allow_html=True
             )
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
             senha_input = st.text_input("Senha", type="password")
@@ -824,6 +848,9 @@ if st.session_state["usuario_logado"] is None:
                 else:
                     st.error("Usuário ou senha incorretos.")
 else:
+    # ---------------------------------------------------------
+    # 6. PAINEL INTERNO ORIGINAL
+    # ---------------------------------------------------------
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (
@@ -832,9 +859,6 @@ else:
         or "adm" in perfil_db
     )
     
-    # ---------------------------------------------------------
-    # 6. MENU SUPERIOR FIXO (COMPUTADORES E CELULARES)
-    # ---------------------------------------------------------
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3, 1])
     with col_info_usr:
@@ -856,9 +880,6 @@ else:
     menu = st.radio("Menu de Navegação Principal", opcoes_menu, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
     
-    # ---------------------------------------------------------
-    # 7. MÓDULOS DO SISTEMA
-    # ---------------------------------------------------------
     if menu == "Romaneio de Recebimento - Hortifrúti":
         st.title("Romaneio de Recebimento - Hortifrúti")
         if "form_key_suffix" not in st.session_state:
@@ -938,7 +959,7 @@ else:
                     st.session_state[tel_key] = fmt
                 tel_fornecedor = st.text_input(
                     "Telefone do Fornecedor",
-                    placeholder="(00) 00000-0000",
+                    placeholder="",
                     key=tel_key,
                     on_change=formatar_tel,
                 )
@@ -999,14 +1020,14 @@ else:
             qtd_str_input = st.text_input(
                 "Qtd / Peso",
                 value="",
-                placeholder="Ex: 20,200",
+                placeholder="",
                 key=f"qtd_{k_suffix}_{i_suffix}",
             )
         with col_p4:
             val_unit_str_input = st.text_input(
                 "Valor Unit. (R$)",
                 value="",
-                placeholder="Ex: 6,50",
+                placeholder="",
                 key=f"vunit_{k_suffix}_{i_suffix}",
             )
         with col_p5:
@@ -1325,9 +1346,6 @@ else:
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
-    # ---------------------------------------------------------
-    # ETAPA 3: RELATÓRIOS & GRÁFICOS DE ANÁLISE
-    # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
         
