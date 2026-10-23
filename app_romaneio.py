@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA
+# 2. ESTILOS CSS E VISUAL DO SISTEMA (CORREÇÃO DA FAIXA BRANCA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -82,6 +82,11 @@ st.markdown(
     footer, div[data-testid="stToolbar"], div[class*="viewerBadge"] {{
         display: none !important;
         visibility: hidden !important;
+    }}
+
+    /* Remove o fundo branco automático injetado pelo Streamlit no topo */
+    header[data-testid="stHeader"] {{
+        background-color: transparent !important;
     }}
 
     img[data-testid="stImage"] {{
