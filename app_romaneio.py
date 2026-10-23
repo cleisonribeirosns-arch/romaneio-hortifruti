@@ -134,7 +134,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -1427,7 +1427,8 @@ else:
         conn.close()
         
         if produtos_cadastrados:
-            df_produtos = pd.DataFrame(produtos_cadastrados, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão"])
+            produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
+            df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
             
             pdf_produtos_buf = gerar_pdf_produtos(produtos_cadastrados)
             st.download_button(
@@ -1439,15 +1440,15 @@ else:
             )
             st.markdown("")
             
-            st.dataframe(df_produtos[["Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
+            st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
             
             st.markdown("### 🗑️ Excluir Produto")
             col_ex1, col_ex2 = st.columns([3, 1])
             with col_ex1:
                 prod_para_excluir = st.selectbox(
                     "Selecione o produto para excluir",
-                    options=produtos_cadastrados,
-                    format_func=lambda x: f"{x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})"
+                    options=produtos_com_id_ajustado,
+                    format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})"
                 )
             with col_ex2:
                 st.write("")
@@ -1456,7 +1457,7 @@ else:
                     try:
                         conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                         cursor_del = conn_del.cursor()
-                        cursor_del.execute("DELETE FROM produtos WHERE id = ?", (prod_para_excluir[0],))
+                        cursor_del.execute("DELETE FROM produtos WHERE id = ?", (prod_para_excluir[5],))
                         conn_del.commit()
                         conn_del.close()
                         st.success(f"Produto '{prod_para_excluir[3]}' excluído com sucesso!")
@@ -1513,7 +1514,8 @@ else:
         conn.close()
         
         if usuarios_cadastrados:
-            df_usuarios = pd.DataFrame(usuarios_cadastrados, columns=["ID", "Nome Completo", "Login", "Perfil"])
+            usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
+            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Perfil", "ID_Real"])
             st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Perfil"]], use_container_width=True, hide_index=True)
             
             st.markdown("### 🗑️ Excluir Usuário")
@@ -1521,8 +1523,8 @@ else:
             with col_ux1:
                 usr_para_excluir = st.selectbox(
                     "Selecione o usuário para remover o acesso",
-                    options=usuarios_cadastrados,
-                    format_func=lambda x: f"{x[1]} (Login: {x[2]} - Perfil: {x[3]})",
+                    options=usuarios_com_id_ajustado,
+                    format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]} - Perfil: {x[3]})",
                     key="sel_usr_del"
                 )
             with col_ux2:
@@ -1535,7 +1537,7 @@ else:
                         try:
                             conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[0],))
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[4],))
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Usuário '{usr_para_excluir[1]}' removido com sucesso!")
