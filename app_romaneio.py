@@ -40,6 +40,10 @@ st.set_page_config(
     layout="wide",
 )
 
+# Garante que a pasta de uploads/fotos exista sempre
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+
 # ---------------------------------------------------------
 # 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
@@ -556,9 +560,6 @@ def init_db():
     conn.close()
 
 init_db()
-
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
 
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
@@ -1174,6 +1175,10 @@ else:
                 st.error("Adicione itens ao romaneio.")
             else:
                 try:
+                    # Garante pasta de uploads
+                    if not os.path.exists("uploads"):
+                        os.makedirs("uploads")
+
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
@@ -1331,14 +1336,18 @@ else:
                 ):
                     st.write(f"**Loja:** {row['loja']}")
                     st.write(
-                        f"**Código Fornecedor:** {row['codigo_fornecedor']} |"
-                        f" **Telefone:** {row['telefone_fornecedor']}"
+                        f"**Código do Fornecedor:** {row['codigo_fornecedor'] if row['codigo_fornecedor'] else 'N/A'} |"
+                        f" **Telefone:** {row['telefone_fornecedor'] if row['telefone_fornecedor'] else 'N/A'}"
                     )
                     st.write(f"**Conferente:** {row['conferente']}")
                     st.write(
                         f"**Pagamento à Vista:** {row['pagamento_a_vista']} |"
                         f" **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}"
                     )
+                    
+                    if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
+                        st.image(row['caminho_foto'], caption="Foto Anexada", width=300)
+
                     conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     df_itens = pd.read_sql_query(
                         "SELECT produto, quantidade, unidade, valor_unitario,"
