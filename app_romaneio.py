@@ -130,7 +130,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -558,7 +558,6 @@ def fmt_ptbr(val, decimais=2):
             s = f"{f:,.3f}"
         else:
             s = f"{f:,.2f}"
-        # Troca o ponto de milhar por vírgula temporária, vírgula decimal por ponto, e depois ajusta
         s = s.replace(",", "X").replace(".", ",").replace("X", ".")
         return s
     except Exception:
@@ -580,6 +579,13 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story = []
     styles = getSampleStyleSheet()
     
+    # Estilos de alinhamento para o PDF (Produtos e Valores à esquerda, o restante centralizado)
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
+    
+    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
+
     logo_path = None
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
         for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
@@ -670,31 +676,39 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(info_table)
     story.append(Spacer(1, 15))
 
+    # Tabela de itens: Descrição do produto, Vl. Unit e Total alinhados à esquerda; o restante centralizado
     table_content = [
-        ["Item", "Descrição do Produto", "Qtd / Peso", "UND", "Vl. Unit", "Total"]
+        [
+            Paragraph("Item", style_header_center),
+            Paragraph("Descrição do Produto", style_header_left),
+            Paragraph("Qtd / Peso", style_header_center),
+            Paragraph("UND", style_header_center),
+            Paragraph("Vl. Unit", style_header_left),
+            Paragraph("Total", style_header_left)
+        ]
     ]
+    
     total_geral = 0.0
     for idx, item in enumerate(itens_data, 1):
         v_unit = float(item[4]) if len(item) > 4 and item[4] is not None else 0.0
         v_tot = float(item[5]) if len(item) > 5 and item[5] is not None else 0.0
         qtd_val = float(item[2]) if len(item) > 2 and item[2] is not None else 0.0
         total_geral += v_tot
+        
         table_content.append([
-            str(idx),
-            str(item[1]),
-            fmt_ptbr(qtd_val, 3),
-            str(item[3]),
-            f"R$ {fmt_ptbr(v_unit, 2)}",
-            f"R$ {fmt_ptbr(v_tot, 2)}",
+            Paragraph(str(idx), style_center),
+            Paragraph(str(item[1]), style_left),
+            Paragraph(fmt_ptbr(qtd_val, 3), style_center),
+            Paragraph(str(item[3]), style_center),
+            Paragraph(f"R$ {fmt_ptbr(v_unit, 2)}", style_left),
+            Paragraph(f"R$ {fmt_ptbr(v_tot, 2)}", style_left),
         ])
+        
     itens_table = Table(table_content, colWidths=[35, 215, 75, 50, 75, 90])
     itens_table.setStyle(
         TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
             ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
             ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
         ])
@@ -985,7 +999,6 @@ else:
                 key=f"und_sel_{k_suffix}_{i_suffix}",
             )
         with col_p3:
-            # Usando st.text_input para Qtd/Peso para permitir digitação livre com vírgula ou ponto (ex: 20,2 ou 20.2)
             qtd_str_input = st.text_input(
                 "Qtd / Peso",
                 value="",
@@ -993,7 +1006,6 @@ else:
                 key=f"qtd_{k_suffix}_{i_suffix}",
             )
         with col_p4:
-            # Usando st.text_input para Valor Unitário para digitação livre e sem travar zeros indesejados
             val_unit_str_input = st.text_input(
                 "Valor Unit. (R$)",
                 value="",
@@ -1004,14 +1016,12 @@ else:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
-                # Tratamento seguro da quantidade convertendo vírgula em ponto
                 try:
                     qtd_limpa = qtd_str_input.replace(".", "").replace(",", ".") if qtd_str_input else "0"
                     qtd_input = float(qtd_limpa)
                 except ValueError:
                     qtd_input = 0.0
 
-                # Tratamento seguro do valor unitário convertendo vírgula em ponto
                 try:
                     vunit_limpo = val_unit_str_input.replace(".", "").replace(",", ".") if val_unit_str_input else "0"
                     val_unit_val = float(vunit_limpo)
