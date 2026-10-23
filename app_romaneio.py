@@ -4,6 +4,7 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+import plotly.express as px
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -178,31 +179,6 @@ st.markdown(
         font-size: 15px !important;
     }}
 
-    div[data-baseweb="input"] input::placeholder {{
-        color: transparent !important;
-    }}
-
-    div[data-testid="stRadio"] label p {{
-        font-size: 1.1rem !important;
-        font-weight: 800 !important;
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important;
-    }}
-
-    div[data-testid="stRadio"] div[role="radiogroup"] {{
-        background-color: rgba(0, 0, 0, 0.4) !important;
-        padding: 8px 12px !important;
-        border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }}
-
-    div[data-testid="stExpander"] summary span p {{
-        font-size: 1.15rem !important;
-        font-weight: 800 !important;
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
-    }}
-
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -217,16 +193,6 @@ st.markdown(
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
-    }}
-    
-    @media only screen and (max-width: 768px) {{
-        .stDataFrame {{
-            font-size: 11px !important;
-            overflow-x: auto !important;
-        }}
-        div[data-testid="stHorizontalBlock"] {{
-            flex-direction: column !important;
-        }}
     }}
     {css_fundo}
     </style>
@@ -892,7 +858,6 @@ else:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
         st.markdown(f"**Usuário Logado:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_logout:
-        # CORREÇÃO AQUI: adicionado key única no botão de sair para eliminar o erro
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
             st.rerun()
@@ -1483,31 +1448,96 @@ else:
                 kpi4.metric("Principal Fornecedor", str(top_fornecedor))
 
                 st.markdown("---")
-                st.subheader("📊 Visualizações Gráficas")
+                st.subheader("📊 Visualizações Gráficas Profissionais (BI)")
                 
+                # GRÁFICOS PLOTLY MODERNOS E PROFISSIONAIS
                 col_g1, col_g2 = st.columns(2)
                 
                 with col_g1:
                     st.markdown("**Top Produtos por Valor Financeiro (R$)**")
                     top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
-                    st.bar_chart(top_prods_val.set_index("produto"))
+                    fig_val = px.bar(
+                        top_prods_val, 
+                        x="produto", 
+                        y="valor_total",
+                        text_auto=".2f",
+                        color="valor_total",
+                        color_continuous_scale="Greens"
+                    )
+                    fig_val.update_layout(
+                        xaxis_title="Produto", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_val, use_container_width=True)
 
                 with col_g2:
                     st.markdown("**Top Produtos por Volume / Quantidade**")
                     top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
-                    st.bar_chart(top_prods_qtd.set_index("produto"))
+                    fig_qtd = px.bar(
+                        top_prods_qtd, 
+                        x="produto", 
+                        y="quantidade",
+                        text_auto=".2f",
+                        color="quantidade",
+                        color_continuous_scale="Reds"
+                    )
+                    fig_qtd.update_layout(
+                        xaxis_title="Produto", 
+                        yaxis_title="Qtd / Peso",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_qtd, use_container_width=True)
 
                 col_g3, col_g4 = st.columns(2)
                 
                 with col_g3:
                     st.markdown("**Participação Financeira por Fornecedor (R$)**")
                     forn_val = df_filtrado.groupby("fornecedor")["valor_total"].sum().reset_index()
-                    st.bar_chart(forn_val.set_index("fornecedor"))
+                    fig_forn = px.bar(
+                        forn_val, 
+                        x="fornecedor", 
+                        y="valor_total",
+                        text_auto=".2f",
+                        color="valor_total",
+                        color_continuous_scale="Viridis"
+                    )
+                    fig_forn.update_layout(
+                        xaxis_title="Fornecedor", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_forn, use_container_width=True)
 
                 with col_g4:
                     st.markdown("**Evolução Diária dos Recebimentos (R$)**")
                     diario_val = df_filtrado.groupby("data_recebimento")["valor_total"].sum().reset_index()
-                    st.line_chart(diario_val.set_index("data_recebimento"))
+                    fig_line = px.line(
+                        diario_val, 
+                        x="data_recebimento", 
+                        y="valor_total",
+                        markers=True,
+                        line_shape="spline"
+                    )
+                    fig_line.update_traces(line_color="#00E676", line_width=3)
+                    fig_line.update_layout(
+                        xaxis_title="Data do Recebimento", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_line, use_container_width=True)
 
                 st.markdown("---")
                 st.subheader("📋 Tabela Consolidada & Exportação")
@@ -1545,7 +1575,7 @@ else:
                     key="btn_download_csv_relatorio"
                 )
 
-    elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
+    elif menu == "Gerenciar Cadastros (Produtos)" && is_admin:
         st.title("🥦 Gerenciamento de Produtos")
         with st.form("cad_prod"):
             nome_p = st.text_input("Nome do Produto")
@@ -1567,7 +1597,7 @@ else:
                     finally:
                         conn.close()
 
-    elif menu == "Gerenciar Usuários & Permissões" and is_admin:
+    elif menu == "Gerenciar Usuários & Permissões" && is_admin:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_u = pd.read_sql_query(
