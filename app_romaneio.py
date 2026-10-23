@@ -170,6 +170,29 @@ st.markdown(
         color: transparent !important;
     }}
 
+    /* AUMENTO DE FONTE: Menu de Navegação Principal (stRadio) */
+    div[data-testid="stRadio"] label p {{
+        font-size: 1.1rem !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important;
+    }}
+
+    div[data-testid="stRadio"] div[role="radiogroup"] {{
+        background-color: rgba(0, 0, 0, 0.4) !important;
+        padding: 8px 12px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    }}
+
+    /* AUMENTO DE FONTE: Cabeçalho dos Expansores da Consulta de Romaneios (stExpander) */
+    div[data-testid="stExpander"] summary span p {{
+        font-size: 1.15rem !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
+    }}
+
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
