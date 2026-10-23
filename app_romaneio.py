@@ -43,6 +43,12 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
+# CONTROLE DE TEMA (CLARO / ESCURO)
+# ---------------------------------------------------------
+if "tema_app" not in st.session_state:
+    st.session_state["tema_app"] = "🌙 Modo Escuro"
+
+# ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
 # ---------------------------------------------------------
 @st.dialog("📷 Visualização da Foto Anexada", width="large")
@@ -67,24 +73,83 @@ for nome_bg in [
         bg_login_path = nome_bg
         break
 
-if bg_login_path:
-    with open(bg_login_path, "rb") as img_f:
-        b64_img = base64.b64encode(img_f.read()).decode()
-    css_fundo = f"""
-        .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
-            background-size: cover !important;
-            background-position: center !important;
-            background-repeat: no-repeat !important;
-            background-attachment: fixed !important;
-        }}
+is_escuro = "Escuro" in st.session_state["tema_app"]
+
+if st.session_state["usuario_logado"] is None:
+    if bg_login_path:
+        with open(bg_login_path, "rb") as img_f:
+            b64_img = base64.b64encode(img_f.read()).decode()
+        css_fundo = f"""
+            .stApp {{
+                background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-repeat: no-repeat !important;
+                background-attachment: fixed !important;
+            }}
+        """
+    else:
+        css_fundo = """
+            .stApp {
+                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+                background-attachment: fixed !important;
+            }
+        """
+    css_painel_tema = """
+        .stApp h3 {
+            color: #FFFFFF !important;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
+            font-weight: 800 !important;
+        }
+        .stApp label {
+            color: #FFFFFF !important;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+        }
+        div[data-baseweb="input"] input {
+            color: #000000 !important;
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            border-radius: 6px !important;
+            font-size: 15px !important;
+        }
     """
 else:
-    css_fundo = """
-        .stApp {
-            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
-            background-attachment: fixed !important;
-        }
+    if is_escuro:
+        css_fundo = """
+            .stApp {
+                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+                background-attachment: fixed !important;
+            }
+        """
+        cor_texto_principal = "#FFFFFF"
+        cor_texto_secundario = "#FFFFFF"
+        sombra = "2px 2px 4px rgba(0, 0, 0, 0.9)"
+        plotly_font_color = "#FFFFFF"
+        plotly_grid_color = "rgba(255,255,255,0.2)"
+    else:
+        css_fundo = """
+            .stApp {
+                background: #F8F9FA !important;
+            }
+        """
+        cor_texto_principal = "#1B5E20"
+        cor_texto_secundario = "#111111"
+        sombra = "none"
+        plotly_font_color = "#111111"
+        plotly_grid_color = "rgba(0,0,0,0.15)"
+
+    css_painel_tema = f"""
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{
+            color: {cor_texto_principal} !important;
+            text-shadow: {sombra} !important;
+            font-weight: 800 !important;
+        }}
+        .stApp p, .stApp span, .stApp label, div[data-testid="stMarkdownContainer"] p {{
+            color: {cor_texto_secundario} !important;
+            text-shadow: {sombra} !important;
+            font-weight: bold !important;
+        }}
     """
 
 st.markdown(
@@ -145,23 +210,6 @@ st.markdown(
         font-size: 3.0rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-        font-weight: 800 !important;
-    }}
-    .stApp p, .stApp span, .stApp label, div[data-testid="stMarkdownContainer"] p {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
-    }}
-    div[data-baseweb="input"] input {{
-        color: #000000 !important;
-        background-color: rgba(255, 255, 255, 0.95) !important;
-        border-radius: 6px !important;
-        font-size: 15px !important;
-    }}
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -176,6 +224,7 @@ st.markdown(
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
+    {css_painel_tema if st.session_state["usuario_logado"] is not None else ""}
     {css_fundo}
     </style>
 """,
@@ -814,7 +863,7 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     # ---------------------------------------------------------
-    # 6. PAINEL INTERNO ORIGINAL
+    # 6. PAINEL INTERNO COM BOTÃO DE TEMA (CLARO / ESCURO)
     # ---------------------------------------------------------
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
@@ -825,10 +874,21 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_logout = st.columns([4, 1], vertical_alignment="center")
+    col_info_usr, col_tema, col_logout = st.columns([3.2, 1.0, 0.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+    with col_tema:
+        novo_tema = st.selectbox(
+            "Tema",
+            ["🌙 Modo Escuro", "☀️ Modo Claro"],
+            index=0 if "Escuro" in st.session_state["tema_app"] else 1,
+            key="select_tema_app",
+            label_visibility="collapsed"
+        )
+        if novo_tema != st.session_state["tema_app"]:
+            st.session_state["tema_app"] = novo_tema
+            st.rerun()
     with col_logout:
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
@@ -1424,9 +1484,9 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="#FFFFFF",
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-                        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.2)")
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_val, use_container_width=True)
                     
@@ -1446,9 +1506,9 @@ else:
                         yaxis_title="Qtd / Peso",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="#FFFFFF",
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-                        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.2)")
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_qtd, use_container_width=True)
                     
@@ -1469,9 +1529,9 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="#FFFFFF",
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-                        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.2)")
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_forn, use_container_width=True)
                     
@@ -1491,9 +1551,9 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="#FFFFFF",
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-                        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.2)")
+                        font_color=plotly_font_color,
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
                     
