@@ -33,6 +33,7 @@ for nome in [
     if os.path.exists(nome):
         logo_icon = nome
         break
+
 st.set_page_config(
     page_title="Supermercado Super Nova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
@@ -41,7 +42,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (COM ADAPTAÇÃO MOBILE)
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (COM ADAPTAÇÃO MOBILE & SIDEBAR VISÍVEL)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -54,6 +55,7 @@ for nome_bg in [
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
         break
+
 css_fundo = ""
 if bg_login_path:
     with open(bg_login_path, "rb") as img_f:
@@ -74,23 +76,36 @@ else:
             background-attachment: fixed !important;
         }
     """
+
 st.markdown(
     f"""
     <style>
+    /* Força a exibição e largura adequada da barra lateral (Sidebar) */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
         background-color: #F4F6F4 !important;
         border-right: 3px solid #1B5E20 !important;
+        min-width: 260px !important;
     }}
-    header[data-testid="stHeader"], footer, div[data-testid="stToolbar"], div[class*="viewerBadge"], button[kind="header"] {{
+    
+    /* Mantém o botão de abrir/fechar a sidebar visível caso ela seja recolhida no mobile */
+    button[data-testid="baseButton-header"], button[data-testid="stSidebarCollapseButton"] {{
+        display: block !important;
+        visibility: visible !important;
+        color: #1B5E20 !important;
+    }}
+
+    footer, div[data-testid="stToolbar"], div[class*="viewerBadge"] {{
         display: none !important;
         visibility: hidden !important;
     }}
+
     .block-container {{
         padding-top: 1.0rem !important;
         padding-bottom: 1rem !important;
     }}
+
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
@@ -101,6 +116,7 @@ st.markdown(
         margin: 0 auto !important;
         display: block !important;
     }}
+
     .titulo-logo {{
         font-size: 2.6rem !important;
         font-weight: 900 !important;
@@ -108,6 +124,7 @@ st.markdown(
         margin-bottom: 0px !important;
         font-family: 'Arial Black', Gadget, sans-serif !important;
     }}
+
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
         font-size: 1.35rem !important;
@@ -117,6 +134,7 @@ st.markdown(
             -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
+
     .palavra-super {{
         color: #2E7D32 !important;
         font-style: italic !important;
@@ -124,14 +142,16 @@ st.markdown(
             -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
             2px 2px 3px rgba(0, 0, 0, 0.5) !important;
     }}
+
     .palavra-nova {{
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
+
     .palavra-cidade {{
         color: #111111 !important;
         font-style: italic !important;
@@ -139,6 +159,7 @@ st.markdown(
         font-size: 3.2rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
+
     .stApp h3 {{
         color: #000000 !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
@@ -147,18 +168,21 @@ st.markdown(
         margin-top: 2px !important;
         margin-bottom: 8px !important;
     }}
+
     .stApp label {{
         color: #FFFFFF !important;
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         font-size: 15px !important;
         font-weight: bold !important;
     }}
+
     div[data-baseweb="input"] input {{
         color: #000000 !important;
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
+
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -169,12 +193,13 @@ st.markdown(
         width: 100% !important;
         box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
     }}
+
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
     
-    /* ADAPTAÇÃO AUTOMÁTICA PARA DISPOSITIVOS MÓVEIS (CELULARES) */
+    /* ADAPTAÇÃO AUTOMÁTICA PARA DISPOSITIVOS MÓVEIS (CELULARES E TABLETS) */
     @media only screen and (max-width: 768px) {{
         .stDataFrame {{
             font-size: 11px !important;
@@ -581,7 +606,6 @@ else:
             label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
         prod_nomes_keys = list(prod_dict.keys())
-
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -612,7 +636,6 @@ else:
                     key=f"data_rec_{k_suffix}",
                 )
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
-
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
@@ -620,7 +643,6 @@ else:
                 tel_key = f"tel_input_{k_suffix}"
                 if tel_key not in st.session_state:
                     st.session_state[tel_key] = ""
-
                 def formatar_tel():
                     val = st.session_state.get(tel_key, "")
                     raw = "".join(filter(str.isdigit, val))
@@ -635,14 +657,12 @@ else:
                     if len(raw) >= 8:
                         fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
-
                 tel_fornecedor = st.text_input(
                     "Telefone do Fornecedor",
                     placeholder="(00) 00000-0000",
                     key=tel_key,
                     on_change=formatar_tel,
                 )
-
             pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
             
             data_pag_str = ""
@@ -654,14 +674,12 @@ else:
                     key=f"data_pag_{k_suffix}",
                 )
                 data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
-
             conferente = st.text_input(
                 "Responsável Rec. Físico",
                 value=user_info["nome"],
                 disabled=True,
                 key=f"conf_{k_suffix}",
             )
-
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
@@ -671,7 +689,6 @@ else:
             st.session_state[f"qtd_val_{k_suffix}"] = 0.0
         if f"vunit_val_{k_suffix}" not in st.session_state:
             st.session_state[f"vunit_val_{k_suffix}"] = 0.0
-
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
@@ -726,7 +743,6 @@ else:
                     st.rerun()
                 else:
                     st.warning("Informe uma quantidade maior que zero.")
-
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados:**")
             
@@ -763,14 +779,12 @@ else:
                 if st.button("🗑️ Remover", key=f"btn_rem_esp_{k_suffix}", type="secondary"):
                     st.session_state["itens_romaneio"].pop(item_para_remover - 1)
                     st.rerun()
-
             total_geral_temp = sum(itm['valor_total'] for itm in st.session_state["itens_romaneio"])
             st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
             
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
-
         st.subheader("3. Anexo de Fotos / Comprovantes")
         fotos_upload = st.file_uploader(
             "Fotos da Nota / Canhoto",
@@ -778,7 +792,6 @@ else:
             accept_multiple_files=True,
             key=f"fotos_{k_suffix}",
         )
-
         st.subheader("4. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
@@ -805,7 +818,6 @@ else:
                 return_image_data=True,
                 key=f"canv_ent_{k_suffix}",
             )
-
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip():
                 st.error("Preencha o número do romaneio e o fornecedor.")
@@ -926,7 +938,6 @@ else:
                     
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
-
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
