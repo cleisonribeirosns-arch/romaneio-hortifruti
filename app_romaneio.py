@@ -848,11 +848,11 @@ else:
         )
         produtos_lista = cursor.fetchall()
         conn.close()
+        
         prod_dict = {}
         for p in produtos_lista:
             label = f"{p[0]} | Cód: {p[2]} | Barras: {p[3]}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
-        prod_nomes_keys = list(prod_dict.keys())
 
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
@@ -932,30 +932,37 @@ else:
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
+
+        # Campo de busca interativa do produto (começa vazio para digitar código ou nome)
+        filtro_busca_prod = st.text_input("🔍 Buscar Produto por Código ou Descrição (Digite para filtrar)", placeholder="Ex: 1175 ou TOMATE", key=f"busca_prod_{k_suffix}")
         
-        if f"qtd_val_{k_suffix}" not in st.session_state:
-            st.session_state[f"qtd_val_{k_suffix}"] = 0.0
-        if f"vunit_val_{k_suffix}" not in st.session_state:
-            st.session_state[f"vunit_val_{k_suffix}"] = 0.0
+        # Filtragem dinâmica do catálogo
+        if filtro_busca_prod.strip():
+            termo = filtro_busca_prod.strip().lower()
+            prod_filtrados_dict = {k: v for k, v in prod_dict.items() if termo in k.lower()}
+        else:
+            prod_filtrados_dict = {}
+
+        prod_nomes_keys = list(prod_filtrados_dict.keys())
 
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
         with col_p1:
-            prod_label_sel = st.selectbox(
-                "Produto",
-                (
-                    prod_nomes_keys
-                    if prod_dict
-                    else ["Cadastre produtos na aba de Gestor"]
-                ),
-                key=f"prod_sel_{k_suffix}",
-            )
-            prod_nome_real = (
-                prod_dict[prod_label_sel][0] if prod_dict else "Desconhecido"
-            )
+            if prod_nomes_keys:
+                prod_label_sel = st.selectbox(
+                    "Selecione na Lista Filtrada",
+                    prod_nomes_keys,
+                    key=f"prod_sel_{k_suffix}",
+                )
+                prod_nome_real = prod_filtrados_dict[prod_label_sel][0]
+            else:
+                st.info("Digite o código ou nome acima para localizar o produto.")
+                prod_label_sel = None
+                prod_nome_real = ""
+
         with col_p2:
-            und_padrao = prod_dict[prod_label_sel][1] if prod_dict else "KG"
+            und_padrao = prod_filtrados_dict[prod_label_sel][1] if prod_label_sel and prod_filtrados_dict else "KG"
             und_sel = st.selectbox(
                 "UND",
                 ["KG", "UNID", "GRM", "CX"],
@@ -967,31 +974,34 @@ else:
                 key=f"und_sel_{k_suffix}",
             )
         with col_p3:
+            # value=None deixa o campo em branco sem o zero
             qtd_input = st.number_input(
-                "Qtd / Peso", min_value=0.0, value=st.session_state[f"qtd_val_{k_suffix}"], step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
+                "Qtd / Peso", min_value=0.0, value=None, step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
             )
         with col_p4:
+            # value=None deixa o campo em branco sem o zero
             val_unit = st.number_input(
-                "Valor Unit. (R$)", min_value=0.0, value=st.session_state[f"vunit_val_{k_suffix}"], step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
+                "Valor Unit. (R$)", min_value=0.0, value=None, step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
             )
         with col_p5:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}"):
-                if qtd_input > 0:
-                    v_tot = qtd_input * val_unit
+                if not prod_nome_real:
+                    st.warning("Selecione um produto válido.")
+                elif qtd_input is None or qtd_input <= 0:
+                    st.warning("Informe uma quantidade maior que zero.")
+                else:
+                    v_u = float(val_unit) if val_unit is not None else 0.0
+                    v_tot = float(qtd_input) * v_u
                     st.session_state["itens_romaneio"].append({
                         "produto": prod_nome_real,
-                        "quantidade": qtd_input,
+                        "quantidade": float(qtd_input),
                         "unidade": und_sel,
-                        "valor_unitario": val_unit,
+                        "valor_unitario": v_u,
                         "valor_total": v_tot,
                     })
-                    st.session_state[f"qtd_val_{k_suffix}"] = 0.0
-                    st.session_state[f"vunit_val_{k_suffix}"] = 0.0
                     st.rerun()
-                else:
-                    st.warning("Informe uma quantidade maior que zero.")
 
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados:**")
@@ -1183,11 +1193,11 @@ else:
                         key=f"dl_btn_salvo_{k_suffix}",
                     )
                     
+                    # Limpeza automática e reinício imediato para o próximo romaneio
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
-                    
-                    if st.button("➕ Iniciar Novo Romaneio Agora", key=f"novo_rom_{k_suffix}"):
-                        st.rerun()
+                    st.success("Romaneio finalizado e limpo para um novo lançamento! 🚀")
+                    st.rerun()
                     
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
@@ -1269,7 +1279,7 @@ else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
     # ---------------------------------------------------------
-    # ETAPA 3: RELATÓRIOS & GRÁFICOS DE ANÁLISE (COM FILTROS COMPLETOS)
+    # ETAPA 3: RELATÓRIOS & GRÁFICOS DE ANÁLISE
     # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
