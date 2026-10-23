@@ -101,7 +101,7 @@ st.markdown(
         background: transparent !important;
         mix-blend-mode: multiply !important;
         filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 85px !important;
+        max-width: 95px !important;
         width: 100% !important;
         height: auto !important;
         margin: 0 auto !important;
@@ -134,7 +134,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -241,11 +241,13 @@ def init_db():
     
     cursor.execute("DELETE FROM produtos WHERE codigo_produto = 'S/N' OR codigo_barras = 'S/N' OR codigo_produto IS NULL OR codigo_barras IS NULL")
     
-    cursor.execute("SELECT * FROM usuarios WHERE login = 'admin'")
+    cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
     if not cursor.fetchone():
+        # Atualiza caso exista o admin antigo
+        cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
         cursor.execute(
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
-            " ('Administrador', 'admin', '1234', 'Gestor')"
+            " ('Administrador', '908', '0332', 'Gestor')"
         )
     conn.commit()
     conn.close()
@@ -549,12 +551,12 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     # ---------------------------------------------------------
-    # 6. PAINEL INTERNO COMPLETO (CÓDIGO ATUAL DE HOJE)
+    # 6. PAINEL INTERNO COMPLETO
     # ---------------------------------------------------------
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (
-        user_info["login"].lower() == "admin"
+        user_info["login"].lower() == "908"
         or "gestor" in perfil_db
         or "adm" in perfil_db
     )
