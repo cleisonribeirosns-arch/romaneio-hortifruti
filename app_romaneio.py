@@ -1175,7 +1175,6 @@ else:
                 st.error("Adicione itens ao romaneio.")
             else:
                 try:
-                    # Garante pasta de uploads
                     if not os.path.exists("uploads"):
                         os.makedirs("uploads")
 
@@ -1345,8 +1344,16 @@ else:
                         f" **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}"
                     )
                     
+                    # ---------------------------------------------------------
+                    # EXIBIÇÃO DA FOTO COM AMPLIAÇÃO EM TELA CHEIA (POPOVER)
+                    # ---------------------------------------------------------
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
-                        st.image(row['caminho_foto'], caption="Foto Anexada", width=300)
+                        st.write("")
+                        # Exibe mini barra com botao para abrir foto em tela cheia/ampliada
+                        with st.popover("📷 Ver Foto Anexada (Clique para Ampliar / Tela Cheia)"):
+                            st.image(row['caminho_foto'], use_container_width=True, caption="Foto da Nota / Canhoto Ampliada")
+                        # Miniatura pequena logo abaixo
+                        st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
 
                     conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     df_itens = pd.read_sql_query(
