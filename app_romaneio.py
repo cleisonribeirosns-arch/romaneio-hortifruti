@@ -943,7 +943,6 @@ else:
             [3, 1.5, 1.5, 1.5, 1]
         )
         with col_p1:
-            # Sem nenhum texto de exemplo (placeholder limpo), abre em branco
             prod_label_sel = st.selectbox(
                 "Produto / Código",
                 options=prod_nomes_keys,
@@ -972,7 +971,6 @@ else:
                 key=f"und_sel_{k_suffix}_{i_suffix}",
             )
         with col_p3:
-            # Sem placeholder de exemplo
             qtd_input = st.number_input(
                 "Qtd / Peso",
                 min_value=0.0,
@@ -983,7 +981,6 @@ else:
                 key=f"qtd_{k_suffix}_{i_suffix}",
             )
         with col_p4:
-            # Sem placeholder de exemplo
             val_unit = st.number_input(
                 "Valor Unit. (R$)",
                 min_value=0.0,
@@ -1011,7 +1008,6 @@ else:
                         "valor_unitario": v_u,
                         "valor_total": v_tot,
                     })
-                    # Incrementa o sufixo do item para zerar os inputs do produto instantaneamente
                     st.session_state["item_key_suffix"] += 1
                     st.rerun()
 
@@ -1179,16 +1175,47 @@ else:
                     conn.commit()
                     conn.close()
                     
-                    st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco de dados!")
+                    # Salva os dados na session_state para exibir o botão de download do PDF na tela atual
+                    romaneio_dict_atual = {
+                        "numero_romaneio": num_romaneio,
+                        "data_recebimento": data_rec_str,
+                        "fornecedor": fornecedor,
+                        "codigo_fornecedor": cod_fornecedor,
+                        "telefone_fornecedor": tel_fornecedor,
+                        "loja": loja,
+                        "conferente": user_info["nome"],
+                        "pagamento_a_vista": pag_a_vista,
+                        "data_pagamento": data_pag_str,
+                    }
                     
-                    # Limpeza e reinício completo para o próximo romaneio
+                    pdf_buffer_novo = gerar_pdf_romaneio(
+                        romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent
+                    )
+                    
+                    st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
+                    st.session_state["ultimo_num_romaneio"] = num_romaneio
+                    
+                    # Limpa os itens atuais para iniciar um novo romaneio
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
+                    st.success(f"Romaneio {num_romaneio} salvo com sucesso!")
                     st.rerun()
                     
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
+
+        # Exibe o botão de download direto caso o romaneio acabe de ser salvo nesta sessão
+        if "ultimo_pdf_bytes" in st.session_state and "ultimo_num_romaneio" in st.session_state:
+            st.markdown("---")
+            st.success(f"📄 Romaneio **{st.session_state['ultimo_num_romaneio']}** pronto para download!")
+            st.download_button(
+                label=f"📥 Baixar PDF - {st.session_state['ultimo_num_romaneio']}",
+                data=st.session_state["ultimo_pdf_bytes"],
+                file_name=f"{st.session_state['ultimo_num_romaneio']}.pdf",
+                mime="application/pdf",
+                type="primary",
+            )
 
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
