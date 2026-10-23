@@ -239,11 +239,8 @@ def init_db():
         )
     """)
     
-    cursor.execute("DELETE FROM produtos WHERE codigo_produto = 'S/N' OR codigo_barras = 'S/N' OR codigo_produto IS NULL OR codigo_barras IS NULL")
-    
     cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
     if not cursor.fetchone():
-        # Atualiza caso exista o admin antigo
         cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
         cursor.execute(
             "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
@@ -296,7 +293,7 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_imagem
 
 # ---------------------------------------------------------
-# 4. GERADOR DE PDF FORMATADO
+# 4. GERADOR DE PDF DE ROMANEIO
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
     buffer = io.BytesIO()
@@ -496,6 +493,120 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
+# 4B. GERADOR DE PDF DE RELATÓRIO DE PRODUTOS CADASTRADOS
+# ---------------------------------------------------------
+def gerar_pdf_produtos(produtos_data):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=30,
+        leftMargin=30,
+        topMargin=30,
+        bottomMargin=30,
+    )
+    story = []
+    styles = getSampleStyleSheet()
+    
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
+    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
+    
+    logo_path = None
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                logo_path = pos_p
+                break
+        if logo_path:
+            break
+
+    def add_watermark(canvas_obj, doc_obj):
+        if logo_path and os.path.exists(logo_path):
+            canvas_obj.saveState()
+            try:
+                canvas_obj.setFillAlpha(0.12)
+                canvas_obj.drawImage(
+                    logo_path,
+                    letter[0] / 2 - 140,
+                    letter[1] / 2 + 30,
+                    width=280,
+                    height=280,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                )
+            except Exception:
+                pass
+            canvas_obj.restoreState()
+
+    if logo_path and os.path.exists(logo_path):
+        logo_img_header = RLImage(logo_path, width=70, height=50)
+    else:
+        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+
+    header_table = Table(
+        [
+            [
+                logo_img_header,
+                Paragraph(
+                    "<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Produtos Cadastrados - Almoxarifado / Hortifrúti",
+                    styles["Normal"],
+                ),
+                Paragraph(
+                    f"<b>Data:</b> {datetime.now().strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}",
+                    styles["Normal"],
+                ),
+            ]
+        ],
+        colWidths=[80, 310, 150],
+    )
+    header_table.setStyle(
+        TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("ALIGN", (0, 0), (0, 0), "CENTER"),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+            ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey),
+        ])
+    )
+    story.append(header_table)
+    story.append(Spacer(1, 15))
+    
+    table_content = [
+        [
+            Paragraph("Item", style_header_center),
+            Paragraph("Cód. Produto", style_header_center),
+            Paragraph("Código de Barras", style_header_center),
+            Paragraph("Nome do Produto", style_header_left),
+            Paragraph("UND", style_header_center)
+        ]
+    ]
+    
+    for idx, p in enumerate(produtos_data, 1):
+        table_content.append([
+            Paragraph(str(idx), style_center),
+            Paragraph(str(p[2] or "S/N"), style_center),
+            Paragraph(str(p[1] or "S/N"), style_center),
+            Paragraph(str(p[3]), style_left),
+            Paragraph(str(p[4]), style_center),
+        ])
+        
+    prod_table = Table(table_content, colWidths=[35, 95, 125, 235, 50])
+    prod_table.setStyle(
+        TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+        ])
+    )
+    story.append(prod_table)
+    doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
+    buffer.seek(0)
+    return buffer
+
+# ---------------------------------------------------------
 # 5. TELA DE LOGIN (ESTILO ORIGINAL DA ETAPA 2)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
@@ -595,14 +706,14 @@ else:
         cursor = conn.cursor()
         cursor.execute(
             "SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM"
-            " produtos WHERE codigo_produto != 'S/N' ORDER BY nome"
+            " produtos ORDER BY nome"
         )
         produtos_lista = cursor.fetchall()
         conn.close()
         
         prod_dict = {}
         for p in produtos_lista:
-            label = f"{p[0]} | Cód: {p[2]} | Barras: {p[3]}"
+            label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
             
         prod_nomes_keys = list(prod_dict.keys())
@@ -1270,26 +1381,92 @@ else:
                     key="btn_download_csv_relatorio"
                 )
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("🥦 Gerenciamento de Produtos")
-        with st.form("cad_prod"):
-            nome_p = st.text_input("Nome do Produto")
-            und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"])
-            if st.form_submit_button("Cadastrar", type="primary"):
-                if nome_p.strip():
+        st.title("🥦 Gerenciamento e Cadastro de Produtos")
+        
+        with st.form("cad_prod_form", clear_on_submit=True):
+            st.subheader("Cadastrar Novo Produto")
+            col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
+            with col_cp1:
+                cod_prod_input = st.text_input("Código do Produto")
+            with col_cp2:
+                cod_bar_input = st.text_input("Código de Barras")
+            with col_cp3:
+                nome_p = st.text_input("Nome do Produto (Obrigatório)")
+            with col_cp4:
+                und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"])
+                
+            btn_cad_prod = st.form_submit_button("➕ Cadastrar Produto", type="primary")
+            if btn_cad_prod:
+                if not nome_p.strip():
+                    st.error("O Nome do Produto é obrigatório.")
+                else:
                     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     cursor = conn.cursor()
                     try:
                         cursor.execute(
-                            "INSERT INTO produtos (nome, unidade_padrao) VALUES (?, ?)",
-                            (nome_p.strip(), und_p),
+                            "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
+                            (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip(), und_p),
                         )
                         conn.commit()
-                        st.success(f"Produto '{nome_p}' cadastrado com sucesso!")
+                        st.success(f"Produto '{nome_p.strip()}' cadastrado com sucesso!")
                         st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Erro: Já existe um produto cadastrado com este Nome ou Código.")
                     except Exception as e:
                         st.error(f"Erro ao cadastrar produto: {e}")
                     finally:
                         conn.close()
+                        
+        st.markdown("---")
+        st.subheader("📋 Produtos Cadastrados no Sistema")
+        
+        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
+        produtos_cadastrados = cursor.fetchall()
+        conn.close()
+        
+        if produtos_cadastrados:
+            df_produtos = pd.DataFrame(produtos_cadastrados, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão"])
+            
+            # Botão para baixar relatório em PDF
+            pdf_produtos_buf = gerar_pdf_produtos(produtos_cadastrados)
+            st.download_button(
+                label="📥 Baixar Relatório de Produtos em PDF",
+                data=pdf_produtos_buf,
+                file_name=f"Relatorio_Produtos_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf",
+                mime="application/pdf",
+                type="primary",
+            )
+            st.markdown("")
+            
+            st.dataframe(df_produtos[["Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
+            
+            st.markdown("### 🗑️ Excluir Produto")
+            col_ex1, col_ex2 = st.columns([3, 1])
+            with col_ex1:
+                prod_para_excluir = st.selectbox(
+                    "Selecione o produto para excluir",
+                    options=produtos_cadastrados,
+                    format_func=lambda x: f"{x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})"
+                )
+            with col_ex2:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ Excluir Selecionado", type="secondary"):
+                    try:
+                        conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                        cursor_del = conn_del.cursor()
+                        cursor_del.execute("DELETE FROM produtos WHERE id = ?", (prod_para_excluir[0],))
+                        conn_del.commit()
+                        conn_del.close()
+                        st.success(f"Produto '{prod_para_excluir[3]}' excluído com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao excluir produto: {e}")
+        else:
+            st.info("Nenhum produto cadastrado no momento.")
+            
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
