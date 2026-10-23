@@ -1,7 +1,7 @@
 streamlit
 pandas
-Pillow
-pypdf
+numpy
 reportlab
-requests
+Pillow
 streamlit-drawable-canvas
+plotly
