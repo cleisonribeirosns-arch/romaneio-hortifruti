@@ -165,6 +165,13 @@ st.markdown(
         font-size: 15px !important;
     }}
 
+    /* Esconde o placeholder nativo do campo de data */
+    input[type="date"]::-webkit-datetime-edit-year-field:not(:focus):invalid,
+    input[type="date"]::-webkit-datetime-edit-month-field:not(:focus):invalid,
+    input[type="date"]::-webkit-datetime-edit-day-field:not(:focus):invalid {{
+        color: transparent !important;
+    }}
+
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -570,7 +577,6 @@ def remover_fundo_branco(caminho_imagem):
         datas = img.getdata()
         newData = []
         for item in datas:
-            # Se o pixel for muito claro/branco (R, G, B > 200), torna transparente
             if item[0] > 200 and item[1] > 200 and item[2] > 200:
                 newData.append((255, 255, 255, 0))
             else:
@@ -749,7 +755,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
 
-    # Aplica transparência no fundo branco da assinatura antes de jogar no PDF
     path_conf_transp = remover_fundo_branco(path_conf)
     path_ent_transp = remover_fundo_branco(path_ent)
 
@@ -931,7 +936,7 @@ else:
             with col2:
                 data_rec_val = st.date_input(
                     "Data do Recebimento (Obrigatório)",
-                    value=None,
+                    value=datetime.now(),
                     format="DD/MM/YYYY",
                     key=f"data_rec_{k_suffix}",
                 )
@@ -969,7 +974,7 @@ else:
             if pag_a_vista == "NÃO":
                 data_pag_val = st.date_input(
                     "Data para Pagamento (Obrigatório)",
-                    value=None,
+                    value=datetime.now(),
                     format="DD/MM/YYYY",
                     key=f"data_pag_{k_suffix}",
                 )
