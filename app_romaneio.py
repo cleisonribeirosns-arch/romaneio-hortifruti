@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA (LOGIN ORIGINAL SEM FAIXA)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
