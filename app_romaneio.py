@@ -4,6 +4,7 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+import plotly.express as px
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -44,6 +45,12 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
+# CONTROLE DE TEMA (CLARO / ESCURO)
+# ---------------------------------------------------------
+if "tema_app" not in st.session_state:
+    st.session_state["tema_app"] = "Escuro"
+
+# ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
 # ---------------------------------------------------------
 @st.dialog("📷 Visualização da Foto Anexada", width="large")
@@ -54,7 +61,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA
+# 2. ESTILOS CSS DINÂMICOS (MODO CLARO / ESCURO)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -69,25 +76,43 @@ for nome_bg in [
         break
 
 css_fundo = ""
-if bg_login_path:
-    with open(bg_login_path, "rb") as img_f:
-        b64_img = base64.b64encode(img_f.read()).decode()
-    css_fundo = f"""
-        .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
-            background-size: cover !important;
-            background-position: center !important;
-            background-repeat: no-repeat !important;
-            background-attachment: fixed !important;
-        }}
-    """
+if st.session_state["tema_app"] == "Escuro":
+    if bg_login_path:
+        with open(bg_login_path, "rb") as img_f:
+            b64_img = base64.b64encode(img_f.read()).decode()
+        css_fundo = f"""
+            .stApp {{
+                background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-repeat: no-repeat !important;
+                background-attachment: fixed !important;
+            }}
+        """
+    else:
+        css_fundo = """
+            .stApp {
+                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+                background-attachment: fixed !important;
+            }
+        """
+    cor_texto = "#FFFFFF"
+    sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
+    bg_input = "rgba(255, 255, 255, 0.95)"
+    cor_input_texto = "#000000"
+    bg_radio = "rgba(0, 0, 0, 0.4)"
 else:
     css_fundo = """
         .stApp {
-            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
+            background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 50%, #FFEBEE 100%) !important;
             background-attachment: fixed !important;
         }
     """
+    cor_texto = "#1B5E20"
+    sombra_texto = "1px 1px 2px rgba(255, 255, 255, 0.8)"
+    bg_input = "rgba(255, 255, 255, 0.98)"
+    cor_input_texto = "#111111"
+    bg_radio = "rgba(255, 255, 255, 0.7)"
 
 st.markdown(
     f"""
@@ -156,8 +181,8 @@ st.markdown(
     }}
 
     .stApp h3 {{
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
         font-weight: 800 !important;
         font-size: 1.4rem !important;
         margin-top: 4px !important;
@@ -165,32 +190,28 @@ st.markdown(
     }}
 
     .stApp label {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
         font-size: 16px !important;
         font-weight: bold !important;
     }}
 
     div[data-baseweb="input"] input {{
-        color: #000000 !important;
-        background-color: rgba(255, 255, 255, 0.95) !important;
+        color: {cor_input_texto} !important;
+        background-color: {bg_input} !important;
         border-radius: 6px !important;
         font-size: 15px !important;
-    }}
-
-    div[data-baseweb="input"] input::placeholder {{
-        color: transparent !important;
     }}
 
     div[data-testid="stRadio"] label p {{
         font-size: 1.1rem !important;
         font-weight: 800 !important;
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important;
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
     }}
 
     div[data-testid="stRadio"] div[role="radiogroup"] {{
-        background-color: rgba(0, 0, 0, 0.4) !important;
+        background-color: {bg_radio} !important;
         padding: 8px 12px !important;
         border-radius: 8px !important;
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
@@ -199,8 +220,8 @@ st.markdown(
     div[data-testid="stExpander"] summary span p {{
         font-size: 1.15rem !important;
         font-weight: 800 !important;
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
+        color: {cor_texto} !important;
+        text-shadow: {sombra_texto} !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -219,15 +240,6 @@ st.markdown(
         border-color: #FFFFFF !important;
     }}
     
-    @media only screen and (max-width: 768px) {{
-        .stDataFrame {{
-            font-size: 11px !important;
-            overflow-x: auto !important;
-        }}
-        div[data-testid="stHorizontalBlock"] {{
-            flex-direction: column !important;
-        }}
-    }}
     {css_fundo}
     </style>
 """,
@@ -235,7 +247,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E CATÁLOGO (PRODUTOS OFICIAIS CISS)
+# 3. BANCO DE DADOS E CATÁLOGO
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -887,12 +899,22 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_logout = st.columns([3, 1])
+    col_info_usr, col_tema, col_logout = st.columns([2.2, 1.2, 0.8])
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
-        st.markdown(f"**Usuário Logado:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+    with col_tema:
+        novo_tema = st.selectbox(
+            "Tema",
+            ["Escuro", "Claro"],
+            index=0 if st.session_state["tema_app"] == "Escuro" else 1,
+            key="select_tema_app",
+            label_visibility="collapsed"
+        )
+        if novo_tema != st.session_state["tema_app"]:
+            st.session_state["tema_app"] = novo_tema
+            st.rerun()
     with col_logout:
-        # CORREÇÃO AQUI: adicionado key única no botão de sair para eliminar o erro
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
             st.rerun()
@@ -1483,31 +1505,95 @@ else:
                 kpi4.metric("Principal Fornecedor", str(top_fornecedor))
 
                 st.markdown("---")
-                st.subheader("📊 Visualizações Gráficas")
+                st.subheader("📊 Visualizações Gráficas Profissionais (BI)")
                 
                 col_g1, col_g2 = st.columns(2)
                 
                 with col_g1:
                     st.markdown("**Top Produtos por Valor Financeiro (R$)**")
                     top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
-                    st.bar_chart(top_prods_val.set_index("produto"))
+                    fig_val = px.bar(
+                        top_prods_val, 
+                        x="produto", 
+                        y="valor_total",
+                        text_auto=".2f",
+                        color="valor_total",
+                        color_continuous_scale="Greens"
+                    )
+                    fig_val.update_layout(
+                        xaxis_title="Produto", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_val, use_container_width=True)
 
                 with col_g2:
                     st.markdown("**Top Produtos por Volume / Quantidade**")
                     top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
-                    st.bar_chart(top_prods_qtd.set_index("produto"))
+                    fig_qtd = px.bar(
+                        top_prods_qtd, 
+                        x="produto", 
+                        y="quantidade",
+                        text_auto=".2f",
+                        color="quantidade",
+                        color_continuous_scale="Reds"
+                    )
+                    fig_qtd.update_layout(
+                        xaxis_title="Produto", 
+                        yaxis_title="Qtd / Peso",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_qtd, use_container_width=True)
 
                 col_g3, col_g4 = st.columns(2)
                 
                 with col_g3:
                     st.markdown("**Participação Financeira por Fornecedor (R$)**")
                     forn_val = df_filtrado.groupby("fornecedor")["valor_total"].sum().reset_index()
-                    st.bar_chart(forn_val.set_index("fornecedor"))
+                    fig_forn = px.bar(
+                        forn_val, 
+                        x="fornecedor", 
+                        y="valor_total",
+                        text_auto=".2f",
+                        color="valor_total",
+                        color_continuous_scale="Viridis"
+                    )
+                    fig_forn.update_layout(
+                        xaxis_title="Fornecedor", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_forn, use_container_width=True)
 
                 with col_g4:
                     st.markdown("**Evolução Diária dos Recebimentos (R$)**")
                     diario_val = df_filtrado.groupby("data_recebimento")["valor_total"].sum().reset_index()
-                    st.line_chart(diario_val.set_index("data_recebimento"))
+                    fig_line = px.line(
+                        diario_val, 
+                        x="data_recebimento", 
+                        y="valor_total",
+                        markers=True,
+                        line_shape="spline"
+                    )
+                    fig_line.update_traces(line_color="#00E676", line_width=3)
+                    fig_line.update_layout(
+                        xaxis_title="Data do Recebimento", 
+                        yaxis_title="Total (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="white",
+                        xaxis=dict(tickangle=-35)
+                    )
+                    st.plotly_chart(fig_line, use_container_width=True)
 
                 st.markdown("---")
                 st.subheader("📋 Tabela Consolidada & Exportação")
@@ -1535,9 +1621,10 @@ else:
                 
                 st.dataframe(df_export, use_container_width=True, hide_index=True)
                 
-                csv_buffer = df_export.to_csv(index=False).encode('utf-8-sig')
+                # CORREÇÃO AQUI: Alterado separador do CSV para ponto e vírgula (;) para abrir perfeitamente em colunas no Excel brasileiro
+                csv_buffer = df_export.to_csv(index=False, sep=';').encode('utf-8-sig')
                 st.download_button(
-                    label="📥 Baixar Relatório Consolidado (CSV / Excel)",
+                    label="📥 Baixar Relatório Consolidado (Excel / CSV)",
                     data=csv_buffer,
                     file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
