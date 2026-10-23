@@ -46,7 +46,7 @@ if not os.path.exists("uploads"):
 # CONTROLE DE TEMA (CLARO / ESCURO)
 # ---------------------------------------------------------
 if "tema_app" not in st.session_state:
-    st.session_state["tema_app"] = "🌙 Modo Escuro"
+    st.session_state["tema_app"] = "☀️ Modo Claro"
 
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
@@ -59,7 +59,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS CORRIGIDOS (MANTÉM LOGIN E AJUSTA MODO CLARO)
+# 2. ESTILOS CSS REFORMULADOS (DESIGN LIMPO E PROFISSIONAL)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -76,7 +76,7 @@ for nome_bg in [
 is_escuro = "Escuro" in st.session_state["tema_app"]
 
 if st.session_state["usuario_logado"] is None:
-    # --- TELA DE LOGIN ORIGINAL (REGRAS EXCLUSIVAS) ---
+    # --- TELA DE LOGIN ORIGINAL (EXCLUSIVA E INTACTA) ---
     if bg_login_path:
         with open(bg_login_path, "rb") as img_f:
             b64_img = base64.b64encode(img_f.read()).decode()
@@ -116,78 +116,100 @@ if st.session_state["usuario_logado"] is None:
         }
     """
 else:
-    # --- PAINEL INTERNO (ADAPTAÇÃO CLARO / ESCURO) ---
+    # --- PAINEL INTERNO (ESTILO EXECUTIVO LIMPO) ---
     if is_escuro:
         css_fundo = """
             .stApp {
-                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
-                background-attachment: fixed !important;
+                background: #121612 !important;
             }
         """
-        cor_texto_principal = "#FFFFFF"
-        cor_texto_secundario = "#F0F0F0"
-        sombra = "2px 2px 4px rgba(0, 0, 0, 0.9)"
-        bg_input_painel = "rgba(255, 255, 255, 0.95)"
-        cor_input_texto_painel = "#000000"
+        cor_titulos = "#2E7D32"
+        cor_texto_body = "#E0E0E0"
+        cor_labels = "#B0BEC5"
+        bg_card_input = "#1E241E"
+        cor_input_txt = "#FFFFFF"
+        borda_input = "1px solid #334033"
         plotly_font_color = "#FFFFFF"
-        plotly_grid_color = "rgba(255,255,255,0.2)"
-        kpi_bg = "rgba(0, 0, 0, 0.4)"
-        kpi_border = "1px solid rgba(255, 255, 255, 0.3)"
+        plotly_grid_color = "rgba(255,255,255,0.15)"
+        kpi_bg = "#1E241E"
+        kpi_border = "1px solid #2E7D32"
     else:
         css_fundo = """
             .stApp {
-                background: #F8F9FA !important;
+                background: #F4F6F8 !important;
             }
         """
-        cor_texto_principal = "#1B5E20"
-        cor_texto_secundario = "#111111"
-        sombra = "none"
-        bg_input_painel = "#FFFFFF"
-        cor_input_texto_painel = "#111111"
+        cor_titulos = "#1B5E20"
+        cor_texto_body = "#111111"
+        cor_labels = "#37474F"
+        bg_card_input = "#FFFFFF"
+        cor_input_txt = "#111111"
+        borda_input = "1px solid #CFD8DC"
         plotly_font_color = "#111111"
-        plotly_grid_color = "rgba(0,0,0,0.15)"
+        plotly_grid_color = "rgba(0,0,0,0.1)"
         kpi_bg = "#FFFFFF"
-        kpi_border = "2px solid #1B5E20"
+        kpi_border = "1px solid #C8E6C9"
 
     css_painel_tema = f"""
         .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{
-            color: {cor_texto_principal} !important;
-            text-shadow: {sombra} !important;
+            color: {cor_titulos} !important;
             font-weight: 800 !important;
+            text-shadow: none !important;
         }}
-        .stApp p, .stApp span, .stApp label, div[data-testid="stMarkdownContainer"] p {{
-            color: {cor_texto_secundario} !important;
-            font-weight: bold !important;
+        .stApp p, .stApp span, div[data-testid="stMarkdownContainer"] p {{
+            color: {cor_texto_body} !important;
         }}
-        div[data-testid="stMetric"] {{
-            background-color: {kpi_bg} !important;
-            border: {kpi_border} !important;
-            padding: 14px !important;
-            border-radius: 10px !important;
-            box-shadow: 0px 4px 10px rgba(0,0,0,0.08) !important;
+        .stApp label, div[data-testid="stWidgetLabel"] p {{
+            color: {cor_labels} !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+            text-shadow: none !important;
         }}
-        div[data-testid="stMetricLabel"] p {{
-            color: {cor_texto_principal} !important;
-            font-size: 1.0rem !important;
-            font-weight: 800 !important;
-        }}
-        div[data-testid="stMetricValue"] div {{
-            color: {cor_texto_secundario} !important;
-            font-size: 1.7rem !important;
-            font-weight: 900 !important;
+        
+        /* CORREÇÃO DAS CAIXAS DE ENTRADA, SELECTBOX E DATAS */
+        div[data-baseweb="input"], 
+        div[data-baseweb="select"],
+        div[data-baseweb="base-input"],
+        div[data-testid="stDateInput"] > div {{
+            background-color: {bg_card_input} !important;
+            border: {borda_input} !important;
+            border-radius: 8px !important;
+            box-shadow: 0px 2px 4px rgba(0,0,0,0.02) !important;
         }}
         div[data-baseweb="input"] input, 
         div[data-baseweb="select"] div,
         div[data-testid="stDateInput"] input {{
-            color: {cor_input_texto_painel} !important;
-            background-color: {bg_input_painel} !important;
-            border-radius: 6px !important;
+            color: {cor_input_txt} !important;
+            background-color: transparent !important;
             font-size: 15px !important;
-            font-weight: bold !important;
+            font-weight: 600 !important;
         }}
-        div[data-baseweb="base-input"] {{
-            background-color: {bg_input_painel} !important;
-            border-radius: 6px !important;
+        
+        /* CARDS KPI DE INDICADORES */
+        div[data-testid="stMetric"] {{
+            background-color: {kpi_bg} !important;
+            border: {kpi_border} !important;
+            padding: 16px !important;
+            border-radius: 12px !important;
+            box-shadow: 0px 4px 12px rgba(0,0,0,0.04) !important;
+        }}
+        div[data-testid="stMetricLabel"] p {{
+            color: {cor_titulos} !important;
+            font-size: 0.95rem !important;
+            font-weight: 800 !important;
+        }}
+        div[data-testid="stMetricValue"] div {{
+            color: {cor_texto_body} !important;
+            font-size: 1.6rem !important;
+            font-weight: 900 !important;
+        }}
+
+        /* EXPANSORES E ABAS */
+        div[data-testid="stExpander"] {{
+            background-color: {bg_card_input} !important;
+            border: {borda_input} !important;
+            border-radius: 10px !important;
+            box-shadow: 0px 2px 8px rgba(0,0,0,0.03) !important;
         }}
     """
 
@@ -252,16 +274,16 @@ st.markdown(
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
-        border: 2px solid #FFFFFF !important;
+        border: none !important;
         font-weight: bold !important;
-        font-size: 16px !important;
+        font-size: 15px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
+        box-shadow: 0px 3px 6px rgba(27, 94, 32, 0.3) !important;
+        transition: all 0.2s ease !important;
     }}
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
-        border-color: #FFFFFF !important;
     }}
     {css_painel_tema}
     {css_fundo}
@@ -847,7 +869,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN ORIGINAL
+# 5. TELA DE LOGIN ORIGINAL (MANTIDA 100%)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -920,8 +942,8 @@ else:
     with col_tema:
         novo_tema = st.selectbox(
             "Tema Visual",
-            ["🌙 Modo Escuro", "☀️ Modo Claro"],
-            index=0 if "Escuro" in st.session_state["tema_app"] else 1,
+            ["☀️ Modo Claro", "🌙 Modo Escuro"],
+            index=0 if "Claro" in st.session_state["tema_app"] else 1,
             key="select_tema_app",
             label_visibility="collapsed"
         )
@@ -1523,9 +1545,9 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font=dict(color=plotly_font_color, size=12),
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color)
                     )
                     st.plotly_chart(fig_val, use_container_width=True)
                     
@@ -1545,9 +1567,9 @@ else:
                         yaxis_title="Qtd / Peso",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font=dict(color=plotly_font_color, size=12),
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color)
                     )
                     st.plotly_chart(fig_qtd, use_container_width=True)
                     
@@ -1568,9 +1590,9 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font=dict(color=plotly_font_color, size=12),
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color)
                     )
                     st.plotly_chart(fig_forn, use_container_width=True)
                     
@@ -1590,9 +1612,9 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color=plotly_font_color,
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color),
-                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color)
+                        font=dict(color=plotly_font_color, size=12),
+                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color),
+                        yaxis=dict(showgrid=True, gridcolor=plotly_grid_color, color=plotly_font_color)
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
                     
