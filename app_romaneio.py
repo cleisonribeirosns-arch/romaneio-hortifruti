@@ -130,7 +130,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -853,6 +853,8 @@ else:
         for p in produtos_lista:
             label = f"{p[0]} | Cód: {p[2]} | Barras: {p[3]}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
+            
+        prod_nomes_keys = list(prod_dict.keys())
 
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
@@ -933,36 +935,28 @@ else:
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
 
-        # Campo de busca interativa do produto (começa vazio para digitar código ou nome)
-        filtro_busca_prod = st.text_input("🔍 Buscar Produto por Código ou Descrição (Digite para filtrar)", placeholder="Ex: 1175 ou TOMATE", key=f"busca_prod_{k_suffix}")
-        
-        # Filtragem dinâmica do catálogo
-        if filtro_busca_prod.strip():
-            termo = filtro_busca_prod.strip().lower()
-            prod_filtrados_dict = {k: v for k, v in prod_dict.items() if termo in k.lower()}
-        else:
-            prod_filtrados_dict = {}
-
-        prod_nomes_keys = list(prod_filtrados_dict.keys())
-
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
         with col_p1:
-            if prod_nomes_keys:
-                prod_label_sel = st.selectbox(
-                    "Selecione na Lista Filtrada",
-                    prod_nomes_keys,
-                    key=f"prod_sel_{k_suffix}",
-                )
-                prod_nome_real = prod_filtrados_dict[prod_label_sel][0]
-            else:
-                st.info("Digite o código ou nome acima para localizar o produto.")
-                prod_label_sel = None
-                prod_nome_real = ""
+            # index=None e placeholder deixam o campo de produto 100% em branco para começar
+            prod_label_sel = st.selectbox(
+                "Produto / Código",
+                options=prod_nomes_keys,
+                index=None,
+                placeholder="Selecione ou digite o código/nome do produto...",
+                key=f"prod_sel_{k_suffix}",
+            )
+            prod_nome_real = (
+                prod_dict[prod_label_sel][0] if prod_label_sel and prod_dict else ""
+            )
 
         with col_p2:
-            und_padrao = prod_filtrados_dict[prod_label_sel][1] if prod_label_sel and prod_filtrados_dict else "KG"
+            und_padrao = (
+                prod_dict[prod_label_sel][1]
+                if prod_label_sel and prod_dict
+                else "KG"
+            )
             und_sel = st.selectbox(
                 "UND",
                 ["KG", "UNID", "GRM", "CX"],
@@ -974,21 +968,33 @@ else:
                 key=f"und_sel_{k_suffix}",
             )
         with col_p3:
-            # value=None deixa o campo em branco sem o zero
+            # value=None deixa o campo Qtd/Peso em branco
             qtd_input = st.number_input(
-                "Qtd / Peso", min_value=0.0, value=None, step=0.1, format="%.3f", key=f"qtd_{k_suffix}"
+                "Qtd / Peso",
+                min_value=0.0,
+                value=None,
+                step=0.1,
+                format="%.3f",
+                placeholder="Ex: 10.500",
+                key=f"qtd_{k_suffix}",
             )
         with col_p4:
-            # value=None deixa o campo em branco sem o zero
+            # value=None deixa o campo Valor Unit. em branco
             val_unit = st.number_input(
-                "Valor Unit. (R$)", min_value=0.0, value=None, step=0.01, format="%.2f", key=f"vunit_{k_suffix}"
+                "Valor Unit. (R$)",
+                min_value=0.0,
+                value=None,
+                step=0.01,
+                format="%.2f",
+                placeholder="Ex: 4.50",
+                key=f"vunit_{k_suffix}",
             )
         with col_p5:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}"):
                 if not prod_nome_real:
-                    st.warning("Selecione um produto válido.")
+                    st.warning("Selecione um produto antes de adicionar.")
                 elif qtd_input is None or qtd_input <= 0:
                     st.warning("Informe uma quantidade maior que zero.")
                 else:
@@ -1169,34 +1175,9 @@ else:
                     
                     st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco de dados!")
                     
-                    romaneio_dict_atual = {
-                        "numero_romaneio": num_romaneio,
-                        "data_recebimento": data_rec_str,
-                        "fornecedor": fornecedor,
-                        "codigo_fornecedor": cod_fornecedor,
-                        "telefone_fornecedor": tel_fornecedor,
-                        "loja": loja,
-                        "conferente": user_info["nome"],
-                        "pagamento_a_vista": pag_a_vista,
-                        "data_pagamento": data_pag_str,
-                    }
-                    pdf_buffer_novo = gerar_pdf_romaneio(
-                        romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent
-                    )
-                    
-                    st.download_button(
-                        label=f"📥 Baixar Via em PDF para o Fornecedor ({num_romaneio})",
-                        data=pdf_buffer_novo,
-                        file_name=f"{num_romaneio}.pdf",
-                        mime="application/pdf",
-                        type="primary",
-                        key=f"dl_btn_salvo_{k_suffix}",
-                    )
-                    
-                    # Limpeza automática e reinício imediato para o próximo romaneio
+                    # Prepara PDF e limpa o formulário
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
-                    st.success("Romaneio finalizado e limpo para um novo lançamento! 🚀")
                     st.rerun()
                     
                 except Exception as e:
