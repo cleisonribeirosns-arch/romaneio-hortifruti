@@ -667,7 +667,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (100% ORIGINAL CONFORME A SUA IMAGEM DE REFERÊNCIA)
+# 5. TELA DE LOGIN (EXATAMENTE COMO ESTAVA ANTES DA ALTERAÇÃO)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -713,84 +713,8 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     # ---------------------------------------------------------
-    # 6. PAINEL INTERNO (ÁREA DO CONFERENTE E MENU MELHORADOS)
+    # 6. PAINEL INTERNO
     # ---------------------------------------------------------
-    st.markdown(
-        """
-        <style>
-        .stApp p, .stApp span, .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p, div[data-baseweb="radio"] label span {
-            color: #FFFFFF !important;
-            font-size: 13px !important;
-            font-weight: 600 !important;
-            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
-        }
-
-        .stApp h1 {
-            font-size: 2.2rem !important;
-            color: #FFFFFF !important;
-            font-weight: 900 !important;
-            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95) !important;
-        }
-
-        .stApp h2 {
-            font-size: 1.6rem !important;
-            color: #FFFFFF !important;
-            font-weight: 800 !important;
-            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95) !important;
-        }
-
-        .stApp h3 {
-            font-size: 1.3rem !important;
-            color: #FFFFFF !important;
-            font-weight: 800 !important;
-            text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95) !important;
-        }
-
-        label[data-testid="stWidgetLabel"] p {
-            font-size: 13px !important;
-            font-weight: 800 !important;
-            color: #FFFFFF !important;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95) !important;
-        }
-
-        div[data-baseweb="input"] input, div[data-baseweb="select"] div {
-            color: #000000 !important;
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            border-radius: 6px !important;
-            font-size: 13px !important;
-            font-weight: bold !important;
-        }
-
-        button[kind="primary"], .stButton > button[kind="primary"] {
-            background-color: #1B5E20 !important;
-            color: #FFFFFF !important;
-            border: 2px solid #FFFFFF !important;
-            font-weight: bold !important;
-            font-size: 13px !important;
-            border-radius: 8px !important;
-            width: 100% !important;
-            box-shadow: 0px 4px 8px rgba(0,0,0,0.6) !important;
-        }
-
-        button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {
-            background-color: #2E7D32 !important;
-            border-color: #FFFFFF !important;
-        }
-        
-        @media only screen and (max-width: 768px) {
-            .stDataFrame {
-                font-size: 11px !important;
-                overflow-x: auto !important;
-            }
-            div[data-testid="stHorizontalBlock"] {
-                flex-direction: column !important;
-            }
-        }
-        </style>
-    """,
-        unsafe_allow_html=True,
-    )
-
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (
