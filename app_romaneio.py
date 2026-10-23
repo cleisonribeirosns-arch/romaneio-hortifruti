@@ -59,7 +59,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS (CORREÇÃO DE ALTA VISIBILIDADE E CONTRASTE)
+# 2. ESTILOS CSS DINÂMICOS (SEPARAÇÃO RIGOROSA DA TELA DE LOGIN VS PAINEL INTERNO)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -189,6 +189,19 @@ st.markdown(
         color: {cor_subtitulo} !important;
         font-weight: bold !important;
     }}
+    
+    /* PRESENÇA EXCLUSIVA DA TELA DE LOGIN (FUNDO BRANCO E TEXTO ESCURO GARANTIDOS) */
+    form[key="form_login"] div[data-baseweb="input"] input,
+    form[key="form_login"] div[data-baseweb="base-input"] {{
+        background-color: #FFFFFF !important;
+        color: #111111 !important;
+        font-weight: bold !important;
+    }}
+    form[key="form_login"] label p {{
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.9) !important;
+    }}
+
     /* Ajuste visual dos cards de métricas (KPIs) */
     div[data-testid="stMetric"] {{
         background-color: {kpi_bg} !important;
@@ -207,7 +220,8 @@ st.markdown(
         font-size: 1.7rem !important;
         font-weight: 900 !important;
     }}
-    /* Inputs, Date Inputs e Selectbox adaptativos ao tema */
+
+    /* Inputs, Date Inputs e Selectbox adaptativos ao tema (somente no painel do sistema) */
     div[data-baseweb="input"] input, 
     div[data-baseweb="select"] div,
     div[data-testid="stDateInput"] input {{
