@@ -45,6 +45,16 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
+# FUNÇÃO PARA VER FOTO EM TELA CHEIA (DIALOG MODAL)
+# ---------------------------------------------------------
+@st.dialog("📷 Visualização da Foto Anexada", width="large")
+def exibir_foto_modal(caminho_foto):
+    if os.path.exists(caminho_foto):
+        st.image(caminho_foto, use_container_width=True, caption="Comprovante / Nota Anexada")
+    else:
+        st.error("Arquivo de imagem não encontrado no servidor.")
+
+# ---------------------------------------------------------
 # 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
 bg_login_path = None
@@ -1345,15 +1355,13 @@ else:
                     )
                     
                     # ---------------------------------------------------------
-                    # EXIBIÇÃO DA FOTO COM AMPLIAÇÃO EM TELA CHEIA (POPOVER)
+                    # EXIBIÇÃO DA FOTO COM BOTÃO PARA TELA CHEIA (MODAL)
                     # ---------------------------------------------------------
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
-                        # Exibe mini barra com botao para abrir foto em tela cheia/ampliada
-                        with st.popover("📷 Ver Foto Anexada (Clique para Ampliar / Tela Cheia)"):
-                            st.image(row['caminho_foto'], use_container_width=True, caption="Foto da Nota / Canhoto Ampliada")
-                        # Miniatura pequena logo abaixo
                         st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
+                        if st.button("🔍 Ampliar Foto da Nota (Tela Cheia)", key=f"btn_ampliar_foto_{row['id']}"):
+                            exibir_foto_modal(row['caminho_foto'])
 
                     conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                     df_itens = pd.read_sql_query(
