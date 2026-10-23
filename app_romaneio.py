@@ -165,13 +165,6 @@ st.markdown(
         font-size: 15px !important;
     }}
 
-    /* Esconde o placeholder nativo do campo de data */
-    input[type="date"]::-webkit-datetime-edit-year-field:not(:focus):invalid,
-    input[type="date"]::-webkit-datetime-edit-month-field:not(:focus):invalid,
-    input[type="date"]::-webkit-datetime-edit-day-field:not(:focus):invalid {{
-        color: transparent !important;
-    }}
-
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -934,13 +927,29 @@ else:
                     key=f"loja_{k_suffix}",
                 )
             with col2:
-                data_rec_val = st.date_input(
+                d_rec_key = f"data_rec_input_{k_suffix}"
+                if d_rec_key not in st.session_state:
+                    st.session_state[d_rec_key] = ""
+                def formatar_d_rec():
+                    val = st.session_state.get(d_rec_key, "")
+                    raw = "".join(filter(str.isdigit, val))
+                    if len(raw) > 8:
+                        raw = raw[:8]
+                    fmt = ""
+                    if len(raw) > 0:
+                        fmt += raw[:2]
+                    if len(raw) >= 3:
+                        fmt += f"/{raw[2:4]}"
+                    if len(raw) >= 5:
+                        fmt += f"/{raw[4:]}"
+                    st.session_state[d_rec_key] = fmt
+
+                data_rec_str = st.text_input(
                     "Data do Recebimento (Obrigatório)",
-                    value=datetime.now(),
-                    format="DD/MM/YYYY",
-                    key=f"data_rec_{k_suffix}",
+                    placeholder="",
+                    key=d_rec_key,
+                    on_change=formatar_d_rec,
                 )
-                data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
@@ -972,13 +981,29 @@ else:
             
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag_val = st.date_input(
+                d_pag_key = f"data_pag_input_{k_suffix}"
+                if d_pag_key not in st.session_state:
+                    st.session_state[d_pag_key] = ""
+                def formatar_d_pag():
+                    val = st.session_state.get(d_pag_key, "")
+                    raw = "".join(filter(str.isdigit, val))
+                    if len(raw) > 8:
+                        raw = raw[:8]
+                    fmt = ""
+                    if len(raw) > 0:
+                        fmt += raw[:2]
+                    if len(raw) >= 3:
+                        fmt += f"/{raw[2:4]}"
+                    if len(raw) >= 5:
+                        fmt += f"/{raw[4:]}"
+                    st.session_state[d_pag_key] = fmt
+
+                data_pag_str = st.text_input(
                     "Data para Pagamento (Obrigatório)",
-                    value=datetime.now(),
-                    format="DD/MM/YYYY",
-                    key=f"data_pag_{k_suffix}",
+                    placeholder="",
+                    key=d_pag_key,
+                    on_change=formatar_d_pag,
                 )
-                data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
             conferente = st.text_input(
                 "Responsável Rec. Físico",
                 value=user_info["nome"],
@@ -1148,10 +1173,10 @@ else:
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip():
                 st.error("Preencha o número do romaneio e o fornecedor.")
-            elif not data_rec_str:
-                st.error("A Data do Recebimento é obrigatória! Selecione a data no calendário.")
-            elif pag_a_vista == "NÃO" and not data_pag_str:
-                st.error("A Data para Pagamento é obrigatória para compras a prazo! Selecione a data.")
+            elif not data_rec_str.strip():
+                st.error("A Data do Recebimento é obrigatória! Informe a data.")
+            elif pag_a_vista == "NÃO" and not data_pag_str.strip():
+                st.error("A Data para Pagamento é obrigatória para compras a prazo! Informe a data.")
             elif not st.session_state["itens_romaneio"]:
                 st.error("Adicione itens ao romaneio.")
             else:
