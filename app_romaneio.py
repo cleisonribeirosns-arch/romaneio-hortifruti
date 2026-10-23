@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA (FONTES DESTACADAS)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA (APENAS PARA O SISTEMA INTERNO - TELA DE LOGIN PRESERVADA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -61,7 +61,7 @@ if bg_login_path:
         b64_img = base64.b64encode(img_f.read()).decode()
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(20,60,20,0.90), rgba(120,20,20,0.90)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(10,40,10,0.92), rgba(90,10,10,0.92)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -88,71 +88,44 @@ st.markdown(
         background-color: transparent !important;
     }}
 
-    img[data-testid="stImage"] {{
-        background: transparent !important;
-        mix-blend-mode: multiply !important;
-        filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 85px !important;
-        width: 100% !important;
-        height: auto !important;
-        margin: 0 auto !important;
-        display: block !important;
-    }}
-
-    /* TÍTULOS E TEXTOS GERAIS COM MÁXIMA VISIBILIDADE */
-    .stApp h1, .stApp h2, .stApp h3, .stApp h4 {{
+    /* PADRÃO DE FONTES 12PX E ALTO CONTRASTE APENAS NO SISTEMA LOGADO */
+    .stApp p, .stApp span, .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p {{
         color: #FFFFFF !important;
-        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95), -1px -1px 2px rgba(0, 0, 0, 0.9) !important;
-        font-weight: 900 !important;
-    }}
-
-    .stApp p, .stApp span, .stApp label, .stMarkdown {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.95) !important;
+        font-size: 13px !important;
         font-weight: 700 !important;
+        text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95), -1px -1px 2px rgba(0, 0, 0, 0.9) !important;
     }}
 
-    .titulo-logo {{
-        font-size: 2.4rem !important;
-        font-weight: 900 !important;
-        line-height: 1.1 !important;
-        margin-bottom: 0px !important;
-        font-family: 'Arial Black', Gadget, sans-serif !important;
-    }}
-
-    .palavra-sup-mercado {{
-        color: #4CAF50 !important;
-        font-size: 1.25rem !important;
-        font-weight: 900 !important;
-        font-style: italic !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-    }}
-
-    .palavra-super {{
-        color: #4CAF50 !important;
-        font-style: italic !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-    }}
-
-    .palavra-nova {{
-        color: #FF5722 !important;
-        font-style: italic !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-    }}
-
-    .palavra-cidade {{
+    .stApp h1 {{
+        font-size: 2.2rem !important;
         color: #FFFFFF !important;
-        font-style: italic !important;
-        font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 3.0rem !important;
-        text-shadow: 2px 3px 5px rgba(0, 0, 0, 0.95) !important;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95) !important;
     }}
 
-    div[data-baseweb="input"] input {{
+    .stApp h2 {{
+        font-size: 1.7rem !important;
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95) !important;
+    }}
+
+    .stApp h3 {{
+        font-size: 1.3rem !important;
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95) !important;
+    }}
+
+    label[data-testid="stWidgetLabel"] p {{
+        font-size: 13px !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95) !important;
+    }}
+
+    div[data-baseweb="input"] input, div[data-baseweb="select"] div {{
         color: #000000 !important;
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
-        font-size: 15px !important;
+        font-size: 13px !important;
         font-weight: bold !important;
     }}
 
@@ -161,7 +134,7 @@ st.markdown(
         color: #FFFFFF !important;
         border: 2px solid #FFFFFF !important;
         font-weight: bold !important;
-        font-size: 16px !important;
+        font-size: 13px !important;
         border-radius: 8px !important;
         width: 100% !important;
         box-shadow: 0px 4px 8px rgba(0,0,0,0.6) !important;
@@ -760,7 +733,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN
+# 5. TELA DE LOGIN (MANTIDA ORIGINAL E PRESERVADA)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
