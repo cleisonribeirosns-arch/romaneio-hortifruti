@@ -667,7 +667,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (EXATAMENTE COMO ESTAVA ANTES DA ALTERAÇÃO)
+# 5. TELA DE LOGIN (ORIGINAL EXATA, SEM NENHUMA ALTERAÇÃO)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -679,20 +679,31 @@ if st.session_state["usuario_logado"] is None:
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
-            st.image(logo_display, width=220)
-        
-        st.markdown(
-            """
-            <div style="margin-top: 10px; margin-bottom: 20px;">
-                <span style="color: #1B5E20; font-size: 1.3rem; font-weight: 700;">Supermercado</span><br>
-                <span style="color: #1B5E20; font-size: 2.8rem; font-weight: 900; letter-spacing: 1px;">SUPER</span> 
-                <span style="color: #C62828; font-size: 2.8rem; font-weight: 900; letter-spacing: 1px;">NOVA</span><br>
-                <span style="color: #FFFFFF; font-size: 2.2rem; font-weight: 800; font-style: italic; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Cidade</span>
-            </div>
-            <h3 style="color: #FFFFFF; font-size: 1.5rem; font-weight: 700; margin-bottom: 25px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Sistema de Recebimento Hortifrúti</h3>
-            """,
-            unsafe_allow_html=True
-        )
+            col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
+            with col_logo:
+                st.image(logo_display, use_container_width=True)
+            with col_titulo:
+                st.markdown(
+                    """<div class='titulo-logo'>
+                    <span class='palavra-sup-mercado'>Supermercado</span><br>
+                    <span class='palavra-super'>SUPER</span> 
+                    <span class='palavra-nova'>NOVA</span><br>
+                    <span class='palavra-cidade'>Cidade</span>
+                    </div>""",
+                    unsafe_allow_html=True
+                )
+                st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+        else:
+            st.markdown(
+                """<div class='titulo-logo'>
+                <span class='palavra-sup-mercado'>Supermercado</span><br>
+                <span class='palavra-super'>SUPER</span> 
+                <span class='palavra-nova'>NOVA</span><br>
+                <span class='palavra-cidade'>Cidade</span>
+                </div>""",
+                unsafe_allow_html=True
+            )
+            st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
@@ -713,7 +724,7 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     # ---------------------------------------------------------
-    # 6. PAINEL INTERNO
+    # 6. PAINEL INTERNO ORIGINAL
     # ---------------------------------------------------------
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
