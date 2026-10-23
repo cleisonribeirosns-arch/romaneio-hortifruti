@@ -165,12 +165,10 @@ st.markdown(
         font-size: 15px !important;
     }}
 
-    /* Oculta a mascara em texto (dd/mm/yyyy) mantendo o icone do calendario clicavel */
     div[data-baseweb="input"] input::placeholder {{
         color: transparent !important;
     }}
 
-    /* AUMENTO DE FONTE: Menu de Navegação Principal (stRadio) */
     div[data-testid="stRadio"] label p {{
         font-size: 1.1rem !important;
         font-weight: 800 !important;
@@ -185,7 +183,6 @@ st.markdown(
         border: 1px solid rgba(255, 255, 255, 0.2) !important;
     }}
 
-    /* AUMENTO DE FONTE: Cabeçalho dos Expansores da Consulta de Romaneios (stExpander) */
     div[data-testid="stExpander"] summary span p {{
         font-size: 1.15rem !important;
         font-weight: 800 !important;
@@ -1293,10 +1290,40 @@ else:
 
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
+        
+        # ---------------------------------------------------------
+        # FILTROS DE BUSCA (DATA, FORNECEDOR, CÓDIGO, NÚMERO)
+        # ---------------------------------------------------------
+        with st.expander("🔍 Filtrar Romaneios", expanded=True):
+            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            with col_f1:
+                filtro_num = st.text_input("Número do Romaneio", placeholder="Ex: ROM-...")
+            with col_f2:
+                filtro_forn = st.text_input("Fornecedor / Entregador", placeholder="Nome do fornecedor")
+            with col_f3:
+                filtro_cod_forn = st.text_input("Código do Fornecedor", placeholder="Cód. fornecedor")
+            with col_f4:
+                filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
+                filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
+
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
+
+        # Aplicando os filtros na tabela
         if not df_rom.empty:
+            if filtro_num.strip():
+                df_rom = df_rom[df_rom["numero_romaneio"].str.contains(filtro_num.strip(), case=False, na=False)]
+            if filtro_forn.strip():
+                df_rom = df_rom[df_rom["fornecedor"].str.contains(filtro_forn.strip(), case=False, na=False)]
+            if filtro_cod_forn.strip():
+                df_rom = df_rom[df_rom["codigo_fornecedor"].str.contains(filtro_cod_forn.strip(), case=False, na=False)]
+            if filtro_data_str:
+                df_rom = df_rom[df_rom["data_recebimento"] == filtro_data_str]
+
+        if not df_rom.empty:
+            st.markdown(f"**Total de romaneios encontrados:** {len(df_rom)}")
+            st.markdown("---")
             for idx, row in df_rom.iterrows():
                 with st.expander(
                     f"Romaneio: {row['numero_romaneio']} | Fornecedor:"
@@ -1370,7 +1397,7 @@ else:
                             except Exception as e:
                                 st.error(f"Erro ao excluir romaneio: {e}")
         else:
-            st.info("Nenhum romaneio cadastrado até o momento.")
+            st.info("Nenhum romaneio encontrado com os filtros informados.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
