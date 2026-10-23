@@ -61,7 +61,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS (MODO CLARO / ESCURO)
+# 2. ESTILOS CSS DINÂMICOS (ALTA VISIBILIDADE)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -75,7 +75,6 @@ for nome_bg in [
         bg_login_path = nome_bg
         break
 
-css_fundo = ""
 if st.session_state["tema_app"] == "Escuro":
     if bg_login_path:
         with open(bg_login_path, "rb") as img_f:
@@ -97,22 +96,29 @@ if st.session_state["tema_app"] == "Escuro":
             }
         """
     cor_texto = "#FFFFFF"
+    cor_subtitulo = "#E0E0E0"
     sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
     bg_input = "rgba(255, 255, 255, 0.95)"
     cor_input_texto = "#000000"
     bg_radio = "rgba(0, 0, 0, 0.4)"
+    plotly_font_color = "#FFFFFF"
+    kpi_bg = "rgba(0, 0, 0, 0.35)"
+    kpi_border = "1px solid rgba(255, 255, 255, 0.2)"
 else:
     css_fundo = """
         .stApp {
-            background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 50%, #FFEBEE 100%) !important;
-            background-attachment: fixed !important;
+            background: #F4F6F9 !important;
         }
     """
     cor_texto = "#1B5E20"
-    sombra_texto = "1px 1px 2px rgba(255, 255, 255, 0.8)"
-    bg_input = "rgba(255, 255, 255, 0.98)"
-    cor_input_texto = "#111111"
-    bg_radio = "rgba(255, 255, 255, 0.7)"
+    cor_subtitulo = "#111111"
+    sombra_texto = "none"
+    bg_input = "#FFFFFF"
+    cor_input_texto = "#000000"
+    bg_radio = "#FFFFFF"
+    plotly_font_color = "#111111"
+    kpi_bg = "#FFFFFF"
+    kpi_border = "1px solid #D0D7DE"
 
 st.markdown(
     f"""
@@ -180,20 +186,36 @@ st.markdown(
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
 
-    .stApp h3 {{
+    .stApp h1, .stApp h2, .stApp h3 {{
         color: {cor_texto} !important;
         text-shadow: {sombra_texto} !important;
         font-weight: 800 !important;
-        font-size: 1.4rem !important;
-        margin-top: 4px !important;
-        margin-bottom: 10px !important;
     }}
 
-    .stApp label {{
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
-        font-size: 16px !important;
+    .stApp p, .stApp span, .stApp label {{
+        color: {cor_subtitulo} !important;
         font-weight: bold !important;
+    }}
+
+    /* Ajuste visual dos cards de métricas (KPIs) */
+    div[data-testid="stMetric"] {{
+        background-color: {kpi_bg} !important;
+        border: {kpi_border} !important;
+        padding: 12px !important;
+        border-radius: 8px !important;
+        box-shadow: 0px 2px 6px rgba(0,0,0,0.1) !important;
+    }}
+
+    div[data-testid="stMetricLabel"] p {{
+        color: {cor_texto} !important;
+        font-size: 0.95rem !important;
+        font-weight: 800 !important;
+    }}
+
+    div[data-testid="stMetricValue"] div {{
+        color: {cor_subtitulo} !important;
+        font-size: 1.6rem !important;
+        font-weight: 900 !important;
     }}
 
     div[data-baseweb="input"] input {{
@@ -203,25 +225,11 @@ st.markdown(
         font-size: 15px !important;
     }}
 
-    div[data-testid="stRadio"] label p {{
-        font-size: 1.1rem !important;
-        font-weight: 800 !important;
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
-    }}
-
     div[data-testid="stRadio"] div[role="radiogroup"] {{
         background-color: {bg_radio} !important;
         padding: 8px 12px !important;
         border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }}
-
-    div[data-testid="stExpander"] summary span p {{
-        font-size: 1.15rem !important;
-        font-weight: 800 !important;
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
+        border: 1px solid rgba(0, 0, 0, 0.1) !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -232,7 +240,7 @@ st.markdown(
         font-size: 16px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.2) !important;
     }}
 
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
@@ -1525,7 +1533,7 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="white",
+                        font_color=plotly_font_color,
                         xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_val, use_container_width=True)
@@ -1546,7 +1554,7 @@ else:
                         yaxis_title="Qtd / Peso",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="white",
+                        font_color=plotly_font_color,
                         xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_qtd, use_container_width=True)
@@ -1569,7 +1577,7 @@ else:
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="white",
+                        font_color=plotly_font_color,
                         xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_forn, use_container_width=True)
@@ -1584,13 +1592,13 @@ else:
                         markers=True,
                         line_shape="spline"
                     )
-                    fig_line.update_traces(line_color="#00E676", line_width=3)
+                    fig_line.update_traces(line_color="#1B5E20", line_width=3)
                     fig_line.update_layout(
                         xaxis_title="Data do Recebimento", 
                         yaxis_title="Total (R$)",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="white",
+                        font_color=plotly_font_color,
                         xaxis=dict(tickangle=-35)
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
@@ -1621,7 +1629,6 @@ else:
                 
                 st.dataframe(df_export, use_container_width=True, hide_index=True)
                 
-                # CORREÇÃO AQUI: Alterado separador do CSV para ponto e vírgula (;) para abrir perfeitamente em colunas no Excel brasileiro
                 csv_buffer = df_export.to_csv(index=False, sep=';').encode('utf-8-sig')
                 st.download_button(
                     label="📥 Baixar Relatório Consolidado (Excel / CSV)",
