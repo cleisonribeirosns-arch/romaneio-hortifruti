@@ -130,7 +130,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -838,7 +838,11 @@ else:
         st.title("Romaneio de Recebimento - Hortifrúti")
         if "form_key_suffix" not in st.session_state:
             st.session_state["form_key_suffix"] = 0
+        if "item_key_suffix" not in st.session_state:
+            st.session_state["item_key_suffix"] = 0
+
         k_suffix = st.session_state["form_key_suffix"]
+        i_suffix = st.session_state["item_key_suffix"]
         
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
@@ -939,13 +943,13 @@ else:
             [3, 1.5, 1.5, 1.5, 1]
         )
         with col_p1:
-            # index=None e placeholder deixam o campo de produto 100% em branco para começar
+            # Sem nenhum texto de exemplo (placeholder limpo), abre em branco
             prod_label_sel = st.selectbox(
                 "Produto / Código",
                 options=prod_nomes_keys,
                 index=None,
-                placeholder="Selecione ou digite o código/nome do produto...",
-                key=f"prod_sel_{k_suffix}",
+                placeholder="",
+                key=f"prod_sel_{k_suffix}_{i_suffix}",
             )
             prod_nome_real = (
                 prod_dict[prod_label_sel][0] if prod_label_sel and prod_dict else ""
@@ -965,34 +969,34 @@ else:
                     if und_padrao in ["KG", "UNID", "GRM", "CX"]
                     else 0
                 ),
-                key=f"und_sel_{k_suffix}",
+                key=f"und_sel_{k_suffix}_{i_suffix}",
             )
         with col_p3:
-            # value=None deixa o campo Qtd/Peso em branco
+            # Sem placeholder de exemplo
             qtd_input = st.number_input(
                 "Qtd / Peso",
                 min_value=0.0,
                 value=None,
                 step=0.1,
                 format="%.3f",
-                placeholder="Ex: 10.500",
-                key=f"qtd_{k_suffix}",
+                placeholder="",
+                key=f"qtd_{k_suffix}_{i_suffix}",
             )
         with col_p4:
-            # value=None deixa o campo Valor Unit. em branco
+            # Sem placeholder de exemplo
             val_unit = st.number_input(
                 "Valor Unit. (R$)",
                 min_value=0.0,
                 value=None,
                 step=0.01,
                 format="%.2f",
-                placeholder="Ex: 4.50",
-                key=f"vunit_{k_suffix}",
+                placeholder="",
+                key=f"vunit_{k_suffix}_{i_suffix}",
             )
         with col_p5:
             st.write("")
             st.write("")
-            if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}"):
+            if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
                 if not prod_nome_real:
                     st.warning("Selecione um produto antes de adicionar.")
                 elif qtd_input is None or qtd_input <= 0:
@@ -1007,6 +1011,8 @@ else:
                         "valor_unitario": v_u,
                         "valor_total": v_tot,
                     })
+                    # Incrementa o sufixo do item para zerar os inputs do produto instantaneamente
+                    st.session_state["item_key_suffix"] += 1
                     st.rerun()
 
         if st.session_state["itens_romaneio"]:
@@ -1175,9 +1181,10 @@ else:
                     
                     st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco de dados!")
                     
-                    # Prepara PDF e limpa o formulário
+                    # Limpeza e reinício completo para o próximo romaneio
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
+                    st.session_state["item_key_suffix"] = 0
                     st.rerun()
                     
                 except Exception as e:
