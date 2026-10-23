@@ -42,7 +42,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (COM ADAPTAÇÃO MOBILE & SIDEBAR VISÍVEL)
+# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -80,7 +80,7 @@ else:
 st.markdown(
     f"""
     <style>
-    /* Força a exibição e largura adequada da barra lateral (Sidebar) */
+    /* Força a exibição correta e visível da barra lateral (Menu) */
     section[data-testid="stSidebar"] {{
         display: block !important;
         visibility: visible !important;
@@ -89,11 +89,9 @@ st.markdown(
         min-width: 260px !important;
     }}
     
-    /* Mantém o botão de abrir/fechar a sidebar visível caso ela seja recolhida no mobile */
     button[data-testid="baseButton-header"], button[data-testid="stSidebarCollapseButton"] {{
         display: block !important;
         visibility: visible !important;
-        color: #1B5E20 !important;
     }}
 
     footer, div[data-testid="stToolbar"], div[class*="viewerBadge"] {{
@@ -147,7 +145,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -199,7 +197,6 @@ st.markdown(
         border-color: #FFFFFF !important;
     }}
     
-    /* ADAPTAÇÃO AUTOMÁTICA PARA DISPOSITIVOS MÓVEIS (CELULARES E TABLETS) */
     @media only screen and (max-width: 768px) {{
         .stDataFrame {{
             font-size: 11px !important;
@@ -606,6 +603,7 @@ else:
             label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
         prod_nomes_keys = list(prod_dict.keys())
+
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -680,15 +678,16 @@ else:
                 disabled=True,
                 key=f"conf_{k_suffix}",
             )
+
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
         
-        # Gerenciamento de chaves para resetar Qtd e Valor em branco após Add
         if f"qtd_val_{k_suffix}" not in st.session_state:
             st.session_state[f"qtd_val_{k_suffix}"] = 0.0
         if f"vunit_val_{k_suffix}" not in st.session_state:
             st.session_state[f"vunit_val_{k_suffix}"] = 0.0
+
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
             [3, 1.5, 1.5, 1.5, 1]
         )
@@ -743,10 +742,10 @@ else:
                     st.rerun()
                 else:
                     st.warning("Informe uma quantidade maior que zero.")
+
         if st.session_state["itens_romaneio"]:
             st.markdown("**Itens adicionados:**")
             
-            # Utiliza a tabela padrão com suporte responsivo automático do Streamlit
             dados_tabela = []
             for i, itm in enumerate(st.session_state["itens_romaneio"], 1):
                 dados_tabela.append({
@@ -779,12 +778,14 @@ else:
                 if st.button("🗑️ Remover", key=f"btn_rem_esp_{k_suffix}", type="secondary"):
                     st.session_state["itens_romaneio"].pop(item_para_remover - 1)
                     st.rerun()
+
             total_geral_temp = sum(itm['valor_total'] for itm in st.session_state["itens_romaneio"])
             st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
             
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
+
         st.subheader("3. Anexo de Fotos / Comprovantes")
         fotos_upload = st.file_uploader(
             "Fotos da Nota / Canhoto",
@@ -792,6 +793,7 @@ else:
             accept_multiple_files=True,
             key=f"fotos_{k_suffix}",
         )
+
         st.subheader("4. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
@@ -818,6 +820,7 @@ else:
                 return_image_data=True,
                 key=f"canv_ent_{k_suffix}",
             )
+
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip():
                 st.error("Preencha o número do romaneio e o fornecedor.")
@@ -938,6 +941,7 @@ else:
                     
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
+
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -1008,40 +1012,3 @@ else:
                                 conn_del.commit()
                                 conn_del.close()
                                 st.success(f"Romaneio {row['numero_romaneio']} excluído com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao excluir romaneio: {e}")
-        else:
-            st.info("Nenhum romaneio cadastrado até o momento.")
-    elif menu == "Relatórios & Gráficos" and eh_gestor:
-        st.title("📊 Relatórios e Análise Gráfica")
-        st.info("Módulo restrito de relatórios gerenciais.")
-    elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
-        st.title("🥦 Gerenciamento de Produtos")
-        with st.form("cad_prod"):
-            nome_p = st.text_input("Nome do Produto")
-            und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"])
-            if st.form_submit_button("Cadastrar", type="primary"):
-                if nome_p.strip():
-                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-                    cursor = conn.cursor()
-                    try:
-                        cursor.execute(
-                            "INSERT INTO produtos (nome, unidade_padrao) VALUES (?, ?)",
-                            (nome_p.strip(), und_p),
-                        )
-                        conn.commit()
-                        st.success(f"Produto '{nome_p}' cadastrado com sucesso!")
-                        st.rerun()
-                    except:
-                        st.error("Produto já cadastrado.")
-                    finally:
-                        conn.close()
-    elif menu == "Gerenciar Usuários & Permissões" and eh_gestor:
-        st.title("👥 Gerenciamento de Usuários")
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-        df_u = pd.read_sql_query(
-            "SELECT id, nome, login, perfil FROM usuarios", conn
-        )
-        conn.close()
-        st.dataframe(df_u, use_container_width=True)
