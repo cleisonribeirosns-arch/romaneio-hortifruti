@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA (SEM FAIXA BRANCA)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA (CORREÇÃO TOTAL DA FAIXA BRANCA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -84,10 +84,14 @@ st.markdown(
         visibility: hidden !important;
     }}
 
+    /* Força transparência total nos containers de topo do Streamlit */
+    .block-container, div[data-testid="stMainBlockContainer"], div[data-testid="stVerticalBlock"] {{
+        background: transparent !important;
+    }}
+
     .block-container {{
         padding-top: 0.8rem !important;
         padding-bottom: 1rem !important;
-        background: transparent !important;
     }}
 
     img[data-testid="stImage"] {{
@@ -131,7 +135,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
