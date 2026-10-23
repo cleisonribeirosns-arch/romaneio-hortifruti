@@ -550,6 +550,20 @@ def fazer_login(login, senha):
     conn.close()
     return usr
 
+# Funções auxiliares para formatação de valores no padrão brasileiro (1.234,56)
+def fmt_ptbr(val, decimais=2):
+    try:
+        f = float(val)
+        if decimais == 3:
+            s = f"{f:,.3f}"
+        else:
+            s = f"{f:,.2f}"
+        # Troca o ponto de milhar por vírgula temporária, vírgula decimal por ponto, e depois ajusta
+        s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+        return s
+    except Exception:
+        return "0,00"
+
 # ---------------------------------------------------------
 # 4. GERADOR DE PDF FORMATADO
 # ---------------------------------------------------------
@@ -668,10 +682,10 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         table_content.append([
             str(idx),
             str(item[1]),
-            f"{qtd_val:,.3f}",
+            fmt_ptbr(qtd_val, 3),
             str(item[3]),
-            f"R$ {v_unit:,.2f}",
-            f"R$ {v_tot:,.2f}",
+            f"R$ {fmt_ptbr(v_unit, 2)}",
+            f"R$ {fmt_ptbr(v_tot, 2)}",
         ])
     itens_table = Table(table_content, colWidths=[35, 215, 75, 50, 75, 90])
     itens_table.setStyle(
@@ -689,7 +703,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(Spacer(1, 8))
 
     total_table = Table(
-        [[f"TOTAL GERAL DO ROMANEIO: R$ {total_geral:,.2f}"]], colWidths=[540]
+        [[f"TOTAL GERAL DO ROMANEIO: R$ {fmt_ptbr(total_geral, 2)}"]], colWidths=[540]
     )
     total_table.setStyle(
         TableStyle([
@@ -971,41 +985,50 @@ else:
                 key=f"und_sel_{k_suffix}_{i_suffix}",
             )
         with col_p3:
-            qtd_input = st.number_input(
+            # Usando st.text_input para Qtd/Peso para permitir digitação livre com vírgula ou ponto (ex: 20,2 ou 20.2)
+            qtd_str_input = st.text_input(
                 "Qtd / Peso",
-                min_value=0.0,
-                value=None,
-                step=0.1,
-                format="%.3f",
-                placeholder="",
+                value="",
+                placeholder="Ex: 20,200",
                 key=f"qtd_{k_suffix}_{i_suffix}",
             )
         with col_p4:
-            val_unit = st.number_input(
+            # Usando st.text_input para Valor Unitário para digitação livre e sem travar zeros indesejados
+            val_unit_str_input = st.text_input(
                 "Valor Unit. (R$)",
-                min_value=0.0,
-                value=None,
-                step=0.01,
-                format="%.2f",
-                placeholder="",
+                value="",
+                placeholder="Ex: 6,50",
                 key=f"vunit_{k_suffix}_{i_suffix}",
             )
         with col_p5:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
+                # Tratamento seguro da quantidade convertendo vírgula em ponto
+                try:
+                    qtd_limpa = qtd_str_input.replace(".", "").replace(",", ".") if qtd_str_input else "0"
+                    qtd_input = float(qtd_limpa)
+                except ValueError:
+                    qtd_input = 0.0
+
+                # Tratamento seguro do valor unitário convertendo vírgula em ponto
+                try:
+                    vunit_limpo = val_unit_str_input.replace(".", "").replace(",", ".") if val_unit_str_input else "0"
+                    val_unit_val = float(vunit_limpo)
+                except ValueError:
+                    val_unit_val = 0.0
+
                 if not prod_nome_real:
                     st.warning("Selecione um produto antes de adicionar.")
-                elif qtd_input is None or qtd_input <= 0:
+                elif qtd_input <= 0:
                     st.warning("Informe uma quantidade maior que zero.")
                 else:
-                    v_u = float(val_unit) if val_unit is not None else 0.0
-                    v_tot = float(qtd_input) * v_u
+                    v_tot = qtd_input * val_unit_val
                     st.session_state["itens_romaneio"].append({
                         "produto": prod_nome_real,
-                        "quantidade": float(qtd_input),
+                        "quantidade": qtd_input,
                         "unidade": und_sel,
-                        "valor_unitario": v_u,
+                        "valor_unitario": val_unit_val,
                         "valor_total": v_tot,
                     })
                     st.session_state["item_key_suffix"] += 1
@@ -1019,10 +1042,10 @@ else:
                 dados_tabela.append({
                     "Item": i,
                     "Descrição do Produto": itm["produto"],
-                    "Qtd / Peso": f"{itm['quantidade']:,.3f}",
+                    "Qtd / Peso": fmt_ptbr(itm['quantidade'], 3),
                     "UND": itm["unidade"],
-                    "Vl. Unit": f"R$ {itm['valor_unitario']:,.2f}",
-                    "Total": f"R$ {itm['valor_total']:,.2f}"
+                    "Vl. Unit": f"R$ {fmt_ptbr(itm['valor_unitario'], 2)}",
+                    "Total": f"R$ {fmt_ptbr(itm['valor_total'], 2)}"
                 })
             df_exibicao = pd.DataFrame(dados_tabela)
             
@@ -1048,7 +1071,7 @@ else:
                     st.rerun()
 
             total_geral_temp = sum(itm['valor_total'] for itm in st.session_state["itens_romaneio"])
-            st.markdown(f"### **Total Geral: R$ {total_geral_temp:,.2f}**")
+            st.markdown(f"### **Total Geral: R$ {fmt_ptbr(total_geral_temp, 2)}**")
             
             if st.button("🗑️ Limpar Todos os Itens", type="secondary", key=f"btn_del_itens_{k_suffix}"):
                 st.session_state["itens_romaneio"] = []
@@ -1175,7 +1198,6 @@ else:
                     conn.commit()
                     conn.close()
                     
-                    # Salva os dados na session_state para exibir o botão de download do PDF na tela atual
                     romaneio_dict_atual = {
                         "numero_romaneio": num_romaneio,
                         "data_recebimento": data_rec_str,
@@ -1195,7 +1217,6 @@ else:
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_romaneio
                     
-                    # Limpa os itens atuais para iniciar um novo romaneio
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
@@ -1205,7 +1226,6 @@ else:
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
 
-        # Exibe o botão de download direto caso o romaneio acabe de ser salvo nesta sessão
         if "ultimo_pdf_bytes" in st.session_state and "ultimo_num_romaneio" in st.session_state:
             st.markdown("---")
             st.success(f"📄 Romaneio **{st.session_state['ultimo_num_romaneio']}** pronto para download!")
@@ -1249,11 +1269,16 @@ else:
                     st.markdown("**Itens Conferidos:**")
                     
                     df_itens_ex = df_itens.copy()
+                    df_itens_ex['Qtd / Peso'] = df_itens_ex['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
+                    df_itens_ex['Vl. Unit'] = df_itens_ex['valor_unitario'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                    df_itens_ex['Total'] = df_itens_ex['valor_total'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                    df_itens_ex = df_itens_ex[['produto', 'Qtd / Peso', 'unidade', 'Vl. Unit', 'Total']]
                     df_itens_ex.index = range(1, len(df_itens_ex) + 1)
+                    
                     st.dataframe(df_itens_ex, use_container_width=True)
                     
                     total_rom = df_itens["valor_total"].sum()
-                    st.markdown(f"**Total do Romaneio: R$ {total_rom:,.2f}**")
+                    st.markdown(f"**Total do Romaneio: R$ {fmt_ptbr(total_rom, 2)}**")
                     
                     romaneio_dict = row.to_dict()
                     itens_tuple_list = [
@@ -1359,9 +1384,9 @@ else:
                     if not df_filtrado.empty else "N/A"
                 )
 
-                kpi1.metric("Valor Total Recebido", f"R$ {total_val:,.2f}")
+                kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(total_val, 2)}")
                 kpi2.metric("Total de Romaneios", f"{qtd_roms} romaneios")
-                kpi3.metric("Qtd / Peso Total", f"{qtd_peso_total:,.2f}")
+                kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(qtd_peso_total, 3)}")
                 kpi4.metric("Principal Fornecedor", str(top_fornecedor))
 
                 st.markdown("---")
@@ -1397,7 +1422,12 @@ else:
                 df_export = df_filtrado[[
                     "numero_romaneio", "loja", "data_recebimento", "fornecedor", 
                     "produto", "quantidade", "unidade", "valor_unitario", "valor_total", "conferente"
-                ]].rename(columns={
+                ]].copy()
+                df_export['quantidade'] = df_export['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
+                df_export['valor_unitario'] = df_export['valor_unitario'].apply(lambda x: fmt_ptbr(x, 2))
+                df_export['valor_total'] = df_export['valor_total'].apply(lambda x: fmt_ptbr(x, 2))
+                
+                df_export = df_export.rename(columns={
                     "numero_romaneio": "Romaneio",
                     "loja": "Loja",
                     "data_recebimento": "Data Rec.",
