@@ -59,7 +59,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS (TELA DE LOGIN ORIGINAL + ADAPTAÇÃO DO PAINEL)
+# 2. ESTILOS CSS CORRIGIDOS (MANTÉM LOGIN E AJUSTA MODO CLARO)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -76,7 +76,7 @@ for nome_bg in [
 is_escuro = "Escuro" in st.session_state["tema_app"]
 
 if st.session_state["usuario_logado"] is None:
-    # Fundo fixo original da tela de login
+    # --- TELA DE LOGIN ORIGINAL (REGRAS EXCLUSIVAS) ---
     if bg_login_path:
         with open(bg_login_path, "rb") as img_f:
             b64_img = base64.b64encode(img_f.read()).decode()
@@ -96,8 +96,27 @@ if st.session_state["usuario_logado"] is None:
                 background-attachment: fixed !important;
             }
         """
+    css_painel_tema = """
+        .stApp h3 {
+            color: #FFFFFF !important;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
+            font-weight: 800 !important;
+        }
+        .stApp label {
+            color: #FFFFFF !important;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
+            font-size: 16px !important;
+            font-weight: bold !important;
+        }
+        div[data-baseweb="input"] input {
+            color: #000000 !important;
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            border-radius: 6px !important;
+            font-size: 15px !important;
+        }
+    """
 else:
-    # Fundo adaptativo para o painel interno conforme o tema escolhido
+    # --- PAINEL INTERNO (ADAPTAÇÃO CLARO / ESCURO) ---
     if is_escuro:
         css_fundo = """
             .stApp {
@@ -105,12 +124,11 @@ else:
                 background-attachment: fixed !important;
             }
         """
-        cor_texto = "#FFFFFF"
-        cor_subtitulo = "#F0F0F0"
-        sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
-        bg_input = "rgba(255, 255, 255, 0.95)"
-        cor_input_texto = "#000000"
-        bg_radio = "rgba(0, 0, 0, 0.4)"
+        cor_texto_principal = "#FFFFFF"
+        cor_texto_secundario = "#F0F0F0"
+        sombra = "2px 2px 4px rgba(0, 0, 0, 0.9)"
+        bg_input_painel = "rgba(255, 255, 255, 0.95)"
+        cor_input_texto_painel = "#000000"
         plotly_font_color = "#FFFFFF"
         plotly_grid_color = "rgba(255,255,255,0.2)"
         kpi_bg = "rgba(0, 0, 0, 0.4)"
@@ -121,16 +139,57 @@ else:
                 background: #F8F9FA !important;
             }
         """
-        cor_texto = "#1B5E20"
-        cor_subtitulo = "#111111"
-        sombra_texto = "none"
-        bg_input = "#FFFFFF"
-        cor_input_texto = "#111111"
-        bg_radio = "#FFFFFF"
+        cor_texto_principal = "#1B5E20"
+        cor_texto_secundario = "#111111"
+        sombra = "none"
+        bg_input_painel = "#FFFFFF"
+        cor_input_texto_painel = "#111111"
         plotly_font_color = "#111111"
         plotly_grid_color = "rgba(0,0,0,0.15)"
         kpi_bg = "#FFFFFF"
         kpi_border = "2px solid #1B5E20"
+
+    css_painel_tema = f"""
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp h5 {{
+            color: {cor_texto_principal} !important;
+            text-shadow: {sombra} !important;
+            font-weight: 800 !important;
+        }}
+        .stApp p, .stApp span, .stApp label, div[data-testid="stMarkdownContainer"] p {{
+            color: {cor_texto_secundario} !important;
+            font-weight: bold !important;
+        }}
+        div[data-testid="stMetric"] {{
+            background-color: {kpi_bg} !important;
+            border: {kpi_border} !important;
+            padding: 14px !important;
+            border-radius: 10px !important;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.08) !important;
+        }}
+        div[data-testid="stMetricLabel"] p {{
+            color: {cor_texto_principal} !important;
+            font-size: 1.0rem !important;
+            font-weight: 800 !important;
+        }}
+        div[data-testid="stMetricValue"] div {{
+            color: {cor_texto_secundario} !important;
+            font-size: 1.7rem !important;
+            font-weight: 900 !important;
+        }}
+        div[data-baseweb="input"] input, 
+        div[data-baseweb="select"] div,
+        div[data-testid="stDateInput"] input {{
+            color: {cor_input_texto_painel} !important;
+            background-color: {bg_input_painel} !important;
+            border-radius: 6px !important;
+            font-size: 15px !important;
+            font-weight: bold !important;
+        }}
+        div[data-baseweb="base-input"] {{
+            background-color: {bg_input_painel} !important;
+            border-radius: 6px !important;
+        }}
+    """
 
 st.markdown(
     f"""
@@ -190,26 +249,6 @@ st.markdown(
         font-size: 3.0rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
-    .stApp h3 {{
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-        font-weight: 800 !important;
-        font-size: 1.4rem !important;
-        margin-top: 4px !important;
-        margin-bottom: 10px !important;
-    }}
-    .stApp label {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
-    }}
-    div[data-baseweb="input"] input {{
-        color: #000000 !important;
-        background-color: rgba(255, 255, 255, 0.95) !important;
-        border-radius: 6px !important;
-        font-size: 15px !important;
-    }}
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -224,6 +263,7 @@ st.markdown(
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
+    {css_painel_tema}
     {css_fundo}
     </style>
 """,
