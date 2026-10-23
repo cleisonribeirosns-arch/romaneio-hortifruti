@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA
+# 2. ESTILOS CSS E VISUAL DO SISTEMA (FONTES DESTACADAS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -61,7 +61,7 @@ if bg_login_path:
         b64_img = base64.b64encode(img_f.read()).decode()
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(20,60,20,0.90), rgba(120,20,20,0.90)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -99,6 +99,19 @@ st.markdown(
         display: block !important;
     }}
 
+    /* TÍTULOS E TEXTOS GERAIS COM MÁXIMA VISIBILIDADE */
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4 {{
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.95), -1px -1px 2px rgba(0, 0, 0, 0.9) !important;
+        font-weight: 900 !important;
+    }}
+
+    .stApp p, .stApp span, .stApp label, .stMarkdown {{
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.95) !important;
+        font-weight: 700 !important;
+    }}
+
     .titulo-logo {{
         font-size: 2.4rem !important;
         font-weight: 900 !important;
@@ -108,54 +121,31 @@ st.markdown(
     }}
 
     .palavra-sup-mercado {{
-        color: #2E7D32 !important;
+        color: #4CAF50 !important;
         font-size: 1.25rem !important;
-        font-weight: 800 !important;
+        font-weight: 900 !important;
         font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
 
     .palavra-super {{
-        color: #2E7D32 !important;
+        color: #4CAF50 !important;
         font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
 
     .palavra-nova {{
-        color: #FF3D00 !important;
+        color: #FF5722 !important;
         font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
-            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
-            3px 3px 5px rgba(0, 0, 0, 0.6) !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
 
     .palavra-cidade {{
-        color: #111111 !important;
+        color: #FFFFFF !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
         font-size: 3.0rem !important;
-        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
-    }}
-
-    .stApp h3 {{
-        color: #FFFFFF !important;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
-        font-weight: 800 !important;
-        font-size: 1.4rem !important;
-        margin-top: 4px !important;
-        margin-bottom: 10px !important;
-    }}
-
-    .stApp label {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
-        font-size: 16px !important;
-        font-weight: bold !important;
+        text-shadow: 2px 3px 5px rgba(0, 0, 0, 0.95) !important;
     }}
 
     div[data-baseweb="input"] input {{
@@ -163,6 +153,7 @@ st.markdown(
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
+        font-weight: bold !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -173,7 +164,7 @@ st.markdown(
         font-size: 16px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.6) !important;
     }}
 
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
@@ -549,7 +540,6 @@ def fazer_login(login, senha):
     conn.close()
     return usr
 
-# Funções auxiliares para formatação de valores no padrão brasileiro (1.234,56)
 def fmt_ptbr(val, decimais=2):
     try:
         f = float(val)
