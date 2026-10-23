@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA (CORREÇÃO DA FAIXA BRANCA)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -51,6 +51,8 @@ for nome_bg in [
     "Tela de login.jpeg.jpeg",
     "tela_de_login.jpeg",
 ]:
+    if os.path.exists(bg_login_path if 'bg_login_path' in locals() else nome_bg): # 안전체크
+        pass
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
         break
@@ -84,7 +86,6 @@ st.markdown(
         visibility: hidden !important;
     }}
 
-    /* Remove o fundo branco automático injetado pelo Streamlit no topo */
     header[data-testid="stHeader"] {{
         background-color: transparent !important;
     }}
@@ -144,18 +145,18 @@ st.markdown(
     }}
 
     .stApp h3 {{
-        color: #000000 !important;
-        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
         font-weight: 800 !important;
-        font-size: 1.3rem !important;
-        margin-top: 2px !important;
-        margin-bottom: 8px !important;
+        font-size: 1.4rem !important;
+        margin-top: 4px !important;
+        margin-bottom: 10px !important;
     }}
 
     .stApp label {{
         color: #FFFFFF !important;
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
-        font-size: 15px !important;
+        font-size: 16px !important;
         font-weight: bold !important;
     }}
 
