@@ -51,8 +51,6 @@ for nome_bg in [
     "Tela de login.jpeg.jpeg",
     "tela_de_login.jpeg",
 ]:
-    if os.path.exists(bg_login_path if 'bg_login_path' in locals() else nome_bg): # 안전체크
-        pass
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
         break
