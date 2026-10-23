@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS (LOGIN TOTALMENTE PRESERVADO)
+# 2. ESTILOS CSS (TELA DE LOGIN ORIGINAL RESTAURADA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -667,7 +667,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (INTOCÁVEL E ORIGINAL)
+# 5. TELA DE LOGIN (100% ORIGINAL CONFORME A SUA IMAGEM DE REFERÊNCIA)
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -675,34 +675,25 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
+
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
     with col_central:
         if logo_display:
-            col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
-            with col_logo:
-                st.image(logo_display, use_container_width=True)
-            with col_titulo:
-                st.markdown(
-                    """<div class='titulo-logo'>
-                    <span class='palavra-sup-mercado'>Supermercado</span><br>
-                    <span class='palavra-super'>SUPER</span> 
-                    <span class='palavra-nova'>NOVA</span><br>
-                    <span class='palavra-cidade'>Cidade</span>
-                    </div>""",
-                    unsafe_allow_html=True
-                )
-                st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-        else:
-            st.markdown(
-                """<div class='titulo-logo'>
-                <span class='palavra-sup-mercado'>Supermercado</span><br>
-                <span class='palavra-super'>SUPER</span> 
-                <span class='palavra-nova'>NOVA</span><br>
-                <span class='palavra-cidade'>Cidade</span>
-                </div>""",
-                unsafe_allow_html=True
-            )
-            st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+            st.image(logo_display, width=220)
+        
+        st.markdown(
+            """
+            <div style="margin-top: 10px; margin-bottom: 20px;">
+                <span style="color: #1B5E20; font-size: 1.3rem; font-weight: 700;">Supermercado</span><br>
+                <span style="color: #1B5E20; font-size: 2.8rem; font-weight: 900; letter-spacing: 1px;">SUPER</span> 
+                <span style="color: #C62828; font-size: 2.8rem; font-weight: 900; letter-spacing: 1px;">NOVA</span><br>
+                <span style="color: #FFFFFF; font-size: 2.2rem; font-weight: 800; font-style: italic; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Cidade</span>
+            </div>
+            <h3 style="color: #FFFFFF; font-size: 1.5rem; font-weight: 700; margin-bottom: 25px; text-shadow: 2px 2px 4px rgba(0,0,0,0.8);">Sistema de Recebimento Hortifrúti</h3>
+            """,
+            unsafe_allow_html=True
+        )
+
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login")
             senha_input = st.text_input("Senha", type="password")
@@ -722,16 +713,16 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     # ---------------------------------------------------------
-    # ESTILOS DO PAINEL INTERNO (HIERARQUIA COM DESTAQUES E TAMANHO 12PX NOS TEXTOS)
+    # 6. PAINEL INTERNO (ÁREA DO CONFERENTE E MENU MELHORADOS)
     # ---------------------------------------------------------
     st.markdown(
         """
         <style>
         .stApp p, .stApp span, .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p, div[data-baseweb="radio"] label span {
             color: #FFFFFF !important;
-            font-size: 12px !important;
-            font-weight: 700 !important;
-            text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.95), -1px -1px 2px rgba(0, 0, 0, 0.9) !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         }
 
         .stApp h1 {
@@ -756,7 +747,7 @@ else:
         }
 
         label[data-testid="stWidgetLabel"] p {
-            font-size: 12px !important;
+            font-size: 13px !important;
             font-weight: 800 !important;
             color: #FFFFFF !important;
             text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.95) !important;
@@ -766,7 +757,7 @@ else:
             color: #000000 !important;
             background-color: rgba(255, 255, 255, 0.95) !important;
             border-radius: 6px !important;
-            font-size: 12px !important;
+            font-size: 13px !important;
             font-weight: bold !important;
         }
 
@@ -775,7 +766,7 @@ else:
             color: #FFFFFF !important;
             border: 2px solid #FFFFFF !important;
             font-weight: bold !important;
-            font-size: 12px !important;
+            font-size: 13px !important;
             border-radius: 8px !important;
             width: 100% !important;
             box-shadow: 0px 4px 8px rgba(0,0,0,0.6) !important;
@@ -808,9 +799,6 @@ else:
         or "adm" in perfil_db
     )
     
-    # ---------------------------------------------------------
-    # 6. MENU SUPERIOR FIXO (COMPUTADORES E CELULARES)
-    # ---------------------------------------------------------
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3, 1])
     with col_info_usr:
@@ -832,9 +820,6 @@ else:
     menu = st.radio("Menu de Navegação Principal", opcoes_menu, horizontal=True, label_visibility="collapsed")
     st.markdown("---")
     
-    # ---------------------------------------------------------
-    # 7. MÓDULOS DO SISTEMA
-    # ---------------------------------------------------------
     if menu == "Romaneio de Recebimento - Hortifrúti":
         st.title("Romaneio de Recebimento - Hortifrúti")
         if "form_key_suffix" not in st.session_state:
@@ -1301,9 +1286,6 @@ else:
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
-    # ---------------------------------------------------------
-    # ETAPA 3: RELATÓRIOS & GRÁFICOS DE ANÁLISE
-    # ---------------------------------------------------------
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
         
