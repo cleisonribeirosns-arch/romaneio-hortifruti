@@ -38,11 +38,10 @@ st.set_page_config(
     page_title="Supermercado Supernova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
     layout="wide",
-    initial_sidebar_state="expanded",
 )
 
 # ---------------------------------------------------------
-# 2. DEFINIÇÃO DA IMAGEM DE FUNDO E ESTILOS CSS (MENU FIXO E VISÍVEL)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -80,27 +79,13 @@ else:
 st.markdown(
     f"""
     <style>
-    /* Força a exibição e largura ideal da barra lateral de menu */
-    section[data-testid="stSidebar"] {{
-        display: block !important;
-        visibility: visible !important;
-        background-color: #F4F6F4 !important;
-        border-right: 3px solid #1B5E20 !important;
-        min-width: 260px !important;
-    }}
-    
-    button[data-testid="baseButton-header"], button[data-testid="stSidebarCollapseButton"] {{
-        display: block !important;
-        visibility: visible !important;
-    }}
-
     footer, div[data-testid="stToolbar"], div[class*="viewerBadge"] {{
         display: none !important;
         visibility: hidden !important;
     }}
 
     .block-container {{
-        padding-top: 1.0rem !important;
+        padding-top: 0.8rem !important;
         padding-bottom: 1rem !important;
     }}
 
@@ -108,7 +93,7 @@ st.markdown(
         background: transparent !important;
         mix-blend-mode: multiply !important;
         filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 95px !important;
+        max-width: 85px !important;
         width: 100% !important;
         height: auto !important;
         margin: 0 auto !important;
@@ -116,7 +101,7 @@ st.markdown(
     }}
 
     .titulo-logo {{
-        font-size: 2.6rem !important;
+        font-size: 2.4rem !important;
         font-weight: 900 !important;
         line-height: 1.1 !important;
         margin-bottom: 0px !important;
@@ -125,7 +110,7 @@ st.markdown(
 
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
-        font-size: 1.35rem !important;
+        font-size: 1.25rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
         text-shadow: 
@@ -145,7 +130,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -154,7 +139,7 @@ st.markdown(
         color: #111111 !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 3.2rem !important;
+        font-size: 3.0rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
 
@@ -213,7 +198,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E INICIALIZAÇÃO (COM TRATAMENTO DE CÓDIGOS VAZIOS)
+# 3. BANCO DE DADOS E CATÁLOGO REVISADO (SEM OVOS, COM CÓDIGOS REAIS DO CISS)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -272,6 +257,7 @@ def init_db():
             " ('Administrador', 'admin', '1234', 'Gestor')"
         )
     
+    # Catálogo extraído diretamente das páginas 1 a 8 do PDF do CISS (sem ovos)
     produtos_iniciais = [
         ("58063", "82405", "ABACATE AVOCADO KG", "KG"),
         ("5884", "28920", "ABACATE FORTUNA KG", "KG"),
@@ -532,7 +518,6 @@ def init_db():
     ]
     
     for cod_b, cod_p, nome_prod, und_p in produtos_iniciais:
-        # Se o código do produto for vazio ou N/A, tratamos para exibir corretamente no selectbox
         cb = cod_b if cod_b else "S/N"
         cp = cod_p if cod_p else "S/N"
         try:
@@ -815,46 +800,39 @@ if st.session_state["usuario_logado"] is None:
                     st.error("Usuário ou senha incorretos.")
 else:
     user_info = st.session_state["usuario_logado"]
-    st.sidebar.markdown(f"**Usuário:** {user_info['nome']}")
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (
         user_info["login"].lower() == "admin"
         or "gestor" in perfil_db
         or "adm" in perfil_db
     )
-    if is_admin:
-        st.sidebar.success("🔒 Perfil: Gestor / Administrador")
-        eh_gestor = True
-    else:
-        st.sidebar.info("👤 Perfil: Conferente")
-        eh_gestor = False
-    if eh_gestor:
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-        total_romaneios_db = pd.read_sql_query(
-            "SELECT COUNT(*) as qtd FROM romaneios", conn
-        ).iloc[0]["qtd"]
-        conn.close()
-        st.sidebar.divider()
-        st.sidebar.markdown(
-            f"🔔 **Painel de Alertas:**<br>📦 Romaneios: **{total_romaneios_db}**",
-            unsafe_allow_html=True,
-        )
-    if st.sidebar.button("Sair / Logout", type="secondary"):
-        st.session_state["usuario_logado"] = None
-        st.rerun()
-    st.sidebar.divider()
     
+    # ---------------------------------------------------------
+    # 6. MENU SUPERIOR FIXO (VISÍVEL EM COMPUTADORES E CELULARES)
+    # ---------------------------------------------------------
+    st.markdown("---")
+    col_info_usr, col_logout = st.columns([3, 1])
+    with col_info_usr:
+        tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
+        st.markdown(f"**Usuário Logado:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+    with col_logout:
+        if st.button("🚪 Sair", type="secondary"):
+            st.session_state["usuario_logado"] = None
+            st.rerun()
+
     opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios"]
-    if eh_gestor:
+    if is_admin:
         opcoes_menu.extend([
             "Relatórios & Gráficos",
             "Gerenciar Cadastros (Produtos)",
             "Gerenciar Usuários & Permissões",
         ])
-    menu = st.sidebar.radio("Navegação", opcoes_menu)
+    
+    menu = st.radio("Menu de Navegação Principal", opcoes_menu, horizontal=True, label_visibility="collapsed")
+    st.markdown("---")
     
     # ---------------------------------------------------------
-    # 6. MÓDULOS DO SISTEMA
+    # 7. MÓDULOS DO SISTEMA
     # ---------------------------------------------------------
     if menu == "Romaneio de Recebimento - Hortifrúti":
         st.title("Romaneio de Recebimento - Hortifrúti")
@@ -872,7 +850,6 @@ else:
         conn.close()
         prod_dict = {}
         for p in produtos_lista:
-            # Exibe de forma limpa os códigos disponíveis no CISS
             c_prod = p[2] if p[2] and p[2] != "S/N" else "S/N"
             c_bar = p[3] if p[3] and p[3] != "S/N" else "S/N"
             label = f"{p[0]} | Cód: {c_prod} | Barras: {c_bar}"
@@ -1211,7 +1188,7 @@ else:
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     
-                    if st.button("➕ Iniciar Novo Romaneio Agora", key=f"novo_rom_{k_suffix}اعات"):
+                    if st.button("➕ Iniciar Novo Romaneio Agora", key=f"novo_rom_{k_suffix}"):
                         st.rerun()
                     
                 except Exception as e:
@@ -1293,11 +1270,11 @@ else:
         else:
             st.info("Nenhum romaneio cadastrado até o momento.")
 
-    elif menu == "Relatórios & Gráficos" and eh_gestor:
+    elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gráfica")
         st.info("Módulo restrito de relatórios gerenciais.")
 
-    elif menu == "Gerenciar Cadastros (Produtos)" and eh_gestor:
+    elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("🥦 Gerenciamento de Produtos")
         with st.form("cad_prod"):
             nome_p = st.text_input("Nome do Produto")
@@ -1319,7 +1296,7 @@ else:
                     finally:
                         conn.close()
 
-    elif menu == "Gerenciar Usuários & Permissões" and eh_gestor:
+    elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_u = pd.read_sql_query(
