@@ -134,7 +134,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -1429,7 +1429,6 @@ else:
         if produtos_cadastrados:
             df_produtos = pd.DataFrame(produtos_cadastrados, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão"])
             
-            # Botão para baixar relatório em PDF
             pdf_produtos_buf = gerar_pdf_produtos(produtos_cadastrados)
             st.download_button(
                 label="📥 Baixar Relatório de Produtos em PDF",
@@ -1453,7 +1452,7 @@ else:
             with col_ex2:
                 st.write("")
                 st.write("")
-                if st.button("🗑️ Excluir Selecionado", type="secondary"):
+                if st.button("🗑️ Excluir Selecionado", type="secondary", key="btn_del_prod_sel"):
                     try:
                         conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                         cursor_del = conn_del.cursor()
@@ -1468,10 +1467,80 @@ else:
             st.info("Nenhum produto cadastrado no momento.")
             
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
-        st.title("👥 Gerenciamento de Usuários")
+        st.title("👥 Gerenciamento de Usuários e Permissões")
+        
+        with st.form("cad_usuario_form", clear_on_submit=True):
+            st.subheader("Cadastrar Novo Usuário / Conferente")
+            col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
+            with col_u1:
+                novo_nome = st.text_input("Nome Completo do Usuário")
+            with col_u2:
+                novo_login = st.text_input("Login de Acesso")
+            with col_u3:
+                nova_senha = st.text_input("Senha", type="password")
+            with col_u4:
+                novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"])
+                
+            btn_cad_usuario = st.form_submit_button("➕ Cadastrar Usuário", type="primary")
+            if btn_cad_usuario:
+                if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
+                    st.error("Preencha todos os campos obrigatórios para cadastrar o usuário.")
+                else:
+                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute(
+                            "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)",
+                            (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil)
+                        )
+                        conn.commit()
+                        st.success(f"Usuário '{novo_nome.strip()}' cadastrado com sucesso!")
+                        st.rerun()
+                    except sqlite3.IntegrityError:
+                        st.error("Erro: Este Login já está em uso por outro usuário.")
+                    except Exception as e:
+                        st.error(f"Erro ao cadastrar usuário: {e}")
+                    finally:
+                        conn.close()
+                        
+        st.markdown("---")
+        st.subheader("📋 Usuários Cadastrados no Sistema")
+        
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-        df_u = pd.read_sql_query(
-            "SELECT id, nome, login, perfil FROM usuarios", conn
-        )
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, nome, login, perfil FROM usuarios ORDER BY id")
+        usuarios_cadastrados = cursor.fetchall()
         conn.close()
-        st.dataframe(df_u, use_container_width=True)
+        
+        if usuarios_cadastrados:
+            df_usuarios = pd.DataFrame(usuarios_cadastrados, columns=["ID", "Nome Completo", "Login", "Perfil"])
+            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Perfil"]], use_container_width=True, hide_index=True)
+            
+            st.markdown("### 🗑️ Excluir Usuário")
+            col_ux1, col_ux2 = st.columns([3, 1])
+            with col_ux1:
+                usr_para_excluir = st.selectbox(
+                    "Selecione o usuário para remover o acesso",
+                    options=usuarios_cadastrados,
+                    format_func=lambda x: f"{x[1]} (Login: {x[2]} - Perfil: {x[3]})",
+                    key="sel_usr_del"
+                )
+            with col_ux2:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ Remover Usuário", type="secondary", key="btn_del_usr_sel"):
+                    if str(usr_para_excluir[2]) == "908":
+                        st.error("Atenção: Não é permitido excluir o usuário Administrador principal (908)!")
+                    else:
+                        try:
+                            conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[0],))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"Usuário '{usr_para_excluir[1]}' removido com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao remover usuário: {e}")
+        else:
+            st.info("Nenhum usuário cadastrado.")
