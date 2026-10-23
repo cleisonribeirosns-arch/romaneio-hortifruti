@@ -41,7 +41,7 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS E VISUAL DO SISTEMA
+# 2. ESTILOS CSS E VISUAL DO SISTEMA (ALTA VISIBILIDADE)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -61,7 +61,7 @@ if bg_login_path:
         b64_img = base64.b64encode(img_f.read()).decode()
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(10,35,12,0.90), rgba(110,20,20,0.90)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -89,6 +89,34 @@ st.markdown(
         padding-bottom: 1rem !important;
     }}
 
+    /* Ajuste geral de textos e labels para máxima visibilidade */
+    .stApp p, .stApp span, .stApp div, .stMarkdown p {{
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.95), 0px 0px 5px rgba(0, 0, 0, 0.8) !important;
+    }}
+
+    /* Títulos principais da página */
+    .stApp h1, .stApp h2, .stApp h3 {{
+        color: #FFFFFF !important;
+        text-shadow: -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 3px 3px 6px rgba(0,0,0,0.9) !important;
+        font-weight: 900 !important;
+    }}
+
+    .stApp label {{
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.95) !important;
+        font-size: 15px !important;
+        font-weight: bold !important;
+    }}
+
+    /* Textos do menu superior e rádio buttons */
+    div[data-testid="stRadio"] label p {{
+        color: #FFFFFF !important;
+        font-size: 16px !important;
+        font-weight: 800 !important;
+        text-shadow: 1px 1px 3px rgba(0,0,0,0.9) !important;
+    }}
+
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
@@ -109,54 +137,37 @@ st.markdown(
     }}
 
     .palavra-sup-mercado {{
-        color: #2E7D32 !important;
+        color: #4CAF50 !important;
         font-size: 1.25rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+            -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000,
+            2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
 
     .palavra-super {{
-        color: #2E7D32 !important;
+        color: #4CAF50 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+            -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000,
+            2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
 
     .palavra-nova {{
-        color: #FF3D00 !important;
+        color: #FF5722 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
-            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
-            3px 3px 5px rgba(0, 0, 0, 0.6) !important;
+            -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000,
+            2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
 
     .palavra-cidade {{
-        color: #111111 !important;
+        color: #FFFFFF !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
         font-size: 3.0rem !important;
-        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
-    }}
-
-    .stApp h3 {{
-        color: #000000 !important;
-        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
-        font-weight: 800 !important;
-        font-size: 1.3rem !important;
-        margin-top: 2px !important;
-        margin-bottom: 8px !important;
-    }}
-
-    .stApp label {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
-        font-size: 15px !important;
-        font-weight: bold !important;
+        text-shadow: 2px 3px 5px rgba(0, 0, 0, 0.9), -1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000 !important;
     }}
 
     div[data-baseweb="input"] input {{
@@ -164,6 +175,7 @@ st.markdown(
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
+        font-weight: bold !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -579,7 +591,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story = []
     styles = getSampleStyleSheet()
     
-    # Estilos de alinhamento para o PDF (Produtos e Valores à esquerda, o restante centralizado)
     style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
     style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
     
@@ -676,7 +687,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(info_table)
     story.append(Spacer(1, 15))
 
-    # Tabela de itens: Descrição do produto, Vl. Unit e Total alinhados à esquerda; o restante centralizado
     table_content = [
         [
             Paragraph("Item", style_header_center),
