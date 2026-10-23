@@ -45,12 +45,6 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
-# CONTROLE DE TEMA (CLARO / ESCURO)
-# ---------------------------------------------------------
-if "tema_app" not in st.session_state:
-    st.session_state["tema_app"] = "Escuro"
-
-# ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
 # ---------------------------------------------------------
 @st.dialog("📷 Visualização da Foto Anexada", width="large")
@@ -61,7 +55,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DINÂMICOS (MODO CLARO / ESCURO)
+# 2. ESTILOS CSS E VISUAL DO SISTEMA
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -76,43 +70,25 @@ for nome_bg in [
         break
 
 css_fundo = ""
-if st.session_state["tema_app"] == "Escuro":
-    if bg_login_path:
-        with open(bg_login_path, "rb") as img_f:
-            b64_img = base64.b64encode(img_f.read()).decode()
-        css_fundo = f"""
-            .stApp {{
-                background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
-                background-size: cover !important;
-                background-position: center !important;
-                background-repeat: no-repeat !important;
-                background-attachment: fixed !important;
-            }}
-        """
-    else:
-        css_fundo = """
-            .stApp {
-                background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
-                background-attachment: fixed !important;
-            }
-        """
-    cor_texto = "#FFFFFF"
-    sombra_texto = "2px 2px 4px rgba(0, 0, 0, 0.9)"
-    bg_input = "rgba(255, 255, 255, 0.95)"
-    cor_input_texto = "#000000"
-    bg_radio = "rgba(0, 0, 0, 0.4)"
+if bg_login_path:
+    with open(bg_login_path, "rb") as img_f:
+        b64_img = base64.b64encode(img_f.read()).decode()
+    css_fundo = f"""
+        .stApp {{
+            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+        }}
+    """
 else:
     css_fundo = """
         .stApp {
-            background: linear-gradient(135deg, #E8F5E9 0%, #F1F8E9 50%, #FFEBEE 100%) !important;
+            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
             background-attachment: fixed !important;
         }
     """
-    cor_texto = "#1B5E20"
-    sombra_texto = "1px 1px 2px rgba(255, 255, 255, 0.8)"
-    bg_input = "rgba(255, 255, 255, 0.98)"
-    cor_input_texto = "#111111"
-    bg_radio = "rgba(255, 255, 255, 0.7)"
 
 st.markdown(
     f"""
@@ -181,8 +157,8 @@ st.markdown(
     }}
 
     .stApp h3 {{
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
+        color: #FFFFFF !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
         font-weight: 800 !important;
         font-size: 1.4rem !important;
         margin-top: 4px !important;
@@ -190,38 +166,17 @@ st.markdown(
     }}
 
     .stApp label {{
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         font-size: 16px !important;
         font-weight: bold !important;
     }}
 
     div[data-baseweb="input"] input {{
-        color: {cor_input_texto} !important;
-        background-color: {bg_input} !important;
+        color: #000000 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
-    }}
-
-    div[data-testid="stRadio"] label p {{
-        font-size: 1.1rem !important;
-        font-weight: 800 !important;
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
-    }}
-
-    div[data-testid="stRadio"] div[role="radiogroup"] {{
-        background-color: {bg_radio} !important;
-        padding: 8px 12px !important;
-        border-radius: 8px !important;
-        border: 1px solid rgba(255, 255, 255, 0.2) !important;
-    }}
-
-    div[data-testid="stExpander"] summary span p {{
-        font-size: 1.15rem !important;
-        font-weight: 800 !important;
-        color: {cor_texto} !important;
-        text-shadow: {sombra_texto} !important;
     }}
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
@@ -239,7 +194,6 @@ st.markdown(
         background-color: #2E7D32 !important;
         border-color: #FFFFFF !important;
     }}
-    
     {css_fundo}
     </style>
 """,
@@ -247,7 +201,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E CATÁLOGO
+# 3. BANCO DE DADOS E CATÁLOGO (PRODUTOS OFICIAIS CISS)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -899,21 +853,10 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_tema, col_logout = st.columns([2.2, 1.2, 0.8])
+    col_info_usr, col_logout = st.columns([3, 1])
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
-        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
-    with col_tema:
-        novo_tema = st.selectbox(
-            "Tema",
-            ["Escuro", "Claro"],
-            index=0 if st.session_state["tema_app"] == "Escuro" else 1,
-            key="select_tema_app",
-            label_visibility="collapsed"
-        )
-        if novo_tema != st.session_state["tema_app"]:
-            st.session_state["tema_app"] = novo_tema
-            st.rerun()
+        st.markdown(f"**Usuário Logado:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_logout:
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
@@ -1507,6 +1450,7 @@ else:
                 st.markdown("---")
                 st.subheader("📊 Visualizações Gráficas Profissionais (BI)")
                 
+                # GRÁFICOS PLOTLY MODERNOS E PROFISSIONAIS
                 col_g1, col_g2 = st.columns(2)
                 
                 with col_g1:
@@ -1621,10 +1565,9 @@ else:
                 
                 st.dataframe(df_export, use_container_width=True, hide_index=True)
                 
-                # CORREÇÃO AQUI: Alterado separador do CSV para ponto e vírgula (;) para abrir perfeitamente em colunas no Excel brasileiro
-                csv_buffer = df_export.to_csv(index=False, sep=';').encode('utf-8-sig')
+                csv_buffer = df_export.to_csv(index=False).encode('utf-8-sig')
                 st.download_button(
-                    label="📥 Baixar Relatório Consolidado (Excel / CSV)",
+                    label="📥 Baixar Relatório Consolidado (CSV / Excel)",
                     data=csv_buffer,
                     file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
@@ -1632,7 +1575,7 @@ else:
                     key="btn_download_csv_relatorio"
                 )
 
-    elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
+    elif menu == "Gerenciar Cadastros (Produtos)" && is_admin:
         st.title("🥦 Gerenciamento de Produtos")
         with st.form("cad_prod"):
             nome_p = st.text_input("Nome do Produto")
@@ -1654,7 +1597,7 @@ else:
                     finally:
                         conn.close()
 
-    elif menu == "Gerenciar Usuários & Permissões" and is_admin:
+    elif menu == "Gerenciar Usuários & Permissões" && is_admin:
         st.title("👥 Gerenciamento de Usuários")
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         df_u = pd.read_sql_query(
