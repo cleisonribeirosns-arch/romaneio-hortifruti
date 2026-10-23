@@ -134,7 +134,7 @@ st.markdown(
         color: #FF3D00 !important;
         font-style: italic !important;
         text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px 1.5px 0 #FFEB3B, 1.5px 1.5px 0 #FFEB3B,
+            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
             -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
             3px 3px 5px rgba(0, 0, 0, 0.6) !important;
     }}
@@ -1509,22 +1509,53 @@ else:
         
         conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, login, perfil FROM usuarios ORDER BY id")
+        cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id")
         usuarios_cadastrados = cursor.fetchall()
         conn.close()
         
         if usuarios_cadastrados:
-            usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
-            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Perfil", "ID_Real"])
-            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Perfil"]], use_container_width=True, hide_index=True)
+            usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
+            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
+            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True)
             
-            st.markdown("### 🗑️ Excluir Usuário")
+            st.markdown("---")
+            st.subheader("✏️ Alterar Senha de Usuário")
+            with st.form("form_alterar_senha"):
+                col_alt1, col_alt2 = st.columns([2, 2])
+                with col_alt1:
+                    usr_para_alterar = st.selectbox(
+                        "Selecione o usuário",
+                        options=usuarios_com_id_ajustado,
+                        format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]})",
+                        key="sel_usr_alt"
+                    )
+                with col_alt2:
+                    nova_senha_input = st.text_input("Nova Senha", type="password")
+                
+                btn_salvar_senha = st.form_submit_button("🔑 Salvar Nova Senha", type="primary")
+                if btn_salvar_senha:
+                    if not nova_senha_input.strip():
+                        st.error("Digite a nova senha.")
+                    else:
+                        try:
+                            conn_alt = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                            cursor_alt = conn_alt.cursor()
+                            cursor_alt.execute("UPDATE usuarios SET senha = ? WHERE id = ?", (nova_senha_input.strip(), usr_para_alterar[5]))
+                            conn_alt.commit()
+                            conn_alt.close()
+                            st.success(f"Senha do usuário '{usr_para_alterar[1]}' alterada com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao alterar senha: {e}")
+            
+            st.markdown("---")
+            st.subheader("🗑️ Excluir Usuário")
             col_ux1, col_ux2 = st.columns([3, 1])
             with col_ux1:
                 usr_para_excluir = st.selectbox(
                     "Selecione o usuário para remover o acesso",
                     options=usuarios_com_id_ajustado,
-                    format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]} - Perfil: {x[3]})",
+                    format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]} - Perfil: {x[4]})",
                     key="sel_usr_del"
                 )
             with col_ux2:
@@ -1537,7 +1568,7 @@ else:
                         try:
                             conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[4],))
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[5],))
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Usuário '{usr_para_excluir[1]}' removido com sucesso!")
