@@ -1,5 +1,5 @@
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 import io
 import os
 import pandas as pd
@@ -29,7 +29,7 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA
+# 1. CONFIGURAÇÃO DA PÁGINA E ESTADOS DE TEMA
 # ---------------------------------------------------------
 logo_icon = None
 for nome in [
@@ -42,13 +42,25 @@ for nome in [
     if os.path.exists(nome):
         logo_icon = nome
         break
+
 st.set_page_config(
     page_title="Supermercado Supernova Cidade - Recebimento Hortifrúti",
     page_icon=logo_icon if logo_icon else "🥦",
     layout="wide",
 )
+
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
+
+# Estado Global de Temas
+if "tipo_tema" not in st.session_state:
+    st.session_state["tipo_tema"] = "Padrão do Aplicativo (Original)"
+if "hora_inicio_claro" not in st.session_state:
+    st.session_state["hora_inicio_claro"] = time(6, 0)
+if "hora_inicio_escuro" not in st.session_state:
+    st.session_state["hora_inicio_escuro"] = time(18, 0)
+if "nivel_brilho" not in st.session_state:
+    st.session_state["nivel_brilho"] = 100
 
 # ---------------------------------------------------------
 # CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL OU SQLITE)
@@ -75,7 +87,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS CSS DA TELA DE LOGIN E DO PAINEL
+# 2. MOTOR DINÂMICO DE TEMAS E BRILHO
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -89,25 +101,81 @@ for nome_bg in [
         bg_login_path = nome_bg
         break
 
+b64_img = ""
 if bg_login_path:
     with open(bg_login_path, "rb") as img_f:
         b64_img = base64.b64encode(img_f.read()).decode()
+
+# Determina qual estilo aplicar dependendo do modo selecionado
+tema_atual = st.session_state["tipo_tema"]
+modo_efetivo = "original"
+
+if tema_atual == "Modo Claro":
+    modo_efetivo = "claro"
+elif tema_atual == "Modo Escuro":
+    modo_efetivo = "escuro"
+elif tema_atual == "Personalizado (Horário Automatico)":
+    hora_atual = datetime.now().time()
+    h_claro = st.session_state["hora_inicio_claro"]
+    h_escuro = st.session_state["hora_inicio_escuro"]
+    
+    if h_claro < h_escuro:
+        if h_claro <= hora_atual < h_escuro:
+            modo_efetivo = "claro"
+        else:
+            modo_efetivo = "escuro"
+    else:
+        if h_escuro <= hora_atual < h_claro:
+            modo_efetivo = "escuro"
+        else:
+            modo_efetivo = "claro"
+else:
+    modo_efetivo = "original"
+
+# Opacidade baseada no nível de brilho (10% a 100%)
+fator_brilho = st.session_state["nivel_brilho"] / 100.0
+
+if modo_efetivo == "claro":
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
-            background-size: cover !important;
-            background-position: center !important;
-            background-repeat: no-repeat !important;
-            background-attachment: fixed !important;
+            background: rgba(245, 247, 250, {fator_brilho}) !important;
+            color: #111111 !important;
+        }}
+        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
+            color: #111111 !important;
+            text-shadow: none !important;
+        }}
+    """
+elif modo_efetivo == "escuro":
+    css_fundo = f"""
+        .stApp {{
+            background: rgba(18, 18, 18, {fator_brilho}) !important;
+            color: #FFFFFF !important;
+        }}
+        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
+            color: #FFFFFF !important;
+            text-shadow: none !important;
         }}
     """
 else:
-    css_fundo = """
-        .stApp {
-            background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #C62828 100%) !important;
-            background-attachment: fixed !important;
-        }
-    """
+    # Tema Padrão do Aplicativo (Original)
+    if b64_img:
+        css_fundo = f"""
+            .stApp {{
+                background-image: linear-gradient(rgba(27,94,32,{0.85 * fator_brilho}), rgba(198,40,40,{0.85 * fator_brilho})), url("data:image/jpeg;base64,{b64_img}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                background-repeat: no-repeat !important;
+                background-attachment: fixed !important;
+            }}
+        """
+    else:
+        css_fundo = f"""
+            .stApp {{
+                background: linear-gradient(135deg, rgba(27,94,32,{fator_brilho}) 0%, rgba(46,125,50,{fator_brilho}) 50%, rgba(198,40,40,{fator_brilho}) 100%) !important;
+                background-attachment: fixed !important;
+            }}
+        """
 
 st.markdown(
     f"""
@@ -167,17 +235,7 @@ st.markdown(
         font-size: 2.8rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
-    .stApp h3 {{
-        color: #000000 !important;
-        text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
-        font-weight: 800 !important;
-        font-size: 1.2rem !important;
-        margin-top: 2px !important;
-        margin-bottom: 8px !important;
-    }}
     .stApp label {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
         font-size: 15px !important;
         font-weight: bold !important;
     }}
@@ -686,6 +744,40 @@ def gerar_pdf_baixas(df_baixas_data):
     doc.build(story)
     buffer.seek(0)
     return buffer
+
+# ---------------------------------------------------------
+# BARRA LATERAL (SIDEBAR): CONFIGURAÇÃO DE TEMAS E BRILHO
+# ---------------------------------------------------------
+with st.sidebar:
+    st.markdown("### 🎨 Personalização de Temas")
+    
+    sel_tema = st.selectbox(
+        "Selecione o Tema",
+        ["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"],
+        index=["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"].index(st.session_state["tipo_tema"])
+    )
+    if sel_tema != st.session_state["tipo_tema"]:
+        st.session_state["tipo_tema"] = sel_tema
+        st.rerun()
+
+    if st.session_state["tipo_tema"] == "Personalizado (Horário Automatico)":
+        st.markdown("---")
+        st.write("⏰ **Configurar Horários:**")
+        
+        h_c = st.time_input("Horário do Modo Claro", value=st.session_state["hora_inicio_claro"])
+        h_e = st.time_input("Horário do Modo Escuro", value=st.session_state["hora_inicio_escuro"])
+        
+        if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
+            st.session_state["hora_inicio_claro"] = h_c
+            st.session_state["hora_inicio_escuro"] = h_e
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("☀️ **Nível de Brilho da Tela (%)**")
+    slider_brilho = st.slider("Ajuste do Brilho", min_value=10, max_value=100, value=st.session_state["nivel_brilho"], step=5, label_visibility="collapsed")
+    if slider_brilho != st.session_state["nivel_brilho"]:
+        st.session_state["nivel_brilho"] = slider_brilho
+        st.rerun()
 
 # ---------------------------------------------------------
 # 5. TELA DE LOGIN
