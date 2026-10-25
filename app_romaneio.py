@@ -87,7 +87,43 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. MOTOR DINÂMICO DE TEMAS E BRILHO
+# 2. BARRA LATERAL (SIDEBAR): CONFIGURAÇÃO DE TEMAS E BRILHO
+# (Disponível visível para Conferentes e Gestores em qualquer tela)
+# ---------------------------------------------------------
+with st.sidebar:
+    st.markdown("### 🎨 Configuração de Tema & Tela")
+    
+    sel_tema = st.selectbox(
+        "Selecione o Tema",
+        ["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"],
+        index=["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"].index(st.session_state["tipo_tema"])
+    )
+    if sel_tema != st.session_state["tipo_tema"]:
+        st.session_state["tipo_tema"] = sel_tema
+        st.rerun()
+
+    if st.session_state["tipo_tema"] == "Personalizado (Horário Automatico)":
+        st.markdown("---")
+        st.write("⏰ **Horários de Alteração:**")
+        
+        h_c = st.time_input("Início Modo Claro", value=st.session_state["hora_inicio_claro"])
+        h_e = st.time_input("Início Modo Escuro", value=st.session_state["hora_inicio_escuro"])
+        
+        if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
+            st.session_state["hora_inicio_claro"] = h_c
+            st.session_state["hora_inicio_escuro"] = h_e
+            st.rerun()
+
+    st.markdown("---")
+    st.markdown("☀️ **Nível de Brilho da Tela (%)**")
+    slider_brilho = st.slider("Ajuste do Brilho", min_value=10, max_value=100, value=st.session_state["nivel_brilho"], step=5, label_visibility="collapsed")
+    if slider_brilho != st.session_state["nivel_brilho"]:
+        st.session_state["nivel_brilho"] = slider_brilho
+        st.rerun()
+    st.markdown("---")
+
+# ---------------------------------------------------------
+# 3. MOTOR DINÂMICO DE TEMAS E BRILHO
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -266,7 +302,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
+# 4. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -744,40 +780,6 @@ def gerar_pdf_baixas(df_baixas_data):
     doc.build(story)
     buffer.seek(0)
     return buffer
-
-# ---------------------------------------------------------
-# BARRA LATERAL (SIDEBAR): CONFIGURAÇÃO DE TEMAS E BRILHO
-# ---------------------------------------------------------
-with st.sidebar:
-    st.markdown("### 🎨 Personalização de Temas")
-    
-    sel_tema = st.selectbox(
-        "Selecione o Tema",
-        ["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"],
-        index=["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"].index(st.session_state["tipo_tema"])
-    )
-    if sel_tema != st.session_state["tipo_tema"]:
-        st.session_state["tipo_tema"] = sel_tema
-        st.rerun()
-
-    if st.session_state["tipo_tema"] == "Personalizado (Horário Automatico)":
-        st.markdown("---")
-        st.write("⏰ **Configurar Horários:**")
-        
-        h_c = st.time_input("Horário do Modo Claro", value=st.session_state["hora_inicio_claro"])
-        h_e = st.time_input("Horário do Modo Escuro", value=st.session_state["hora_inicio_escuro"])
-        
-        if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
-            st.session_state["hora_inicio_claro"] = h_c
-            st.session_state["hora_inicio_escuro"] = h_e
-            st.rerun()
-
-    st.markdown("---")
-    st.markdown("☀️ **Nível de Brilho da Tela (%)**")
-    slider_brilho = st.slider("Ajuste do Brilho", min_value=10, max_value=100, value=st.session_state["nivel_brilho"], step=5, label_visibility="collapsed")
-    if slider_brilho != st.session_state["nivel_brilho"]:
-        st.session_state["nivel_brilho"] = slider_brilho
-        st.rerun()
 
 # ---------------------------------------------------------
 # 5. TELA DE LOGIN
