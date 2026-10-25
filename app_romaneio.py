@@ -615,7 +615,6 @@ def gerar_pdf_bonificacoes(df_bonf_data):
     return buffer
 
 def gerar_pdf_baixas(df_baixas_data):
-    # Paisagem para caber perfeitamente todas as colunas da planilha de avarias
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
@@ -710,8 +709,8 @@ if st.session_state["usuario_logado"] is None:
             st.markdown("""<div class='titulo-logo'><span class='palavra-sup-mercado'>Supermercado</span><br><span class='palavra-super'>SUPER</span> <span class='palavra-nova'>NOVA</span><br><span class='palavra-cidade'>Cidade</span></div>""", unsafe_allow_html=True)
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
         with st.form("form_login"):
-            login_input = st.text_input("Usuário / Login ou Nome Completo")
-            senha_input = st.text_input("Senha", type="password")
+            login_input = st.text_input("Usuário / Login ou Nome Completo", value="")
+            senha_input = st.text_input("Senha", type="password", value="")
             btn_entrar = st.form_submit_button("Entrar no Sistema", type="primary")
             if btn_entrar:
                 usuario = fazer_login(login_input, senha_input)
@@ -765,14 +764,14 @@ else:
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
-                num_romaneio = st.text_input("Número do Romaneio", value=f"ROM-{datetime.now().strftime('%Y%m%d%H%M%S')}", key=f"num_rom_{k_suffix}")
-                loja = st.selectbox("Loja", ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=1, key=f"loja_{k_suffix}")
+                num_romaneio = st.text_input("Número do Romaneio", value="", key=f"num_rom_{k_suffix}")
+                loja = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_{k_suffix}")
             with col2:
-                data_rec_val = st.date_input("Data do Recebimento (Obrigatório)", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
+                data_rec_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
-                fornecedor = st.text_input("Fornecedor / Entregador", key=f"forn_{k_suffix}")
+                fornecedor = st.text_input("Fornecedor / Entregador", value="", key=f"forn_{k_suffix}")
             with col3:
-                cod_fornecedor = st.text_input("Código do Fornecedor", key=f"cod_forn_{k_suffix}")
+                cod_fornecedor = st.text_input("Código do Fornecedor", value="", key=f"cod_forn_{k_suffix}")
                 tel_key = f"tel_input_{k_suffix}"
                 if tel_key not in st.session_state: st.session_state[tel_key] = ""
                 def formatar_tel():
@@ -784,12 +783,12 @@ else:
                     if len(raw) >= 3: fmt += f") {raw[2:7]}"
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
-                tel_fornecedor = st.text_input("Telefone do Fornecedor", placeholder="", key=tel_key, on_change=formatar_tel)
-            pag_a_vista = st.selectbox("Pagamento à Vista?", ["SIM", "NÃO"], key=f"pag_vista_{k_suffix}")
+                tel_fornecedor = st.text_input("Telefone do Fornecedor", value="", key=tel_key, on_change=formatar_tel)
+            pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
             
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag_val = st.date_input("Data para Pagamento (Obrigatório)", value=None, format="DD/MM/YYYY", key=f"data_pag_{k_suffix}")
+                data_pag_val = st.date_input("Data para Pagamento", value=None, format="DD/MM/YYYY", key=f"data_pag_{k_suffix}")
                 data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
             conferente = st.text_input("Responsável Rec. Físico", value=user_info["nome"], disabled=True, key=f"conf_{k_suffix}")
             
@@ -804,9 +803,9 @@ else:
             und_padrao = prod_dict[prod_label_sel][1] if prod_label_sel and prod_dict else "KG"
             und_sel = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=(["KG", "UNID", "GRM", "CX"].index(und_padrao) if und_padrao in ["KG", "UNID", "GRM", "CX"] else 0), key=f"und_sel_{k_suffix}_{i_suffix}")
         with col_p3:
-            qtd_str_input = st.text_input("Qtd / Peso", value="", placeholder="", key=f"qtd_{k_suffix}_{i_suffix}")
+            qtd_str_input = st.text_input("Qtd / Peso", value="", key=f"qtd_{k_suffix}_{i_suffix}")
         with col_p4:
-            val_unit_str_input = st.text_input("Valor Unit. (R$)", value="", placeholder="", key=f"vunit_{k_suffix}_{i_suffix}")
+            val_unit_str_input = st.text_input("Valor Unit. (R$)", value="", key=f"vunit_{k_suffix}_{i_suffix}")
         with col_p5:
             st.write("")
             st.write("")
@@ -922,9 +921,9 @@ else:
         st.title("🔍 Consulta de Romaneios")
         with st.expander("🔍 Filtrar Romaneios", expanded=True):
             col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
-            with col_f1: filtro_num = st.text_input("Número do Romaneio", placeholder="Ex: ROM-...")
-            with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", placeholder="Nome do fornecedor")
-            with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", placeholder="Cód. fornecedor")
+            with col_f1: filtro_num = st.text_input("Número do Romaneio", value="")
+            with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="")
+            with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="")
             with col_f4:
                 filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
                 filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
@@ -997,15 +996,15 @@ else:
         prods_cad = cursor_p.fetchall()
         conn_prod.close()
         
-        lista_opcoes_prod = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad] if prods_cad else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA", "2080 - LARANJA REGIONAL", "2059 - LIMÃO", "6156 - ABACAXI"]
+        lista_opcoes_prod = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad] if prods_cad else []
         
         with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
             with st.form("form_cad_prod_rapido_bonf", clear_on_submit=True):
                 col_rp1, col_rp2, col_rp3, col_rp4 = st.columns([1.5, 1.5, 2.5, 1])
-                with col_rp1: r_cod = st.text_input("Cód. Produto")
-                with col_rp2: r_bar = st.text_input("Cód. Barras")
-                with col_rp3: r_nome = st.text_input("Nome do Produto *")
-                with col_rp4: r_und = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"])
+                with col_rp1: r_cod = st.text_input("Cód. Produto", value="")
+                with col_rp2: r_bar = st.text_input("Cód. Barras", value="")
+                with col_rp3: r_nome = st.text_input("Nome do Produto *", value="")
+                with col_rp4: r_und = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=0)
                 if st.form_submit_button("Salvar Produto", type="primary"):
                     if not r_nome.strip():
                         st.error("Informe o nome do produto.")
@@ -1028,17 +1027,17 @@ else:
             with st.form("form_cad_bonificacao", clear_on_submit=True):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
-                    num_nota_bonf = st.text_input("N° Nota Fiscal", placeholder="Ex: 65231")
-                    loja_bonf = st.selectbox("Loja", ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=1, key="loja_bonf_sel")
+                    num_nota_bonf = st.text_input("N° Nota Fiscal", value="")
+                    loja_bonf = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key="loja_bonf_sel")
                 with col_b2:
-                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", placeholder="0,00")
-                    status_bonf = st.selectbox("STATUS", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"])
+                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="")
+                    status_bonf = st.selectbox("STATUS", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0)
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod)
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0)
                     anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dt1, col_dt2 = st.columns(2)
-                with col_dt1: data_entrada_manual = st.date_input("Data de Entrada (Manual)", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dt1: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
                 with col_dt2:
                     hora_auto = datetime.now().strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada (Automática)", value=hora_auto, disabled=True)
@@ -1047,7 +1046,7 @@ else:
                 
                 btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
                 if btn_salvar_bonf:
-                    if not num_nota_bonf.strip(): st.error("O Número da Nota é obrigatório.")
+                    if not num_nota_bonf.strip() or not prod_bonf: st.error("O Número da Nota e o Produto são obrigatórios.")
                     else:
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
                         except ValueError: valor_bonf_val = 0.0
@@ -1072,10 +1071,10 @@ else:
         
         with st.expander("🔍 Filtros de Busca", expanded=True):
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", placeholder="Ex: 65231", key="f_nota_bonf")
+            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", value="", key="f_nota_bonf")
             with f_col2: f_loja = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], key="f_loja_bonf")
             with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="f_status_bonf")
-            with f_col4: f_prod = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA", key="f_prod_bonf")
+            with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", key="f_prod_bonf")
                 
         conn_b_sel, db_tb_sel = get_db_connection()
         df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
@@ -1141,32 +1140,27 @@ else:
         else: st.info("Nenhuma bonificação encontrada.")
 
     # ---------------------------------------------------------
-    # 7. CONTROLE DE BAIXA DE AVARIAS (SEGUINDO O MODELO EXATO DA PLANILHA)
+    # 7. CONTROLE DE BAIXA DE AVARIAS
     # ---------------------------------------------------------
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Registro de Baixas das Avarias")
         
-        # BUSCA TODAS AS NOTAS DE BONIFICAÇÃO CADASTRADAS PARA CALCULAR OS SALDOS EM TEMPO REAL
         conn_b_all, db_tb_all = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
         conn_b_all.close()
         
-        # Saldo total disponível unicamente para a LOJA 02 (notas com '02' no nome da loja e status livre)
         df_bonf_loja2 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
         
-        # Calcula o saldo atual de cada nota de entrada da Loja 02 abatendo as baixas já realizadas
         conn_bx_chk, db_tbx_chk = get_db_connection()
         df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
         conn_bx_chk.close()
         
-        # Mapeamento do total já baixado por nota de entrada
         total_baixado_por_nota = {}
         if not df_baixar_hist.empty:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
                 
-        # Constrói a listagem de notas da Loja 02 com saldo disponível
         notas_com_saldo_loja2 = []
         saldo_total_disp_loja2 = 0.0
         
@@ -1198,22 +1192,20 @@ else:
         else:
             st.warning("⚠️ Não há notas com saldo disponível para a Loja 02 no momento.")
 
-        # Carrega lista de produtos para seleção
         conn_prod_v, db_pv = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
         cursor_pv.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
         prods_cad_v = cursor_pv.fetchall()
         conn_prod_v.close()
-        lista_opcoes_prod_v = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad_v] if prods_cad_v else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA"]
+        lista_opcoes_prod_v = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad_v] if prods_cad_v else []
 
-        # Expander para Cadastro Rápido de Produtos
         with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
             with st.form("form_cad_prod_rapido_reg_baixa", clear_on_submit=True):
                 col_rp1, col_rp2, col_rp3, col_rp4 = st.columns([1.5, 1.5, 2.5, 1])
-                with col_rp1: r_cod_v = st.text_input("Cód. Produto")
-                with col_rp2: r_bar_v = st.text_input("Cód. Barras")
-                with col_rp3: r_nome_v = st.text_input("Nome do Produto *")
-                with col_rp4: r_und_v = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"])
+                with col_rp1: r_cod_v = st.text_input("Cód. Produto", value="")
+                with col_rp2: r_bar_v = st.text_input("Cód. Barras", value="")
+                with col_rp3: r_nome_v = st.text_input("Nome do Produto *", value="")
+                with col_rp4: r_und_v = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=0)
                 if st.form_submit_button("Salvar Produto", type="primary"):
                     if not r_nome_v.strip(): st.error("Informe o nome.")
                     else:
@@ -1232,18 +1224,18 @@ else:
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
                     lojas_baixa_sel = st.selectbox("LOJAS", ["LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0)
-                    ref_bon_transf = st.text_input("Ref. Bon. transferen", placeholder="Ex: 65231")
+                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="")
                 with col_m2:
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja2] if notas_com_saldo_loja2 else ["Nenhuma Nota Disponível"])
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v)
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0)
                 with col_m3:
-                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", placeholder="Ex: 38,600")
-                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", placeholder="Ex: 135,29")
+                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="")
+                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="")
                     
                 nf_baixa_file = st.file_uploader("NF da baixa (Comprovante / Anexo PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa (Manual)", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(), format="DD/MM/YYYY")
                 with col_dm2:
                     hora_baixa_aut = datetime.now().strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa (Automática)", value=hora_baixa_aut, disabled=True)
@@ -1252,8 +1244,8 @@ else:
                 
                 btn_gravar_baixa_mod = st.form_submit_button("✅ Registrar Baixa na Planilha", type="primary")
                 if btn_gravar_baixa_mod:
-                    if not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível":
-                        st.error("Preencha a Referência de Bonificação e selecione uma Nota de Entrada válida.")
+                    if not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
+                        st.error("Preencha todos os campos obrigatórios e selecione a Nota de Entrada e o Produto.")
                     else:
                         try:
                             qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
@@ -1261,7 +1253,6 @@ else:
                         except ValueError:
                             qtd_val_f, val_avaria_f = 0.0, 0.0
                             
-                        # Valida se o valor da avaria cabe no saldo da nota de entrada selecionada
                         nota_selecionada_dict = next((item for item in notas_com_saldo_loja2 if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada selecionada inválida.")
@@ -1273,7 +1264,6 @@ else:
                                 path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
                                 with open(path_nf_baixa, "wb") as f_out: f_out.write(nf_baixa_file.getbuffer())
                                 
-                            # Calcula novos saldos em tempo real para gravação
                             novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
                             novo_saldo_total_disp = saldo_total_disp_loja2 - val_avaria_f
                             
@@ -1311,9 +1301,9 @@ else:
         
         with st.expander("🔍 Filtros da Planilha de Baixas", expanded=True):
             fb1, fb2, fb3 = st.columns(3)
-            with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"])
-            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon. transferen", placeholder="Ex: 65219")
-            with fb3: f_prod_bx = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA")
+            with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0)
+            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon. transferen", value="")
+            with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="")
             
         conn_bx_view, db_tbx_v = get_db_connection()
         df_bx_table = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
@@ -1325,7 +1315,6 @@ else:
             if f_prod_bx.strip(): df_bx_table = df_bx_table[df_bx_table["produto_hortifruti"].str.contains(f_prod_bx.strip(), case=False, na=False)]
             
         if not df_bx_table.empty:
-            # BOTÃO PARA BAIXAR PDF DA PLANILHA DE BAIXAS
             pdf_bytes_bx = gerar_pdf_baixas(df_bx_table)
             st.download_button(
                 label="📥 Baixar Planilha de Baixas de Avarias em PDF",
@@ -1337,7 +1326,6 @@ else:
             )
             st.markdown("")
             
-            # Formata colunas para exibição idêntica à planilha enviada
             df_display_plan = df_bx_table.copy()
             df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
             df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
@@ -1449,10 +1437,10 @@ else:
         with st.form("cad_prod_form", clear_on_submit=True):
             st.subheader("Cadastrar Novo Produto")
             col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-            with col_cp1: cod_prod_input = st.text_input("Código do Produto")
-            with col_cp2: cod_bar_input = st.text_input("Código de Barras")
-            with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)")
-            with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"])
+            with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
+            with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
+            with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)", value="")
+            with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
             if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                 if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
                 else:
@@ -1504,10 +1492,10 @@ else:
         with st.form("cad_usuario_form", clear_on_submit=True):
             st.subheader("Cadastrar Novo Usuário / Conferente")
             col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
-            with col_u1: novo_nome = st.text_input("Nome Completo do Usuário")
-            with col_u2: novo_login = st.text_input("Login de Acesso")
-            with col_u3: nova_senha = st.text_input("Senha", type="password")
-            with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"])
+            with col_u1: novo_nome = st.text_input("Nome Completo do Usuário", value="")
+            with col_u2: novo_login = st.text_input("Login de Acesso", value="")
+            with col_u3: nova_senha = st.text_input("Senha", type="password", value="")
+            with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0)
             if st.form_submit_button("➕ Cadastrar Usuário", type="primary"):
                 if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
                 else:
