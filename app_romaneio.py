@@ -20,6 +20,14 @@ import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
+# Tenta importar psycopg2 para suporte ao PostgreSQL permanente
+try:
+    import psycopg2
+    import psycopg2.extras
+    HAS_POSTGRES = True
+except ImportError:
+    HAS_POSTGRES = False
+
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
@@ -41,6 +49,20 @@ st.set_page_config(
 )
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
+
+# ---------------------------------------------------------
+# CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL OU SQLITE)
+# ---------------------------------------------------------
+def get_db_connection():
+    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
+        try:
+            conn = psycopg2.connect(st.secrets["database"]["db_url"])
+            return conn, "postgres"
+        except Exception as e:
+            st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+    
+    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    return conn, "sqlite"
 
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
@@ -108,7 +130,7 @@ st.markdown(
         display: block !important;
     }}
     .titulo-logo {{
-        font-size: 2.6rem !important;
+        font-size: 2.2rem !important;
         font-weight: 900 !important;
         line-height: 1.1 !important;
         margin-bottom: 0px !important;
@@ -116,7 +138,7 @@ st.markdown(
     }}
     .palavra-sup-mercado {{
         color: #2E7D32 !important;
-        font-size: 1.35rem !important;
+        font-size: 1.2rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
         text-shadow: 
@@ -142,14 +164,14 @@ st.markdown(
         color: #111111 !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 3.2rem !important;
+        font-size: 2.8rem !important;
         text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
     }}
     .stApp h3 {{
         color: #000000 !important;
         text-shadow: -1px -1px 0 #FFF, 1px -1px 0 #FFF, -1px 1px 0 #FFF, 1px 1px 0 #FFF, 2px 2px 4px rgba(255,255,255,0.9) !important;
         font-weight: 800 !important;
-        font-size: 1.3rem !important;
+        font-size: 1.2rem !important;
         margin-top: 2px !important;
         margin-bottom: 8px !important;
     }}
@@ -186,66 +208,149 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS E CATÁLOGO
+# 3. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
 # ---------------------------------------------------------
 def init_db():
-    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    conn, db_type = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            login TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL,
-            perfil TEXT NOT NULL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS produtos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            codigo_barras TEXT,
-            codigo_produto TEXT UNIQUE,
-            nome TEXT UNIQUE NOT NULL,
-            unidade_padrao TEXT NOT NULL
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS romaneios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            numero_romaneio TEXT UNIQUE NOT NULL,
-            loja TEXT NOT NULL,
-            data_recebimento TEXT NOT NULL,
-            fornecedor TEXT,
-            codigo_fornecedor TEXT,
-            telefone_fornecedor TEXT,
-            conferente TEXT NOT NULL,
-            pagamento_a_vista TEXT NOT NULL,
-            data_pagamento TEXT,
-            caminho_foto TEXT,
-            assinatura_conferente TEXT,
-            assinatura_entregador TEXT
-        )
-    """)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS romaneio_itens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            romaneio_id INTEGER NOT NULL,
-            produto TEXT NOT NULL,
-            quantidade REAL NOT NULL,
-            unidade TEXT NOT NULL,
-            valor_unitario REAL,
-            valor_total REAL,
-            FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
-        )
-    """)
     
-    cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
-    if not cursor.fetchone():
-        cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
-        cursor.execute(
-            "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
-            " ('Administrador', '908', '0332', 'Gestor')"
-        )
+    if db_type == "postgres":
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(255) NOT NULL,
+                login VARCHAR(255) UNIQUE NOT NULL,
+                senha VARCHAR(255) NOT NULL,
+                perfil VARCHAR(255) NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS produtos (
+                id SERIAL PRIMARY KEY,
+                codigo_barras VARCHAR(255),
+                codigo_produto VARCHAR(255) UNIQUE,
+                nome VARCHAR(255) UNIQUE NOT NULL,
+                unidade_padrao VARCHAR(50) NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS romaneios (
+                id SERIAL PRIMARY KEY,
+                numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
+                loja VARCHAR(255) NOT NULL,
+                data_recebimento VARCHAR(50) NOT NULL,
+                fornecedor VARCHAR(255),
+                codigo_fornecedor VARCHAR(255),
+                telefone_fornecedor VARCHAR(255),
+                conferente VARCHAR(255) NOT NULL,
+                pagamento_a_vista VARCHAR(50) NOT NULL,
+                data_pagamento VARCHAR(50),
+                caminho_foto TEXT,
+                assinatura_conferente TEXT,
+                assinatura_entregador TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS romaneio_itens (
+                id SERIAL PRIMARY KEY,
+                romaneio_id INTEGER NOT NULL REFERENCES romaneios(id) ON DELETE CASCADE,
+                produto VARCHAR(255) NOT NULL,
+                quantidade REAL NOT NULL,
+                unidade VARCHAR(50) NOT NULL,
+                valor_unitario REAL,
+                valor_total REAL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bonificacoes (
+                id SERIAL PRIMARY KEY,
+                numero_nota VARCHAR(255) NOT NULL,
+                loja VARCHAR(255) NOT NULL,
+                data_entrada VARCHAR(50) NOT NULL,
+                valor_bonificacao REAL NOT NULL,
+                status VARCHAR(100) NOT NULL,
+                produto_hortifruti VARCHAR(255) NOT NULL,
+                caminho_anexo TEXT
+            )
+        """)
+        
+        cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
+        if not cursor.fetchone():
+            cursor.execute("DELETE FROM usuarios WHERE login = %s", ('admin',))
+            cursor.execute(
+                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
+                " (%s, %s, %s, %s)",
+                ('Administrador', '908', '0332', 'Gestor')
+            )
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                login TEXT UNIQUE NOT NULL,
+                senha TEXT NOT NULL,
+                perfil TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS produtos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_barras TEXT,
+                codigo_produto TEXT UNIQUE,
+                nome TEXT UNIQUE NOT NULL,
+                unidade_padrao TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS romaneios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_romaneio TEXT UNIQUE NOT NULL,
+                loja TEXT NOT NULL,
+                data_recebimento TEXT NOT NULL,
+                fornecedor TEXT,
+                codigo_fornecedor TEXT,
+                telefone_fornecedor TEXT,
+                conferente TEXT NOT NULL,
+                pagamento_a_vista TEXT NOT NULL,
+                data_pagamento TEXT,
+                caminho_foto TEXT,
+                assinatura_conferente TEXT,
+                assinatura_entregador TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS romaneio_itens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                romaneio_id INTEGER NOT NULL,
+                produto TEXT NOT NULL,
+                quantidade REAL NOT NULL,
+                unidade TEXT NOT NULL,
+                valor_unitario REAL,
+                valor_total REAL,
+                FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS bonificacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_nota TEXT NOT NULL,
+                loja TEXT NOT NULL,
+                data_entrada TEXT NOT NULL,
+                valor_bonificacao REAL NOT NULL,
+                status TEXT NOT NULL,
+                produto_hortifruti TEXT NOT NULL,
+                caminho_anexo TEXT
+            )
+        """)
+        
+        cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
+        if not cursor.fetchone():
+            cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
+            cursor.execute(
+                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES"
+                " ('Administrador', '908', '0332', 'Gestor')"
+            )
+            
     conn.commit()
     conn.close()
 
@@ -255,13 +360,18 @@ if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
 def fazer_login(login_ou_nome, senha):
-    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    conn, db_type = get_db_connection()
     cursor = conn.cursor()
-    # Permite buscar pelo Login EXATO ou pelo Nome Completo (ignorando maiúsculas/minúsculas)
-    cursor.execute(
-        "SELECT id, nome, perfil, login FROM usuarios WHERE (login = ? OR nome COLLATE NOCASE = ?) AND senha = ?",
-        (login_ou_nome.strip(), login_ou_nome.strip(), senha),
-    )
+    if db_type == "postgres":
+        cursor.execute(
+            "SELECT id, nome, perfil, login FROM usuarios WHERE (login = %s OR LOWER(nome) = LOWER(%s)) AND senha = %s",
+            (login_ou_nome.strip(), login_ou_nome.strip(), senha),
+        )
+    else:
+        cursor.execute(
+            "SELECT id, nome, perfil, login FROM usuarios WHERE (login = ? OR nome COLLATE NOCASE = ?) AND senha = ?",
+            (login_ou_nome.strip(), login_ou_nome.strip(), senha),
+        )
     usr = cursor.fetchone()
     conn.close()
     return usr
@@ -608,7 +718,7 @@ def gerar_pdf_produtos(produtos_data):
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN (ESTILO ORIGINAL DA ETAPA 2)
+# 5. TELA DE LOGIN
 # ---------------------------------------------------------
 if st.session_state["usuario_logado"] is None:
     logo_display = None
@@ -616,7 +726,7 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
-    col_vazia_esq, col_central, col_vazia_dir = st.columns([0.2, 3.6, 0.2])
+    col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
         if logo_display:
             col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
@@ -674,7 +784,7 @@ else:
     )
     
     st.markdown("---")
-    col_info_usr, col_logout = st.columns([4, 1], vertical_alignment="center")
+    col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
@@ -683,7 +793,11 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios"]
+    opcoes_menu = [
+        "Romaneio de Recebimento - Hortifrúti", 
+        "Consultar Romaneios",
+        "Controle de Bonificação & Baixa"
+    ]
     if is_admin:
         opcoes_menu.extend([
             "Relatórios & Gráficos",
@@ -703,12 +817,9 @@ else:
         k_suffix = st.session_state["form_key_suffix"]
         i_suffix = st.session_state["item_key_suffix"]
         
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        conn, db_type = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM"
-            " produtos ORDER BY nome"
-        )
+        cursor.execute("SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM produtos ORDER BY nome")
         produtos_lista = cursor.fetchall()
         conn.close()
         
@@ -719,7 +830,7 @@ else:
             
         prod_nomes_keys = list(prod_dict.keys())
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
                 num_romaneio = st.text_input(
                     "Número do Romaneio",
@@ -796,9 +907,8 @@ else:
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state:
             st.session_state["itens_romaneio"] = []
-        col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns(
-            [3, 1.5, 1.5, 1.5, 1]
-        )
+            
+        col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns([2.5, 1.2, 1.2, 1.2, 1])
         with col_p1:
             prod_label_sel = st.selectbox(
                 "Produto / Código",
@@ -884,12 +994,7 @@ else:
                     "Total": f"R$ {fmt_ptbr(itm['valor_total'], 2)}"
                 })
             df_exibicao = pd.DataFrame(dados_tabela)
-            
-            st.dataframe(
-                df_exibicao,
-                use_container_width=True,
-                hide_index=True,
-            )
+            st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
             
             col_rem_labels, col_rem_btns = st.columns([3, 1])
             with col_rem_labels:
@@ -980,50 +1085,96 @@ else:
                                 f_out.write(f.getbuffer())
                             caminho_foto_salva = path_f
                     
-                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    conn, db_type = get_db_connection()
                     cursor = conn.cursor()
-                    cursor.execute(
-                        """
-                        INSERT INTO romaneios (
-                            numero_romaneio, loja, data_recebimento, fornecedor, 
-                            codigo_fornecedor, telefone_fornecedor, conferente, 
-                            pagamento_a_vista, data_pagamento, caminho_foto,
-                            assinatura_conferente, assinatura_entregador
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                        (
-                            num_romaneio,
-                            loja,
-                            data_rec_str,
-                            fornecedor,
-                            cod_fornecedor,
-                            tel_fornecedor,
-                            user_info["nome"],
-                            pag_a_vista,
-                            data_pag_str,
-                            caminho_foto_salva,
-                            path_ass_conf,
-                            path_ass_ent,
-                        ),
-                    )
-                    romaneio_id = cursor.lastrowid
-                    itens_salvos_pdf = []
-                    for itm in st.session_state["itens_romaneio"]:
+                    
+                    if db_type == "postgres":
                         cursor.execute(
                             """
-                            INSERT INTO romaneio_itens (
-                                romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total
-                            ) VALUES (?, ?, ?, ?, ?, ?)
+                            INSERT INTO romaneios (
+                                numero_romaneio, loja, data_recebimento, fornecedor, 
+                                codigo_fornecedor, telefone_fornecedor, conferente, 
+                                pagamento_a_vista, data_pagamento, caminho_foto,
+                                assinatura_conferente, assinatura_entregador
+                            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
                         """,
                             (
-                                romaneio_id,
-                                itm["produto"],
-                                itm["quantidade"],
-                                itm["unidade"],
-                                itm["valor_unitario"],
-                                itm["valor_total"],
+                                num_romaneio,
+                                loja,
+                                data_rec_str,
+                                fornecedor,
+                                cod_fornecedor,
+                                tel_fornecedor,
+                                user_info["nome"],
+                                pag_a_vista,
+                                data_pag_str,
+                                caminho_foto_salva,
+                                path_ass_conf,
+                                path_ass_ent,
                             ),
                         )
+                        romaneio_id = cursor.fetchone()[0]
+                    else:
+                        cursor.execute(
+                            """
+                            INSERT INTO romaneios (
+                                numero_romaneio, loja, data_recebimento, fornecedor, 
+                                codigo_fornecedor, telefone_fornecedor, conferente, 
+                                pagamento_a_vista, data_pagamento, caminho_foto,
+                                assinatura_conferente, assinatura_entregador
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                            (
+                                num_romaneio,
+                                loja,
+                                data_rec_str,
+                                fornecedor,
+                                cod_fornecedor,
+                                tel_fornecedor,
+                                user_info["nome"],
+                                pag_a_vista,
+                                data_pag_str,
+                                caminho_foto_salva,
+                                path_ass_conf,
+                                path_ass_ent,
+                            ),
+                        )
+                        romaneio_id = cursor.lastrowid
+                        
+                    itens_salvos_pdf = []
+                    for itm in st.session_state["itens_romaneio"]:
+                        if db_type == "postgres":
+                            cursor.execute(
+                                """
+                                INSERT INTO romaneio_itens (
+                                    romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total
+                                ) VALUES (%s, %s, %s, %s, %s, %s)
+                            """,
+                                (
+                                    romaneio_id,
+                                    itm["produto"],
+                                    itm["quantidade"],
+                                    itm["unidade"],
+                                    itm["valor_unitario"],
+                                    itm["valor_total"],
+                                ),
+                            )
+                        else:
+                            cursor.execute(
+                                """
+                                INSERT INTO romaneio_itens (
+                                    romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total
+                                ) VALUES (?, ?, ?, ?, ?, ?)
+                            """,
+                                (
+                                    romaneio_id,
+                                    itm["produto"],
+                                    itm["quantidade"],
+                                    itm["unidade"],
+                                    itm["valor_unitario"],
+                                    itm["valor_total"],
+                                ),
+                            )
                         itens_salvos_pdf.append([
                             None,
                             itm["produto"],
@@ -1057,7 +1208,7 @@ else:
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_romaneio} salvo com sucesso!")
+                    st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco permanente!")
                     st.rerun()
                     
                 except Exception as e:
@@ -1078,7 +1229,7 @@ else:
         st.title("🔍 Consulta de Romaneios")
         
         with st.expander("🔍 Filtrar Romaneios", expanded=True):
-            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
             with col_f1:
                 filtro_num = st.text_input("Número do Romaneio", placeholder="Ex: ROM-...")
             with col_f2:
@@ -1089,7 +1240,7 @@ else:
                 filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
                 filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
                 
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        conn, db_type = get_db_connection()
         df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
         
@@ -1131,13 +1282,19 @@ else:
                         if st.button("🔍 Ampliar Foto da Nota (Tela Cheia)", key=f"btn_ampliar_foto_{row['id']}"):
                             exibir_foto_modal(row['caminho_foto'])
                             
-                    conn_i = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-                    df_itens = pd.read_sql_query(
-                        "SELECT produto, quantidade, unidade, valor_unitario,"
-                        " valor_total FROM romaneio_itens WHERE romaneio_id = ?",
-                        conn_i,
-                        params=(row["id"],),
-                    )
+                    conn_i, db_t_i = get_db_connection()
+                    if db_t_i == "postgres":
+                        df_itens = pd.read_sql_query(
+                            "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s",
+                            conn_i,
+                            params=(int(row["id"]),),
+                        )
+                    else:
+                        df_itens = pd.read_sql_query(
+                            "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?",
+                            conn_i,
+                            params=(row["id"],),
+                        )
                     conn_i.close()
                     st.markdown("**Itens Conferidos:**")
                     
@@ -1178,10 +1335,14 @@ else:
                     with col_del:
                         if st.button("🗑️ Excluir Romaneio", key=f"btn_excluir_rom_{row['id']}", type="secondary", help="Excluir este romaneio incorreto/teste"):
                             try:
-                                conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                                conn_del, db_t_del = get_db_connection()
                                 cursor_del = conn_del.cursor()
-                                cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = ?", (row["id"],))
-                                cursor_del.execute("DELETE FROM romaneios WHERE id = ?", (row["id"],))
+                                if db_t_del == "postgres":
+                                    cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s", (int(row["id"]),))
+                                    cursor_del.execute("DELETE FROM romaneios WHERE id = %s", (int(row["id"]),))
+                                else:
+                                    cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = ?", (row["id"],))
+                                    cursor_del.execute("DELETE FROM romaneios WHERE id = ?", (row["id"],))
                                 conn_del.commit()
                                 conn_del.close()
                                 st.success(f"Romaneio {row['numero_romaneio']} excluído com sucesso!")
@@ -1190,13 +1351,197 @@ else:
                                 st.error(f"Erro ao excluir romaneio: {e}")
         else:
             st.info("Nenhum romaneio encontrado com os filtros informados.")
+
+    # ---------------------------------------------------------
+    # 6. NOVO MÓDULO: CONTROLE DE BONIFICAÇÃO & BAIXA HORTIFRUTI
+    # ---------------------------------------------------------
+    elif menu == "Controle de Bonificação & Baixa":
+        st.title("🎁 Controle de Bonificação e Baixa Hortifrúti")
+        
+        # Carrega lista de produtos para o dropdown de bonificação
+        conn_prod, db_p = get_db_connection()
+        cursor_p = conn_prod.cursor()
+        cursor_p.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
+        prods_cad = cursor_p.fetchall()
+        conn_prod.close()
+        
+        lista_opcoes_prod = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad] if prods_cad else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA", "2080 - LARANJA REGIONAL", "2059 - LIMÃO", "6156 - ABACAXI"]
+        
+        with st.expander("➕ Cadastrar Nova Bonificação / Baixa", expanded=True):
+            with st.form("form_cad_bonificacao", clear_on_submit=True):
+                col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
+                with col_b1:
+                    num_nota_bonf = st.text_input("N° Nota Fiscal", placeholder="Ex: 65223")
+                    loja_bonf = st.selectbox(
+                        "Loja",
+                        [
+                            "LOJA 01 CD",
+                            "LOJA 02",
+                            "LOJA 03",
+                            "LOJA 04",
+                            "LOJA 05",
+                            "LOJA 06",
+                            "LOJA 07",
+                        ],
+                        index=1,
+                        key="loja_bonf_sel"
+                    )
+                with col_b2:
+                    data_entrada_bonf = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
+                    hora_entrada_bonf = st.time_input("Hora da Entrada", value=datetime.now().time())
+                    dt_entrada_str = f"{data_entrada_bonf.strftime('%d/%m/%Y')} {hora_entrada_bonf.strftime('%H:%M:%S')}"
+                with col_b3:
+                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", placeholder="0,00")
+                    status_bonf = st.selectbox("STATUS", ["Totalmente Utilizada", "Disponível"])
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod)
+                    
+                anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                
+                btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
+                if btn_salvar_bonf:
+                    if not num_nota_bonf.strip():
+                        st.error("O Número da Nota é obrigatório.")
+                    else:
+                        try:
+                            v_bonf_limpo = valor_bonf_str.replace(".", "").replace(",", ".") if valor_bonf_str else "0"
+                            valor_bonf_val = float(v_bonf_limpo)
+                        except ValueError:
+                            valor_bonf_val = 0.0
+                            
+                        path_anexo_bonf = ""
+                        if anexo_bonf:
+                            path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
+                            with open(path_anexo_bonf, "wb") as f_out:
+                                f_out.write(anexo_bonf.getbuffer())
+                                
+                        try:
+                            conn_b, db_tb = get_db_connection()
+                            cursor_b = conn_b.cursor()
+                            if db_tb == "postgres":
+                                cursor_b.execute(
+                                    """
+                                    INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                    """,
+                                    (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf)
+                                )
+                            else:
+                                cursor_b.execute(
+                                    """
+                                    INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    """,
+                                    (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf)
+                                )
+                            conn_b.commit()
+                            conn_b.close()
+                            st.success(f"Bonificação Nota N° {num_nota_bonf} gravada com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao salvar bonificação: {e}")
+                            
+        st.markdown("---")
+        st.subheader("📋 Registros de Bonificação e Baixa")
+        
+        with st.expander("🔍 Filtros de Busca", expanded=True):
+            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+            with f_col1:
+                f_nota = st.text_input("Filtrar por N° Nota", placeholder="Ex: 65223", key="f_nota_bonf")
+            with f_col2:
+                f_loja = st.selectbox("Filtrar por Loja", ["TODAS"] + ["LOJA 01 CD", "LOJA 02", "LOJA 03", "LOJA 04", "LOJA 05", "LOJA 06", "LOJA 07"], key="f_loja_bonf")
+            with f_col3:
+                f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Totalmente Utilizada"], key="f_status_bonf")
+            with f_col4:
+                f_prod = st.text_input("Filtrar por Produto", placeholder="Ex: MAMÃO", key="f_prod_bonf")
+                
+        conn_b_sel, db_tb_sel = get_db_connection()
+        df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
+        conn_b_sel.close()
+        
+        if not df_bonf.empty:
+            if f_nota.strip():
+                df_bonf = df_bonf[df_bonf["numero_nota"].str.contains(f_nota.strip(), case=False, na=False)]
+            if f_loja != "TODAS":
+                df_bonf = df_bonf[df_bonf["loja"] == f_loja]
+            if f_status != "TODOS":
+                df_bonf = df_bonf[df_bonf["status"] == f_status]
+            if f_prod.strip():
+                df_bonf = df_bonf[df_bonf["produto_hortifruti"].str.contains(f_prod.strip(), case=False, na=False)]
+                
+        if not df_bonf.empty:
+            # KPIs Rápidos
+            tot_bonf_val = df_bonf["valor_bonificacao"].sum()
+            tot_disp_val = df_bonf[df_bonf["status"] == "Disponível"]["valor_bonificacao"].sum()
+            tot_util_val = df_bonf[df_bonf["status"] == "Totalmente Utilizada"]["valor_bonificacao"].sum()
             
+            kpi_b1, kpi_b2, kpi_b3, kpi_b4 = st.columns(4)
+            kpi_b1.metric("Total de Registros", f"{len(df_bonf)} notas")
+            kpi_b2.metric("Valor Total Bonificado", f"R$ {fmt_ptbr(tot_bonf_val, 2)}")
+            kpi_b3.metric("Saldo Disponível", f"R$ {fmt_ptbr(tot_disp_val, 2)}")
+            kpi_b4.metric("Total Utilizado", f"R$ {fmt_ptbr(tot_util_val, 2)}")
+            
+            st.markdown("---")
+            
+            df_display_bonf = df_bonf.copy()
+            df_display_bonf["Valor da Bonificação (R$)"] = df_display_bonf["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_display_bonf = df_display_bonf.rename(columns={
+                "numero_nota": "N° NOTA",
+                "loja": "LOJAS",
+                "data_entrada": "Data de Entrada",
+                "status": "STATUS",
+                "produto_hortifruti": "Produto Hortifrúti",
+                "caminho_anexo": "NF DE BONIFICAÇÃO"
+            })
+            
+            df_exib_final = df_display_bonf[["N° NOTA", "LOJAS", "Data de Entrada", "Valor da Bonificação (R$)", "STATUS", "Produto Hortifrúti"]]
+            df_exib_final.index = range(1, len(df_exib_final) + 1)
+            
+            st.dataframe(df_exib_final, use_container_width=True)
+            
+            st.markdown("### ✏️ Alterar Status da Bonificação / Baixa")
+            col_alt_b1, col_alt_b2, col_alt_b3 = st.columns([2.5, 2, 1.5])
+            
+            opcoes_bonf_alterar = [
+                (row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} - {row['produto_hortifruti']} (R$ {fmt_ptbr(row['valor_bonificacao'], 2)}) | Status: {row['status']}")
+                for _, row in df_bonf.iterrows()
+            ]
+            
+            with col_alt_b1:
+                bonf_selecionada = st.selectbox(
+                    "Selecione a Nota de Bonificação",
+                    options=opcoes_bonf_alterar,
+                    format_func=lambda x: x[1],
+                    key="sel_bonf_alt_status"
+                )
+            with col_alt_b2:
+                novo_status_sel = st.selectbox("Novo Status", ["Totalmente Utilizada", "Disponível"], key="sel_novo_status_b")
+            with col_alt_b3:
+                st.write("")
+                st.write("")
+                if st.button("💾 Atualizar Status", type="primary", key="btn_upd_status_bonf"):
+                    try:
+                        conn_up_b, db_t_up = get_db_connection()
+                        cursor_up = conn_up_b.cursor()
+                        if db_t_up == "postgres":
+                            cursor_up.execute("UPDATE bonificacoes SET status = %s WHERE id = %s", (novo_status_sel, int(bonf_selecionada[0])))
+                        else:
+                            cursor_up.execute("UPDATE bonificacoes SET status = ? WHERE id = ?", (novo_status_sel, bonf_selecionada[0]))
+                        conn_up_b.commit()
+                        conn_up_b.close()
+                        st.success("Status atualizado com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Erro ao atualizar status: {e}")
+        else:
+            st.info("Nenhuma bonificação encontrada com os filtros informados.")
+
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
         
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        conn, db_type = get_db_connection()
         df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
         df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
+        df_bonf_rel = pd.read_sql_query("SELECT * FROM bonificacoes", conn)
         conn.close()
         
         if df_roms.empty or df_itens.empty:
@@ -1205,7 +1550,7 @@ else:
             df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
             df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
             st.markdown("### 🔍 Filtros da Análise Gerencial")
-            col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+            col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
             
             with col_f1:
                 lojas_disp = ["TODAS AS LOJAS"] + list(df_roms["loja"].unique())
@@ -1346,6 +1691,47 @@ else:
                     )
                     st.plotly_chart(fig_line, use_container_width=True)
                     
+                if not df_bonf_rel.empty:
+                    st.markdown("---")
+                    st.subheader("🎁 Análise Gerencial de Bonificação e Baixas")
+                    
+                    col_bg1, col_bg2 = st.columns(2)
+                    with col_bg1:
+                        st.markdown("**Total Bonificado por Loja (R$)**")
+                        bonf_loja = df_bonf_rel.groupby("loja")["valor_bonificacao"].sum().reset_index()
+                        fig_bonf_loja = px.bar(
+                            bonf_loja,
+                            x="loja",
+                            y="valor_bonificacao",
+                            text_auto=".2f",
+                            color="valor_bonificacao",
+                            color_continuous_scale="Oranges"
+                        )
+                        fig_bonf_loja.update_layout(
+                            xaxis_title="Loja",
+                            yaxis_title="Valor Bonificado (R$)",
+                            plot_bgcolor="rgba(0,0,0,0)",
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font_color="#FFFFFF"
+                        )
+                        st.plotly_chart(fig_bonf_loja, use_container_width=True)
+                        
+                    with col_bg2:
+                        st.markdown("**Distribuição por Status de Bonificação**")
+                        bonf_status = df_bonf_rel.groupby("status")["valor_bonificacao"].sum().reset_index()
+                        fig_bonf_pie = px.pie(
+                            bonf_status,
+                            names="status",
+                            values="valor_bonificacao",
+                            color="status",
+                            color_discrete_map={"Disponível": "#2E7D32", "Totalmente Utilizada": "#C62828"}
+                        )
+                        fig_bonf_pie.update_layout(
+                            paper_bgcolor="rgba(0,0,0,0)",
+                            font_color="#FFFFFF"
+                        )
+                        st.plotly_chart(fig_bonf_pie, use_container_width=True)
+
                 st.markdown("---")
                 st.subheader("📋 Tabela Consolidada & Exportação")
                 
@@ -1401,27 +1787,31 @@ else:
                 if not nome_p.strip():
                     st.error("O Nome do Produto é obrigatório.")
                 else:
-                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     try:
-                        cursor.execute(
-                            "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
-                            (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip(), und_p),
-                        )
+                        if db_type == "postgres":
+                            cursor.execute(
+                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)",
+                                (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip(), und_p),
+                            )
+                        else:
+                            cursor.execute(
+                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
+                                (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip(), und_p),
+                            )
                         conn.commit()
                         st.success(f"Produto '{nome_p.strip()}' cadastrado com sucesso!")
                         st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Erro: Já existe um produto cadastrado com este Nome ou Código.")
                     except Exception as e:
-                        st.error(f"Erro ao cadastrar produto: {e}")
+                        st.error(f"Erro ao cadastrar produto (Nome ou Código duplicado): {e}")
                     finally:
                         conn.close()
                         
         st.markdown("---")
         st.subheader("📋 Produtos Cadastrados no Sistema")
         
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        conn, db_type = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
         produtos_cadastrados = cursor.fetchall()
@@ -1456,9 +1846,12 @@ else:
                 st.write("")
                 if st.button("🗑️ Excluir Selecionado", type="secondary", key="btn_del_prod_sel"):
                     try:
-                        conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                        conn_del, db_t_del = get_db_connection()
                         cursor_del = conn_del.cursor()
-                        cursor_del.execute("DELETE FROM produtos WHERE id = ?", (prod_para_excluir[5],))
+                        if db_t_del == "postgres":
+                            cursor_del.execute("DELETE FROM produtos WHERE id = %s", (int(prod_para_excluir[5]),))
+                        else:
+                            cursor_del.execute("DELETE FROM produtos WHERE id = ?", (prod_para_excluir[5],))
                         conn_del.commit()
                         conn_del.close()
                         st.success(f"Produto '{prod_para_excluir[3]}' excluído com sucesso!")
@@ -1488,27 +1881,31 @@ else:
                 if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
                     st.error("Preencha todos os campos obrigatórios para cadastrar o usuário.")
                 else:
-                    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                    conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     try:
-                        cursor.execute(
-                            "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)",
-                            (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil)
-                        )
+                        if db_type == "postgres":
+                            cursor.execute(
+                                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)",
+                                (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil)
+                            )
+                        else:
+                            cursor.execute(
+                                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)",
+                                (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil)
+                            )
                         conn.commit()
                         st.success(f"Usuário '{novo_nome.strip()}' cadastrado com sucesso!")
                         st.rerun()
-                    except sqlite3.IntegrityError:
-                        st.error("Erro: Este Login já está em uso por outro usuário.")
                     except Exception as e:
-                        st.error(f"Erro ao cadastrar usuário: {e}")
+                        st.error(f"Erro ao cadastrar usuário (Login já em uso): {e}")
                     finally:
                         conn.close()
                         
         st.markdown("---")
         st.subheader("📋 Usuários Cadastrados no Sistema")
         
-        conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+        conn, db_type = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id")
         usuarios_cadastrados = cursor.fetchall()
@@ -1545,18 +1942,22 @@ else:
                         st.error("Preencha todos os campos para salvar.")
                     else:
                         try:
-                            conn_ed = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                            conn_ed, db_t_ed = get_db_connection()
                             cursor_ed = conn_ed.cursor()
-                            cursor_ed.execute(
-                                "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?",
-                                (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), usr_para_editar[5])
-                            )
+                            if db_t_ed == "postgres":
+                                cursor_ed.execute(
+                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s WHERE id = %s",
+                                    (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), int(usr_para_editar[5]))
+                                )
+                            else:
+                                cursor_ed.execute(
+                                    "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?",
+                                    (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), usr_para_editar[5])
+                                )
                             conn_ed.commit()
                             conn_ed.close()
                             st.success(f"Dados do usuário atualizados com sucesso!")
                             st.rerun()
-                        except sqlite3.IntegrityError:
-                            st.error("Erro: O Login informado já está em uso por outro usuário.")
                         except Exception as e:
                             st.error(f"Erro ao atualizar usuário: {e}")
             
@@ -1578,9 +1979,12 @@ else:
                         st.error("Atenção: Não é permitido excluir o usuário Administrador principal (908)!")
                     else:
                         try:
-                            conn_del = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+                            conn_del, db_t_del = get_db_connection()
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[5],))
+                            if db_t_del == "postgres":
+                                cursor_del.execute("DELETE FROM usuarios WHERE id = %s", (int(usr_para_excluir[5]),))
+                            else:
+                                cursor_del.execute("DELETE FROM usuarios WHERE id = ?", (usr_para_excluir[5]),)
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Usuário '{usr_para_excluir[1]}' removido com sucesso!")
