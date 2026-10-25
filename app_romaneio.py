@@ -87,40 +87,49 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de imagem não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. BARRA LATERAL (SIDEBAR): CONFIGURAÇÃO DE TEMAS E BRILHO
-# (Disponível visível para Conferentes e Gestores em qualquer tela)
+# 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
 # ---------------------------------------------------------
-with st.sidebar:
-    st.markdown("### 🎨 Configuração de Tema & Tela")
+with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Aparelhos)", expanded=False):
+    col_t1, col_t2 = st.columns([2, 2])
     
-    sel_tema = st.selectbox(
-        "Selecione o Tema",
-        ["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"],
-        index=["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automatico)"].index(st.session_state["tipo_tema"])
-    )
-    if sel_tema != st.session_state["tipo_tema"]:
-        st.session_state["tipo_tema"] = sel_tema
-        st.rerun()
+    with col_t1:
+        sel_tema = st.selectbox(
+            "Modo de Exibição / Tema",
+            ["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automático)"],
+            index=["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automático)"].index(st.session_state["tipo_tema"]),
+            key="sel_tema_responsivo"
+        )
+        if sel_tema != st.session_state["tipo_tema"]:
+            st.session_state["tipo_tema"] = sel_tema
+            st.rerun()
 
-    if st.session_state["tipo_tema"] == "Personalizado (Horário Automatico)":
+    with col_t2:
+        st.write("☀️ **Nível do Brilho da Tela (%)**")
+        slider_brilho = st.slider(
+            "Ajuste do Brilho",
+            min_value=10,
+            max_value=100,
+            value=st.session_state["nivel_brilho"],
+            step=5,
+            label_visibility="collapsed",
+            key="slider_brilho_responsivo"
+        )
+        if slider_brilho != st.session_state["nivel_brilho"]:
+            st.session_state["nivel_brilho"] = slider_brilho
+            st.rerun()
+
+    if st.session_state["tipo_tema"] == "Personalizado (Horário Automático)":
         st.markdown("---")
-        st.write("⏰ **Horários de Alteração:**")
-        
-        h_c = st.time_input("Início Modo Claro", value=st.session_state["hora_inicio_claro"])
-        h_e = st.time_input("Início Modo Escuro", value=st.session_state["hora_inicio_escuro"])
+        col_h1, col_h2 = st.columns(2)
+        with col_h1:
+            h_c = st.time_input("Horário de Início do Modo Claro", value=st.session_state["hora_inicio_claro"], key="time_claro")
+        with col_h2:
+            h_e = st.time_input("Horário de Início do Modo Escuro", value=st.session_state["hora_inicio_escuro"], key="time_escuro")
         
         if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
             st.session_state["hora_inicio_claro"] = h_c
             st.session_state["hora_inicio_escuro"] = h_e
             st.rerun()
-
-    st.markdown("---")
-    st.markdown("☀️ **Nível de Brilho da Tela (%)**")
-    slider_brilho = st.slider("Ajuste do Brilho", min_value=10, max_value=100, value=st.session_state["nivel_brilho"], step=5, label_visibility="collapsed")
-    if slider_brilho != st.session_state["nivel_brilho"]:
-        st.session_state["nivel_brilho"] = slider_brilho
-        st.rerun()
-    st.markdown("---")
 
 # ---------------------------------------------------------
 # 3. MOTOR DINÂMICO DE TEMAS E BRILHO
@@ -150,7 +159,7 @@ if tema_atual == "Modo Claro":
     modo_efetivo = "claro"
 elif tema_atual == "Modo Escuro":
     modo_efetivo = "escuro"
-elif tema_atual == "Personalizado (Horário Automatico)":
+elif tema_atual == "Personalizado (Horário Automático)":
     hora_atual = datetime.now().time()
     h_claro = st.session_state["hora_inicio_claro"]
     h_escuro = st.session_state["hora_inicio_escuro"]
