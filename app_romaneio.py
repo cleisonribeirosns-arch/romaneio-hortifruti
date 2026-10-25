@@ -879,7 +879,7 @@ else:
             with col2:
                 data_rec_val = st.date_input(
                     "Data do Recebimento (Obrigatório)",
-                    value=None,
+                    value=datetime.now(),
                     format="DD/MM/YYYY",
                     key=f"data_rec_{k_suffix}",
                 )
@@ -1378,7 +1378,7 @@ else:
             st.info("Nenhum romaneio encontrado com os filtros informados.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO (COM CARIMBO DE DATA/HORA E STATUS CORRETO)
+    # 6. CONTROLE DE BONIFICAÇÃO (COM SELEÇÃO MANUAL DE DATA E HORA AUTOMÁTICA)
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -1417,9 +1417,15 @@ else:
                     prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod)
                     anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
-                # Carimbo automático de data e hora atual
-                dt_entrada_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-                st.info(f"📅 **Data e Hora de Entrada (Automática):** {dt_entrada_str}")
+                # Seleção manual da data e hora automática
+                col_dt1, col_dt2 = st.columns(2)
+                with col_dt1:
+                    data_entrada_manual = st.date_input("Data de Entrada (Manual)", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dt2:
+                    hora_auto = datetime.now().strftime('%H:%M:%S')
+                    st.text_input("Hora de Entrada (Automática)", value=hora_auto, disabled=True)
+                
+                dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}"
                 
                 btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
                 if btn_salvar_bonf:
@@ -1560,11 +1566,34 @@ else:
             st.info("Nenhuma bonificação encontrada com os filtros informados.")
 
     # ---------------------------------------------------------
-    # 7. CONTROLE DE BAIXA DE AVARIAS (SEGUNDA TABELA DEDICADA)
+    # 7. CONTROLE DE BAIXA DE AVARIAS (COM SALDO EXCLUSIVO DA LOJA 02 E LISTAGEM DE NOTAS)
     # ---------------------------------------------------------
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Controle de Baixa de Avarias Hortifrúti")
         
+        # BUSCA SALDO DISPONÍVEL EXCLUSIVO DA LOJA 02
+        conn_b2, db_tb2 = get_db_connection()
+        df_b2 = pd.read_sql_query("SELECT * FROM bonificacoes WHERE loja LIKE '%02%' AND status IN ('Disponível', 'Parcialmente Utilizada')", conn_b2)
+        conn_b2.close()
+        
+        tot_saldo_loja2 = df_b2["valor_bonificacao"].sum() if not df_b2.empty else 0.0
+        
+        st.info(f"💡 **Saldo Disponível Exclusivo para Baixas (Loja 02): R$ {fmt_ptbr(tot_saldo_loja2, 2)}**")
+        
+        if not df_b2.empty:
+            with st.expander("📌 Notas e Produtos com Saldo Disponível para Uso (Loja 02)", expanded=True):
+                df_b2_show = df_b2[["numero_nota", "data_entrada", "valor_bonificacao", "status", "produto_hortifruti"]].copy()
+                df_b2_show["Valor (R$)"] = df_b2_show["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_b2_show = df_b2_show.rename(columns={
+                    "numero_nota": "N° Nota",
+                    "data_entrada": "Data Entrada",
+                    "status": "Status",
+                    "produto_hortifruti": "Produto"
+                })
+                st.dataframe(df_b2_show[["N° Nota", "Data Entrada", "Valor (R$)", "Status", "Produto"]], use_container_width=True, hide_index=True)
+        else:
+            st.warning("⚠️ Não há notas com saldo disponível para a Loja 02 no momento.")
+            
         conn_prod_v, db_pv = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
         cursor_pv.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
@@ -1573,25 +1602,12 @@ else:
         
         lista_opcoes_prod_v = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad_v] if prods_cad_v else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA"]
         
-        with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=True):
+        with st.expander("➕ Registrar Nova Baixa de Avaria (Loja 02)", expanded=True):
             with st.form("form_cad_baixa", clear_on_submit=True):
                 col_v1, col_v2, col_v3 = st.columns([1.5, 1.5, 1.5])
                 with col_v1:
                     num_ocorrencia = st.text_input("N° Ocorrência / Lote", placeholder="Ex: BAIXA-001")
-                    loja_baixa = st.selectbox(
-                        "Loja",
-                        [
-                            "LOJA 01 CD",
-                            "LOJA 02",
-                            "LOJA 03",
-                            "LOJA 04",
-                            "LOJA 05",
-                            "LOJA 06",
-                            "LOJA 07",
-                        ],
-                        index=1,
-                        key="loja_baixa_sel"
-                    )
+                    loja_baixa = st.text_input("Loja Destino", value="LOJA 02", disabled=True)
                 with col_v2:
                     valor_baixa_str = st.text_input("Valor da Baixa (R$)", placeholder="0,00")
                     motivo_baixa = st.text_input("Motivo da Baixa", placeholder="Ex: Amadurecimento excessivo, avaria no transporte...")
@@ -1599,9 +1615,14 @@ else:
                     prod_baixa = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, key="prod_baixa_sel")
                     anexo_baixa = st.file_uploader("Anexar Comprovante / Foto da Baixa", type=["pdf", "png", "jpg", "jpeg"], key="anexo_baixa_file")
                 
-                # Carimbo automático de data e hora atual
-                dt_baixa_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-                st.info(f"📅 **Data e Hora da Baixa (Automática):** {dt_baixa_str}")
+                col_dtv1, col_dtv2 = st.columns(2)
+                with col_dtv1:
+                    data_baixa_manual = st.date_input("Data da Baixa (Manual)", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dtv2:
+                    hora_baixa_auto = datetime.now().strftime('%H:%M:%S')
+                    st.text_input("Hora da Baixa (Automática)", value=hora_baixa_auto, disabled=True)
+                
+                dt_baixa_str = f"{data_baixa_manual.strftime('%d/%m/%Y')} {hora_baixa_auto}"
                 
                 btn_salvar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
                 if btn_salvar_baixa:
@@ -1614,59 +1635,58 @@ else:
                         except ValueError:
                             valor_baixa_val = 0.0
                             
-                        path_anexo_baixa = ""
-                        if anexo_baixa:
-                            path_anexo_baixa = os.path.join("uploads", f"BAIXA_{num_ocorrencia}_{anexo_baixa.name}")
-                            with open(path_anexo_baixa, "wb") as f_out:
-                                f_out.write(anexo_baixa.getbuffer())
-                                
-                        try:
-                            conn_v, db_tv = get_db_connection()
-                            cursor_v = conn_v.cursor()
-                            if db_tv == "postgres":
-                                cursor_v.execute(
-                                    """
-                                    INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                    """,
-                                    (num_ocorrencia.strip(), loja_baixa, dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa)
-                                )
-                            else:
-                                cursor_v.execute(
-                                    """
-                                    INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo)
-                                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    (num_ocorrencia.strip(), loja_baixa, dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa)
-                                )
-                            conn_v.commit()
-                            conn_v.close()
-                            st.success(f"Baixa de Avaria N° {num_ocorrencia} registrada com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao registrar baixa: {e}")
+                        if valor_baixa_val > tot_saldo_loja2:
+                            st.error(f"❌ Valor da baixa (R$ {fmt_ptbr(valor_baixa_val, 2)}) é maior que o saldo disponível na Loja 02 (R$ {fmt_ptbr(tot_saldo_loja2, 2)})!")
+                        else:
+                            path_anexo_baixa = ""
+                            if anexo_baixa:
+                                path_anexo_baixa = os.path.join("uploads", f"BAIXA_{num_ocorrencia}_{anexo_baixa.name}")
+                                with open(path_anexo_baixa, "wb") as f_out:
+                                    f_out.write(anexo_baixa.getbuffer())
+                                    
+                            try:
+                                conn_v, db_tv = get_db_connection()
+                                cursor_v = conn_v.cursor()
+                                if db_tv == "postgres":
+                                    cursor_v.execute(
+                                        """
+                                        INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                        """,
+                                        (num_ocorrencia.strip(), "LOJA 02", dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa)
+                                    )
+                                else:
+                                    cursor_v.execute(
+                                        """
+                                        INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                                        """,
+                                        (num_ocorrencia.strip(), "LOJA 02", dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa)
+                                    )
+                                conn_v.commit()
+                                conn_v.close()
+                                st.success(f"Baixa de Avaria N° {num_ocorrencia} registrada com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao registrar baixa: {e}")
                             
         st.markdown("---")
-        st.subheader("📋 Registros de Baixas e Avarias")
+        st.subheader("📋 Registros de Baixas e Avarias (Loja 02)")
         
         with st.expander("🔍 Filtros de Baixas", expanded=True):
-            fv_col1, fv_col2, fv_col3 = st.columns(3)
+            fv_col1, fv_col2 = st.columns(2)
             with fv_col1:
                 f_ocor = st.text_input("Filtrar por Ocorrência", placeholder="Ex: BAIXA-001", key="f_ocor_baixa")
             with fv_col2:
-                f_loja_v = st.selectbox("Filtrar por Loja", ["TODAS"] + ["LOJA 01 CD", "LOJA 02", "LOJA 03", "LOJA 04", "LOJA 05", "LOJA 06", "LOJA 07"], key="f_loja_baixa")
-            with fv_col3:
                 f_prod_v = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA", key="f_prod_baixa")
                 
         conn_v_sel, db_tv_sel = get_db_connection()
-        df_baixas = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_v_sel)
+        df_baixas = pd.read_sql_query("SELECT * FROM baixas_avarias WHERE loja LIKE '%02%' ORDER BY id DESC", conn_v_sel)
         conn_v_sel.close()
         
         if not df_baixas.empty:
             if f_ocor.strip():
                 df_baixas = df_baixas[df_baixas["numero_ocorrencia"].str.contains(f_ocor.strip(), case=False, na=False)]
-            if f_loja_v != "TODAS":
-                df_baixas = df_baixas[df_baixas["loja"] == f_loja_v]
             if f_prod_v.strip():
                 df_baixas = df_baixas[df_baixas["produto_hortifruti"].str.contains(f_prod_v.strip(), case=False, na=False)]
                 
@@ -1695,7 +1715,7 @@ else:
             
             st.dataframe(df_exib_baixas_final, use_container_width=True)
         else:
-            st.info("Nenhuma baixa de avaria encontrada com os filtros informados.")
+            st.info("Nenhuma baixa de avaria encontrada para a Loja 02.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
