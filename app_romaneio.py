@@ -273,6 +273,18 @@ def init_db():
                 caminho_anexo TEXT
             )
         """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS baixas_avarias (
+                id SERIAL PRIMARY KEY,
+                numero_ocorrencia VARCHAR(255) NOT NULL,
+                loja VARCHAR(255) NOT NULL,
+                data_baixa VARCHAR(50) NOT NULL,
+                valor_baixa REAL NOT NULL,
+                motivo VARCHAR(255) NOT NULL,
+                produto_hortifruti VARCHAR(255) NOT NULL,
+                caminho_anexo TEXT
+            )
+        """)
         
         cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
         if not cursor.fetchone():
@@ -338,6 +350,18 @@ def init_db():
                 data_entrada TEXT NOT NULL,
                 valor_bonificacao REAL NOT NULL,
                 status TEXT NOT NULL,
+                produto_hortifruti TEXT NOT NULL,
+                caminho_anexo TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS baixas_avarias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_ocorrencia TEXT NOT NULL,
+                loja TEXT NOT NULL,
+                data_baixa TEXT NOT NULL,
+                valor_baixa REAL NOT NULL,
+                motivo TEXT NOT NULL,
                 produto_hortifruti TEXT NOT NULL,
                 caminho_anexo TEXT
             )
@@ -796,7 +820,8 @@ else:
     opcoes_menu = [
         "Romaneio de Recebimento - Hortifrúti", 
         "Consultar Romaneios",
-        "Controle de Bonificação & Baixa"
+        "Controle de Bonificação",
+        "Controle de Baixa de Avarias"
     ]
     if is_admin:
         opcoes_menu.extend([
@@ -1353,12 +1378,11 @@ else:
             st.info("Nenhum romaneio encontrado com os filtros informados.")
 
     # ---------------------------------------------------------
-    # 6. NOVO MÓDULO: CONTROLE DE BONIFICAÇÃO & BAIXA HORTIFRUTI
+    # 6. CONTROLE DE BONIFICAÇÃO (COM CARIMBO DE DATA/HORA E STATUS CORRETO)
     # ---------------------------------------------------------
-    elif menu == "Controle de Bonificação & Baixa":
-        st.title("🎁 Controle de Bonificação e Baixa Hortifrúti")
+    elif menu == "Controle de Bonificação":
+        st.title("🎁 Controle de Bonificação Hortifrúti")
         
-        # Carrega lista de produtos para o dropdown de bonificação
         conn_prod, db_p = get_db_connection()
         cursor_p = conn_prod.cursor()
         cursor_p.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
@@ -1367,7 +1391,7 @@ else:
         
         lista_opcoes_prod = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad] if prods_cad else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA", "2080 - LARANJA REGIONAL", "2059 - LIMÃO", "6156 - ABACAXI"]
         
-        with st.expander("➕ Cadastrar Nova Bonificação / Baixa", expanded=True):
+        with st.expander("➕ Cadastrar Nova Bonificação", expanded=True):
             with st.form("form_cad_bonificacao", clear_on_submit=True):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
@@ -1387,15 +1411,15 @@ else:
                         key="loja_bonf_sel"
                     )
                 with col_b2:
-                    data_entrada_bonf = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
-                    hora_entrada_bonf = st.time_input("Hora da Entrada", value=datetime.now().time())
-                    dt_entrada_str = f"{data_entrada_bonf.strftime('%d/%m/%Y')} {hora_entrada_bonf.strftime('%H:%M:%S')}"
-                with col_b3:
                     valor_bonf_str = st.text_input("Valor da Bonificação (R$)", placeholder="0,00")
-                    status_bonf = st.selectbox("STATUS", ["Totalmente Utilizada", "Disponível"])
+                    status_bonf = st.selectbox("STATUS", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"])
+                with col_b3:
                     prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod)
-                    
-                anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                    anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                
+                # Carimbo automático de data e hora atual
+                dt_entrada_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                st.info(f"📅 **Data e Hora de Entrada (Automática):** {dt_entrada_str}")
                 
                 btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
                 if btn_salvar_bonf:
@@ -1441,7 +1465,7 @@ else:
                             st.error(f"Erro ao salvar bonificação: {e}")
                             
         st.markdown("---")
-        st.subheader("📋 Registros de Bonificação e Baixa")
+        st.subheader("📋 Registros de Bonificação")
         
         with st.expander("🔍 Filtros de Busca", expanded=True):
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
@@ -1450,7 +1474,7 @@ else:
             with f_col2:
                 f_loja = st.selectbox("Filtrar por Loja", ["TODAS"] + ["LOJA 01 CD", "LOJA 02", "LOJA 03", "LOJA 04", "LOJA 05", "LOJA 06", "LOJA 07"], key="f_loja_bonf")
             with f_col3:
-                f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Totalmente Utilizada"], key="f_status_bonf")
+                f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="f_status_bonf")
             with f_col4:
                 f_prod = st.text_input("Filtrar por Produto", placeholder="Ex: MAMÃO", key="f_prod_bonf")
                 
@@ -1469,16 +1493,16 @@ else:
                 df_bonf = df_bonf[df_bonf["produto_hortifruti"].str.contains(f_prod.strip(), case=False, na=False)]
                 
         if not df_bonf.empty:
-            # KPIs Rápidos
             tot_bonf_val = df_bonf["valor_bonificacao"].sum()
             tot_disp_val = df_bonf[df_bonf["status"] == "Disponível"]["valor_bonificacao"].sum()
+            tot_parc_val = df_bonf[df_bonf["status"] == "Parcialmente Utilizada"]["valor_bonificacao"].sum()
             tot_util_val = df_bonf[df_bonf["status"] == "Totalmente Utilizada"]["valor_bonificacao"].sum()
             
             kpi_b1, kpi_b2, kpi_b3, kpi_b4 = st.columns(4)
-            kpi_b1.metric("Total de Registros", f"{len(df_bonf)} notas")
-            kpi_b2.metric("Valor Total Bonificado", f"R$ {fmt_ptbr(tot_bonf_val, 2)}")
-            kpi_b3.metric("Saldo Disponível", f"R$ {fmt_ptbr(tot_disp_val, 2)}")
-            kpi_b4.metric("Total Utilizado", f"R$ {fmt_ptbr(tot_util_val, 2)}")
+            kpi_b1.metric("Total Bonificado", f"R$ {fmt_ptbr(tot_bonf_val, 2)}")
+            kpi_b2.metric("Disponível", f"R$ {fmt_ptbr(tot_disp_val, 2)}")
+            kpi_b3.metric("Parcialmente Utilizada", f"R$ {fmt_ptbr(tot_parc_val, 2)}")
+            kpi_b4.metric("Totalmente Utilizada", f"R$ {fmt_ptbr(tot_util_val, 2)}")
             
             st.markdown("---")
             
@@ -1498,7 +1522,7 @@ else:
             
             st.dataframe(df_exib_final, use_container_width=True)
             
-            st.markdown("### ✏️ Alterar Status da Bonificação / Baixa")
+            st.markdown("### ✏️ Alterar Status da Bonificação")
             col_alt_b1, col_alt_b2, col_alt_b3 = st.columns([2.5, 2, 1.5])
             
             opcoes_bonf_alterar = [
@@ -1514,7 +1538,7 @@ else:
                     key="sel_bonf_alt_status"
                 )
             with col_alt_b2:
-                novo_status_sel = st.selectbox("Novo Status", ["Totalmente Utilizada", "Disponível"], key="sel_novo_status_b")
+                novo_status_sel = st.selectbox("Novo Status", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="sel_novo_status_b")
             with col_alt_b3:
                 st.write("")
                 st.write("")
@@ -1535,6 +1559,144 @@ else:
         else:
             st.info("Nenhuma bonificação encontrada com os filtros informados.")
 
+    # ---------------------------------------------------------
+    # 7. CONTROLE DE BAIXA DE AVARIAS (SEGUNDA TABELA DEDICADA)
+    # ---------------------------------------------------------
+    elif menu == "Controle de Baixa de Avarias":
+        st.title("📉 Controle de Baixa de Avarias Hortifrúti")
+        
+        conn_prod_v, db_pv = get_db_connection()
+        cursor_pv = conn_prod_v.cursor()
+        cursor_pv.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
+        prods_cad_v = cursor_pv.fetchall()
+        conn_prod_v.close()
+        
+        lista_opcoes_prod_v = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad_v] if prods_cad_v else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA"]
+        
+        with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=True):
+            with st.form("form_cad_baixa", clear_on_submit=True):
+                col_v1, col_v2, col_v3 = st.columns([1.5, 1.5, 1.5])
+                with col_v1:
+                    num_ocorrencia = st.text_input("N° Ocorrência / Lote", placeholder="Ex: BAIXA-001")
+                    loja_baixa = st.selectbox(
+                        "Loja",
+                        [
+                            "LOJA 01 CD",
+                            "LOJA 02",
+                            "LOJA 03",
+                            "LOJA 04",
+                            "LOJA 05",
+                            "LOJA 06",
+                            "LOJA 07",
+                        ],
+                        index=1,
+                        key="loja_baixa_sel"
+                    )
+                with col_v2:
+                    valor_baixa_str = st.text_input("Valor da Baixa (R$)", placeholder="0,00")
+                    motivo_baixa = st.text_input("Motivo da Baixa", placeholder="Ex: Amadurecimento excessivo, avaria no transporte...")
+                with col_v3:
+                    prod_baixa = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, key="prod_baixa_sel")
+                    anexo_baixa = st.file_uploader("Anexar Comprovante / Foto da Baixa", type=["pdf", "png", "jpg", "jpeg"], key="anexo_baixa_file")
+                
+                # Carimbo automático de data e hora atual
+                dt_baixa_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                st.info(f"📅 **Data e Hora da Baixa (Automática):** {dt_baixa_str}")
+                
+                btn_salvar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
+                if btn_salvar_baixa:
+                    if not num_ocorrencia.strip():
+                        st.error("O Número da Ocorrência é obrigatório.")
+                    else:
+                        try:
+                            v_baixa_limpo = valor_baixa_str.replace(".", "").replace(",", ".") if valor_baixa_str else "0"
+                            valor_baixa_val = float(v_baixa_limpo)
+                        except ValueError:
+                            valor_baixa_val = 0.0
+                            
+                        path_anexo_baixa = ""
+                        if anexo_baixa:
+                            path_anexo_baixa = os.path.join("uploads", f"BAIXA_{num_ocorrencia}_{anexo_baixa.name}")
+                            with open(path_anexo_baixa, "wb") as f_out:
+                                f_out.write(anexo_baixa.getbuffer())
+                                
+                        try:
+                            conn_v, db_tv = get_db_connection()
+                            cursor_v = conn_v.cursor()
+                            if db_tv == "postgres":
+                                cursor_v.execute(
+                                    """
+                                    INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo)
+                                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                    """,
+                                    (num_ocorrencia.strip(), loja_baixa, dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa)
+                                )
+                            else:
+                                cursor_v.execute(
+                                    """
+                                    INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo)
+                                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                                    """,
+                                    (num_ocorrencia.strip(), loja_baixa, dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa)
+                                )
+                            conn_v.commit()
+                            conn_v.close()
+                            st.success(f"Baixa de Avaria N° {num_ocorrencia} registrada com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Erro ao registrar baixa: {e}")
+                            
+        st.markdown("---")
+        st.subheader("📋 Registros de Baixas e Avarias")
+        
+        with st.expander("🔍 Filtros de Baixas", expanded=True):
+            fv_col1, fv_col2, fv_col3 = st.columns(3)
+            with fv_col1:
+                f_ocor = st.text_input("Filtrar por Ocorrência", placeholder="Ex: BAIXA-001", key="f_ocor_baixa")
+            with fv_col2:
+                f_loja_v = st.selectbox("Filtrar por Loja", ["TODAS"] + ["LOJA 01 CD", "LOJA 02", "LOJA 03", "LOJA 04", "LOJA 05", "LOJA 06", "LOJA 07"], key="f_loja_baixa")
+            with fv_col3:
+                f_prod_v = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA", key="f_prod_baixa")
+                
+        conn_v_sel, db_tv_sel = get_db_connection()
+        df_baixas = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_v_sel)
+        conn_v_sel.close()
+        
+        if not df_baixas.empty:
+            if f_ocor.strip():
+                df_baixas = df_baixas[df_baixas["numero_ocorrencia"].str.contains(f_ocor.strip(), case=False, na=False)]
+            if f_loja_v != "TODAS":
+                df_baixas = df_baixas[df_baixas["loja"] == f_loja_v]
+            if f_prod_v.strip():
+                df_baixas = df_baixas[df_baixas["produto_hortifruti"].str.contains(f_prod_v.strip(), case=False, na=False)]
+                
+        if not df_baixas.empty:
+            tot_baixas_val = df_baixas["valor_baixa"].sum()
+            
+            kpi_v1, kpi_v2 = st.columns(2)
+            kpi_v1.metric("Total de Baixas Registradas", f"{len(df_baixas)} ocorrências")
+            kpi_v2.metric("Valor Total de Avarias/Baixas", f"R$ {fmt_ptbr(tot_baixas_val, 2)}")
+            
+            st.markdown("---")
+            
+            df_display_baixas = df_baixas.copy()
+            df_display_baixas["Valor da Baixa (R$)"] = df_display_baixas["valor_baixa"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_display_baixas = df_display_baixas.rename(columns={
+                "numero_ocorrencia": "N° OCORRÊNCIA",
+                "loja": "LOJA",
+                "data_baixa": "Data e Hora da Baixa",
+                "motivo": "Motivo",
+                "produto_hortifruti": "Produto Hortifrúti",
+                "caminho_anexo": "COMPROVANTE"
+            })
+            
+            df_exib_baixas_final = df_display_baixas[["N° OCORRÊNCIA", "LOJA", "Data e Hora da Baixa", "Valor da Baixa (R$)", "Motivo", "Produto Hortifrúti"]]
+            df_exib_baixas_final.index = range(1, len(df_exib_baixas_final) + 1)
+            
+            st.dataframe(df_exib_baixas_final, use_container_width=True)
+        else:
+            st.info("Nenhuma baixa de avaria encontrada com os filtros informados.")
+
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
         
@@ -1542,6 +1704,7 @@ else:
         df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
         df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
         df_bonf_rel = pd.read_sql_query("SELECT * FROM bonificacoes", conn)
+        df_baixas_rel = pd.read_sql_query("SELECT * FROM baixas_avarias", conn)
         conn.close()
         
         if df_roms.empty or df_itens.empty:
@@ -1646,54 +1809,9 @@ else:
                     )
                     st.plotly_chart(fig_qtd, use_container_width=True)
                     
-                col_g3, col_g4 = st.columns(2)
-                with col_g3:
-                    st.markdown("**Participação Financeira por Fornecedor (R$)**")
-                    forn_val = df_filtrado.groupby("fornecedor")["valor_total"].sum().reset_index()
-                    fig_forn = px.bar(
-                        forn_val, 
-                        x="fornecedor", 
-                        y="valor_total",
-                        text_auto=".2f",
-                        color="valor_total",
-                        color_continuous_scale="Viridis"
-                    )
-                    fig_forn.update_layout(
-                        xaxis_title="Fornecedor", 
-                        yaxis_title="Total (R$)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="#FFFFFF",
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-                        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.2)")
-                    )
-                    st.plotly_chart(fig_forn, use_container_width=True)
-                    
-                with col_g4:
-                    st.markdown("**Evolução Diária dos Recebimentos (R$)**")
-                    diario_val = df_filtrado.groupby("data_recebimento")["valor_total"].sum().reset_index()
-                    fig_line = px.line(
-                        diario_val, 
-                        x="data_recebimento", 
-                        y="valor_total",
-                        markers=True,
-                        line_shape="spline"
-                    )
-                    fig_line.update_traces(line_color="#1B5E20", line_width=3)
-                    fig_line.update_layout(
-                        xaxis_title="Data do Recebimento", 
-                        yaxis_title="Total (R$)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        font_color="#FFFFFF",
-                        xaxis=dict(tickangle=-35, showgrid=True, gridcolor="rgba(255,255,255,0.2)"),
-                        yaxis=dict(showgrid=True, gridcolor="rgba(255,255,255,0.2)")
-                    )
-                    st.plotly_chart(fig_line, use_container_width=True)
-                    
                 if not df_bonf_rel.empty:
                     st.markdown("---")
-                    st.subheader("🎁 Análise Gerencial de Bonificação e Baixas")
+                    st.subheader("🎁 Análise Gerencial de Bonificações")
                     
                     col_bg1, col_bg2 = st.columns(2)
                     with col_bg1:
@@ -1724,13 +1842,34 @@ else:
                             names="status",
                             values="valor_bonificacao",
                             color="status",
-                            color_discrete_map={"Disponível": "#2E7D32", "Totalmente Utilizada": "#C62828"}
+                            color_discrete_map={"Disponível": "#2E7D32", "Parcialmente Utilizada": "#FFB300", "Totalmente Utilizada": "#C62828"}
                         )
                         fig_bonf_pie.update_layout(
                             paper_bgcolor="rgba(0,0,0,0)",
                             font_color="#FFFFFF"
                         )
                         st.plotly_chart(fig_bonf_pie, use_container_width=True)
+
+                if not df_baixas_rel.empty:
+                    st.markdown("---")
+                    st.subheader("📉 Análise Gerencial de Baixas e Avarias")
+                    baixas_loja = df_baixas_rel.groupby("loja")["valor_baixa"].sum().reset_index()
+                    fig_baixas_loja = px.bar(
+                        baixas_loja,
+                        x="loja",
+                        y="valor_baixa",
+                        text_auto=".2f",
+                        color="valor_baixa",
+                        color_continuous_scale="Reds"
+                    )
+                    fig_baixas_loja.update_layout(
+                        xaxis_title="Loja",
+                        yaxis_title="Valor da Baixa (R$)",
+                        plot_bgcolor="rgba(0,0,0,0)",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        font_color="#FFFFFF"
+                    )
+                    st.plotly_chart(fig_baixas_loja, use_container_width=True)
 
                 st.markdown("---")
                 st.subheader("📋 Tabela Consolidada & Exportação")
