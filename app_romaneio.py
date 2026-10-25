@@ -6,7 +6,7 @@ import pandas as pd
 from PIL import Image
 import plotly.express as px
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (
     Image as RLImage,
@@ -276,13 +276,16 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id SERIAL PRIMARY KEY,
-                numero_ocorrencia VARCHAR(255) NOT NULL,
-                loja VARCHAR(255) NOT NULL,
+                loja_baixa VARCHAR(255) NOT NULL,
                 data_baixa VARCHAR(50) NOT NULL,
-                valor_baixa REAL NOT NULL,
-                motivo VARCHAR(255) NOT NULL,
+                ref_bon_transferen VARCHAR(255) NOT NULL,
+                nf_baixa TEXT,
+                nf_b_entrada VARCHAR(255) NOT NULL,
                 produto_hortifruti VARCHAR(255) NOT NULL,
-                caminho_anexo TEXT
+                quantidade_kg_cx REAL NOT NULL,
+                valor_total_avaria REAL NOT NULL,
+                saldo_restante_nota REAL NOT NULL,
+                saldo_total_disponivel REAL NOT NULL
             )
         """)
         
@@ -356,13 +359,16 @@ def init_db():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero_ocorrencia TEXT NOT NULL,
-                loja TEXT NOT NULL,
+                loja_baixa TEXT NOT NULL,
                 data_baixa TEXT NOT NULL,
-                valor_baixa REAL NOT NULL,
-                motivo TEXT NOT NULL,
+                ref_bon_transferen TEXT NOT NULL,
+                nf_baixa TEXT,
+                nf_b_entrada TEXT NOT NULL,
                 produto_hortifruti TEXT NOT NULL,
-                caminho_anexo TEXT
+                quantidade_kg_cx REAL NOT NULL,
+                valor_total_avaria REAL NOT NULL,
+                saldo_restante_nota REAL NOT NULL,
+                saldo_total_disponivel REAL NOT NULL
             )
         """)
         
@@ -609,8 +615,9 @@ def gerar_pdf_bonificacoes(df_bonf_data):
     return buffer
 
 def gerar_pdf_baixas(df_baixas_data):
+    # Paisagem para caber perfeitamente todas as colunas da planilha de avarias
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
     story = []
     styles = getSampleStyleSheet()
     
@@ -628,28 +635,54 @@ def gerar_pdf_baixas(df_baixas_data):
                 break
         if logo_path: break
 
-    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+    logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
 
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Baixas de Avarias Hortifrúti (LOJA 02)", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Ocorrências:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Registro de Baixas de Avarias - Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
-    story.append(Spacer(1, 15))
+    story.append(Spacer(1, 12))
     
-    table_content = [[Paragraph("N° Ocorrência", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data/Hora Baixa", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Motivo", style_header_left), Paragraph("Produto Hortifrúti", style_header_left)]]
+    table_content = [[
+        Paragraph("LOJAS", style_header_center),
+        Paragraph("Data Baixa", style_header_center),
+        Paragraph("Ref. Bon. transferen", style_header_center),
+        Paragraph("NF da baixa", style_header_center),
+        Paragraph("NF de B. ENTRADA", style_header_center),
+        Paragraph("Produto Hortifrúti", style_header_left),
+        Paragraph("Qtd (kg/cx)", style_header_center),
+        Paragraph("Valor Total Avaria (R$)", style_header_left),
+        Paragraph("Saldo", style_header_left),
+        Paragraph("Saldo Total disponível", style_header_left)
+    ]]
     
-    tot_val = 0.0
+    tot_val_avarias = 0.0
     for _, r in df_baixas_data.iterrows():
-        v_bx = float(r["valor_baixa"]) if r["valor_baixa"] else 0.0
-        tot_val += v_bx
-        table_content.append([Paragraph(str(r["numero_ocorrencia"]), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_baixa"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_bx, 2)}", style_left), Paragraph(str(r["motivo"]), style_left), Paragraph(str(r["produto_hortifruti"]), style_left)])
+        v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
+        tot_val_avarias += v_av
+        s_nota = float(r["saldo_restante_nota"]) if r["saldo_restante_nota"] else 0.0
+        s_disp = float(r["saldo_total_disponivel"]) if r["saldo_total_disponivel"] else 0.0
+        qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
         
-    baixas_table = Table(table_content, colWidths=[80, 60, 95, 75, 110, 120])
-    baixas_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#C62828")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+        table_content.append([
+            Paragraph(str(r["loja_baixa"]), style_center),
+            Paragraph(str(r["data_baixa"]), style_center),
+            Paragraph(str(r["ref_bon_transferen"]), style_center),
+            Paragraph(str(r["nf_baixa"] if r["nf_baixa"] else "S/Anexo"), style_center),
+            Paragraph(str(r["nf_b_entrada"]), style_center),
+            Paragraph(str(r["produto_hortifruti"]), style_left),
+            Paragraph(fmt_ptbr(qtd_val, 3), style_center),
+            Paragraph(f"R$ {fmt_ptbr(v_av, 2)}", style_left),
+            Paragraph(f"R$ {fmt_ptbr(s_nota, 2)}", style_left),
+            Paragraph(f"R$ {fmt_ptbr(s_disp, 2)}", style_left),
+        ])
+        
+    baixas_table = Table(table_content, colWidths=[70, 95, 85, 75, 85, 120, 60, 85, 65, 52])
+    baixas_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(baixas_table)
     story.append(Spacer(1, 10))
     
-    total_table = Table([[f"VALOR TOTAL DAS BAIXAS: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1B5E20")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
+    total_table = Table([[f"VALOR TOTAL DAS AVARIAS: R$ {fmt_ptbr(tot_val_avarias, 2)}"]], colWidths=[792])
+    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#C62828")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
     story.append(total_table)
     doc.build(story)
     buffer.seek(0)
@@ -953,7 +986,7 @@ else:
         else: st.info("Nenhum romaneio encontrado.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO (COM CADASTRO RÁPIDO DE PRODUTO)
+    # 6. CONTROLE DE BONIFICAÇÃO
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -966,7 +999,6 @@ else:
         
         lista_opcoes_prod = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad] if prods_cad else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA", "2080 - LARANJA REGIONAL", "2059 - LIMÃO", "6156 - ABACAXI"]
         
-        # Expander para Cadastrar Produto Rápido caso não exista na lista
         with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
             with st.form("form_cad_prod_rapido_bonf", clear_on_submit=True):
                 col_rp1, col_rp2, col_rp3, col_rp4 = st.columns([1.5, 1.5, 2.5, 1])
@@ -990,14 +1022,14 @@ else:
                             st.success(f"Produto '{r_nome.strip().upper()}' cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Erro ao cadastrar produto (já existe?): {e}")
+                            st.error(f"Erro ao cadastrar produto: {e}")
 
         with st.expander("➕ Cadastrar Nova Bonificação", expanded=True):
             with st.form("form_cad_bonificacao", clear_on_submit=True):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
-                    num_nota_bonf = st.text_input("N° Nota Fiscal", placeholder="Ex: 65223")
-                    loja_bonf = st.selectbox("Loja", ["LOJA 01 CD", "LOJA 02", "LOJA 03", "LOJA 04", "LOJA 05", "LOJA 06", "LOJA 07"], index=1, key="loja_bonf_sel")
+                    num_nota_bonf = st.text_input("N° Nota Fiscal", placeholder="Ex: 65231")
+                    loja_bonf = st.selectbox("Loja", ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=1, key="loja_bonf_sel")
                 with col_b2:
                     valor_bonf_str = st.text_input("Valor da Bonificação (R$)", placeholder="0,00")
                     status_bonf = st.selectbox("STATUS", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"])
@@ -1040,10 +1072,10 @@ else:
         
         with st.expander("🔍 Filtros de Busca", expanded=True):
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", placeholder="Ex: 65223", key="f_nota_bonf")
-            with f_col2: f_loja = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 01 CD", "LOJA 02", "LOJA 03", "LOJA 04", "LOJA 05", "LOJA 06", "LOJA 07"], key="f_loja_bonf")
+            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", placeholder="Ex: 65231", key="f_nota_bonf")
+            with f_col2: f_loja = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], key="f_loja_bonf")
             with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="f_status_bonf")
-            with f_col4: f_prod = st.text_input("Filtrar por Produto", placeholder="Ex: MAMÃO", key="f_prod_bonf")
+            with f_col4: f_prod = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA", key="f_prod_bonf")
                 
         conn_b_sel, db_tb_sel = get_db_connection()
         df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
@@ -1109,149 +1141,224 @@ else:
         else: st.info("Nenhuma bonificação encontrada.")
 
     # ---------------------------------------------------------
-    # 7. CONTROLE DE BAIXA DE AVARIAS (COM CADASTRO RÁPIDO DE PRODUTO)
+    # 7. CONTROLE DE BAIXA DE AVARIAS (SEGUINDO O MODELO EXATO DA PLANILHA)
     # ---------------------------------------------------------
     elif menu == "Controle de Baixa de Avarias":
-        st.title("📉 Controle de Baixa de Avarias Hortifrúti")
+        st.title("📉 Registro de Baixas das Avarias")
         
-        conn_b2, db_tb2 = get_db_connection()
-        df_b2 = pd.read_sql_query("SELECT * FROM bonificacoes WHERE loja LIKE '%02%' AND status IN ('Disponível', 'Parcialmente Utilizada')", conn_b2)
-        conn_b2.close()
+        # BUSCA TODAS AS NOTAS DE BONIFICAÇÃO CADASTRADAS PARA CALCULAR OS SALDOS EM TEMPO REAL
+        conn_b_all, db_tb_all = get_db_connection()
+        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
+        conn_b_all.close()
         
-        tot_saldo_loja2 = df_b2["valor_bonificacao"].sum() if not df_b2.empty else 0.0
-        st.info(f"💡 **Saldo Disponível Exclusivo para Baixas (Loja 02): R$ {fmt_ptbr(tot_saldo_loja2, 2)}**")
+        # Saldo total disponível unicamente para a LOJA 02 (notas com '02' no nome da loja e status livre)
+        df_bonf_loja2 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
         
-        if not df_b2.empty:
+        # Calcula o saldo atual de cada nota de entrada da Loja 02 abatendo as baixas já realizadas
+        conn_bx_chk, db_tbx_chk = get_db_connection()
+        df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
+        conn_bx_chk.close()
+        
+        # Mapeamento do total já baixado por nota de entrada
+        total_baixado_por_nota = {}
+        if not df_baixar_hist.empty:
+            totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
+            for nf_e, val_bx in totais_por_nf.items():
+                total_baixado_por_nota[str(nf_e)] = float(val_bx)
+                
+        # Constrói a listagem de notas da Loja 02 com saldo disponível
+        notas_com_saldo_loja2 = []
+        saldo_total_disp_loja2 = 0.0
+        
+        if not df_bonf_loja2.empty:
+            for _, r_bonf in df_bonf_loja2.iterrows():
+                num_nf_ent = str(r_bonf["numero_nota"])
+                val_original = float(r_bonf["valor_bonificacao"])
+                ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
+                saldo_restante_nota = max(0.0, val_original - ja_baixado)
+                
+                if saldo_restante_nota > 0:
+                    saldo_total_disp_loja2 += saldo_restante_nota
+                    notas_com_saldo_loja2.append({
+                        "nf_entrada": num_nf_ent,
+                        "produto": r_bonf["produto_hortifruti"],
+                        "valor_original": val_original,
+                        "saldo_restante": saldo_restante_nota
+                    })
+
+        st.info(f"💡 **Saldo Total Disponível para a Loja 02: R$ {fmt_ptbr(saldo_total_disp_loja2, 2)}**")
+        
+        if notas_com_saldo_loja2:
             with st.expander("📌 Notas e Produtos com Saldo Disponível para Uso (Loja 02)", expanded=True):
-                df_b2_show = df_b2[["numero_nota", "data_entrada", "valor_bonificacao", "status", "produto_hortifruti"]].copy()
-                df_b2_show["Valor (R$)"] = df_b2_show["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_b2_show = df_b2_show.rename(columns={"numero_nota": "N° Nota", "data_entrada": "Data Entrada", "status": "Status", "produto_hortifruti": "Produto"})
-                st.dataframe(df_b2_show[["N° Nota", "Data Entrada", "Valor (R$)", "Status", "Produto"]], use_container_width=True, hide_index=True)
+                df_ns_show = pd.DataFrame(notas_com_saldo_loja2)
+                df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
+                st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True)
         else:
             st.warning("⚠️ Não há notas com saldo disponível para a Loja 02 no momento.")
-            
+
+        # Carrega lista de produtos para seleção
         conn_prod_v, db_pv = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
         cursor_pv.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
         prods_cad_v = cursor_pv.fetchall()
         conn_prod_v.close()
-        
         lista_opcoes_prod_v = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad_v] if prods_cad_v else ["2332 - MACAXEIRA", "2363 - MAMÃO", "1038 - BANANA PACOVAN", "75404 - MELANCIA"]
-        
-        # Expander para Cadastrar Produto Rápido nas Baixas
+
+        # Expander para Cadastro Rápido de Produtos
         with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
-            with st.form("form_cad_prod_rapido_baixa", clear_on_submit=True):
+            with st.form("form_cad_prod_rapido_reg_baixa", clear_on_submit=True):
                 col_rp1, col_rp2, col_rp3, col_rp4 = st.columns([1.5, 1.5, 2.5, 1])
                 with col_rp1: r_cod_v = st.text_input("Cód. Produto")
                 with col_rp2: r_bar_v = st.text_input("Cód. Barras")
                 with col_rp3: r_nome_v = st.text_input("Nome do Produto *")
                 with col_rp4: r_und_v = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"])
                 if st.form_submit_button("Salvar Produto", type="primary"):
-                    if not r_nome_v.strip():
-                        st.error("Informe o nome do produto.")
+                    if not r_nome_v.strip(): st.error("Informe o nome.")
                     else:
                         try:
                             conn_rp, db_trp = get_db_connection()
                             cursor_rp = conn_rp.cursor()
-                            cursor_rp.execute(
-                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_trp == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
-                                (r_cod_v.strip() if r_cod_v else None, r_bar_v.strip() if r_bar_v else None, r_nome_v.strip().upper(), r_und_v)
-                            )
+                            cursor_rp.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_trp == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (r_cod_v.strip() if r_cod_v else None, r_bar_v.strip() if r_bar_v else None, r_nome_v.strip().upper(), r_und_v))
                             conn_rp.commit()
                             conn_rp.close()
-                            st.success(f"Produto '{r_nome_v.strip().upper()}' cadastrado com sucesso!")
+                            st.success(f"Produto '{r_nome_v.strip().upper()}' cadastrado!")
                             st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao cadastrar produto: {e}")
+                        except Exception as e: st.error(f"Erro ao cadastrar: {e}")
 
-        with st.expander("➕ Registrar Nova Baixa de Avaria (Loja 02)", expanded=True):
-            with st.form("form_cad_baixa", clear_on_submit=True):
-                col_v1, col_v2, col_v3 = st.columns([1.5, 1.5, 1.5])
-                with col_v1:
-                    num_ocorrencia = st.text_input("N° Ocorrência / Lote", placeholder="Ex: BAIXA-001")
-                    loja_baixa = st.text_input("Loja Destino", value="LOJA 02", disabled=True)
-                with col_v2:
-                    valor_baixa_str = st.text_input("Valor da Baixa (R$)", placeholder="0,00")
-                    motivo_baixa = st.text_input("Motivo da Baixa", placeholder="Ex: Amadurecimento excessivo, avaria no transporte...")
-                with col_v3:
-                    prod_baixa = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, key="prod_baixa_sel")
-                    anexo_baixa = st.file_uploader("Anexar Comprovante / Foto da Baixa", type=["pdf", "png", "jpg", "jpeg"], key="anexo_baixa_file")
+        with st.expander("➕ Registrar Nova Baixa de Avaria (Seguindo o Modelo da Planilha)", expanded=True):
+            with st.form("form_registro_baixa_modelo", clear_on_submit=True):
+                col_m1, col_m2, col_m3 = st.columns(3)
+                with col_m1:
+                    lojas_baixa_sel = st.selectbox("LOJAS", ["LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0)
+                    ref_bon_transf = st.text_input("Ref. Bon. transferen", placeholder="Ex: 65231")
+                with col_m2:
+                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja2] if notas_com_saldo_loja2 else ["Nenhuma Nota Disponível"])
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v)
+                with col_m3:
+                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", placeholder="Ex: 38,600")
+                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", placeholder="Ex: 135,29")
+                    
+                nf_baixa_file = st.file_uploader("NF da baixa (Comprovante / Anexo PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
-                col_dtv1, col_dtv2 = st.columns(2)
-                with col_dtv1: data_baixa_manual = st.date_input("Data da Baixa (Manual)", value=datetime.now(), format="DD/MM/YYYY")
-                with col_dtv2:
-                    hora_baixa_auto = datetime.now().strftime('%H:%M:%S')
-                    st.text_input("Hora da Baixa (Automática)", value=hora_baixa_auto, disabled=True)
+                col_dm1, col_dm2 = st.columns(2)
+                with col_dm1: data_baixa_man = st.date_input("Data da Baixa (Manual)", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dm2:
+                    hora_baixa_aut = datetime.now().strftime('%H:%M:%S')
+                    st.text_input("Hora da Baixa (Automática)", value=hora_baixa_aut, disabled=True)
+                    
+                data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}"
                 
-                dt_baixa_str = f"{data_baixa_manual.strftime('%d/%m/%Y')} {hora_baixa_auto}"
-                
-                btn_salvar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
-                if btn_salvar_baixa:
-                    if not num_ocorrencia.strip(): st.error("O Número da Ocorrência é obrigatório.")
+                btn_gravar_baixa_mod = st.form_submit_button("✅ Registrar Baixa na Planilha", type="primary")
+                if btn_gravar_baixa_mod:
+                    if not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível":
+                        st.error("Preencha a Referência de Bonificação e selecione uma Nota de Entrada válida.")
                     else:
-                        try: valor_baixa_val = float(valor_baixa_str.replace(".", "").replace(",", ".")) if valor_baixa_str else 0.0
-                        except ValueError: valor_baixa_val = 0.0
+                        try:
+                            qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
+                            val_avaria_f = float(valor_total_avaria_str.replace(".", "").replace(",", ".")) if valor_total_avaria_str else 0.0
+                        except ValueError:
+                            qtd_val_f, val_avaria_f = 0.0, 0.0
                             
-                        if valor_baixa_val > tot_saldo_loja2:
-                            st.error(f"❌ Valor da baixa (R$ {fmt_ptbr(valor_baixa_val, 2)}) é maior que o saldo disponível na Loja 02 (R$ {fmt_ptbr(tot_saldo_loja2, 2)})!")
+                        # Valida se o valor da avaria cabe no saldo da nota de entrada selecionada
+                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja2 if item["nf_entrada"] == nf_b_entrada_sel), None)
+                        if not nota_selecionada_dict:
+                            st.error("Nota de entrada selecionada inválida.")
+                        elif val_avaria_f > nota_selecionada_dict["saldo_restante"]:
+                            st.error(f"❌ O valor da avaria (R$ {fmt_ptbr(val_avaria_f, 2)}) ultrapassa o saldo restante da nota {nf_b_entrada_sel} (R$ {fmt_ptbr(nota_selecionada_dict['saldo_restante'], 2)})!")
                         else:
-                            path_anexo_baixa = ""
-                            if anexo_baixa:
-                                path_anexo_baixa = os.path.join("uploads", f"BAIXA_{num_ocorrencia}_{anexo_baixa.name}")
-                                with open(path_anexo_baixa, "wb") as f_out: f_out.write(anexo_baixa.getbuffer())
-                                    
-                            try:
-                                conn_v, db_tv = get_db_connection()
-                                cursor_v = conn_v.cursor()
-                                cursor_v.execute("INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo) VALUES (%s, %s, %s, %s, %s, %s, %s)" if db_tv == "postgres" else "INSERT INTO baixas_avarias (numero_ocorrencia, loja, data_baixa, valor_baixa, motivo, produto_hortifruti, caminho_anexo) VALUES (?, ?, ?, ?, ?, ?, ?)", (num_ocorrencia.strip(), "LOJA 02", dt_baixa_str, valor_baixa_val, motivo_baixa, prod_baixa, path_anexo_baixa))
-                                conn_v.commit()
-                                conn_v.close()
-                                st.success(f"Baixa de Avaria N° {num_ocorrencia} registrada com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro ao registrar baixa: {e}")
+                            path_nf_baixa = ""
+                            if nf_baixa_file:
+                                path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
+                                with open(path_nf_baixa, "wb") as f_out: f_out.write(nf_baixa_file.getbuffer())
+                                
+                            # Calcula novos saldos em tempo real para gravação
+                            novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
+                            novo_saldo_total_disp = saldo_total_disp_loja2 - val_avaria_f
                             
+                            try:
+                                conn_ins, db_tins = get_db_connection()
+                                cursor_ins = conn_ins.cursor()
+                                cursor_ins.execute(
+                                    """
+                                    INSERT INTO baixas_avarias (
+                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, 
+                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx, 
+                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel
+                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """ if db_tins == "postgres" else """
+                                    INSERT INTO baixas_avarias (
+                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, 
+                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx, 
+                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel
+                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    """,
+                                    (
+                                        lojas_baixa_sel, data_hora_baixa_str, ref_bon_transf.strip(), path_nf_baixa,
+                                        nf_b_entrada_sel, prod_hort_sel, qtd_val_f, val_avaria_f, novo_saldo_nota, novo_saldo_total_disp
+                                    )
+                                )
+                                conn_ins.commit()
+                                conn_ins.close()
+                                st.success("Baixa registrada com sucesso e saldo atualizado em tempo real!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao salvar baixa: {e}")
+                                
         st.markdown("---")
-        st.subheader("📋 Registros de Baixas e Avarias (Loja 02)")
+        st.subheader("📋 Planilha de Registro de Baixas das Avarias")
         
-        with st.expander("🔍 Filtros de Baixas", expanded=True):
-            fv_col1, fv_col2 = st.columns(2)
-            with fv_col1: f_ocor = st.text_input("Filtrar por Ocorrência", placeholder="Ex: BAIXA-001", key="f_ocor_baixa")
-            with fv_col2: f_prod_v = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA", key="f_prod_baixa")
-                
-        conn_v_sel, db_tv_sel = get_db_connection()
-        df_baixas = pd.read_sql_query("SELECT * FROM baixas_avarias WHERE loja LIKE '%02%' ORDER BY id DESC", conn_v_sel)
-        conn_v_sel.close()
+        with st.expander("🔍 Filtros da Planilha de Baixas", expanded=True):
+            fb1, fb2, fb3 = st.columns(3)
+            with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"])
+            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon. transferen", placeholder="Ex: 65219")
+            with fb3: f_prod_bx = st.text_input("Filtrar por Produto", placeholder="Ex: MACAXEIRA")
+            
+        conn_bx_view, db_tbx_v = get_db_connection()
+        df_bx_table = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
+        conn_bx_view.close()
         
-        if not df_baixas.empty:
-            if f_ocor.strip(): df_baixas = df_baixas[df_baixas["numero_ocorrencia"].str.contains(f_ocor.strip(), case=False, na=False)]
-            if f_prod_v.strip(): df_baixas = df_baixas[df_baixas["produto_hortifruti"].str.contains(f_prod_v.strip(), case=False, na=False)]
-                
-        if not df_baixas.empty:
-            tot_baixas_val = df_baixas["valor_baixa"].sum()
-            kpi_v1, kpi_v2 = st.columns(2)
-            kpi_v1.metric("Total de Baixas Registradas", f"{len(df_baixas)} ocorrências")
-            kpi_v2.metric("Valor Total de Avarias/Baixas", f"R$ {fmt_ptbr(tot_baixas_val, 2)}")
+        if not df_bx_table.empty:
+            if f_loja_bx != "TODAS": df_bx_table = df_bx_table[df_bx_table["loja_baixa"] == f_loja_bx]
+            if f_ref_bx.strip(): df_bx_table = df_bx_table[df_bx_table["ref_bon_transferen"].str.contains(f_ref_bx.strip(), case=False, na=False)]
+            if f_prod_bx.strip(): df_bx_table = df_bx_table[df_bx_table["produto_hortifruti"].str.contains(f_prod_bx.strip(), case=False, na=False)]
             
-            st.markdown("---")
-            
-            pdf_baixas_bytes = gerar_pdf_baixas(df_baixas)
+        if not df_bx_table.empty:
+            # BOTÃO PARA BAIXAR PDF DA PLANILHA DE BAIXAS
+            pdf_bytes_bx = gerar_pdf_baixas(df_bx_table)
             st.download_button(
-                label="📥 Baixar Relatório de Baixas de Avarias em PDF",
-                data=pdf_baixas_bytes,
-                file_name=f"Relatorio_Baixas_Avarias_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf",
+                label="📥 Baixar Planilha de Baixas de Avarias em PDF",
+                data=pdf_bytes_bx,
+                file_name=f"Registro_Baixas_Avarias_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
                 type="primary",
-                key="btn_download_pdf_baixas"
+                key="btn_download_pdf_planilha_baixas"
             )
             st.markdown("")
             
-            df_display_baixas = df_baixas.copy()
-            df_display_baixas["Valor da Baixa (R$)"] = df_display_baixas["valor_baixa"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_baixas = df_display_baixas.rename(columns={"numero_ocorrencia": "N° OCORRÊNCIA", "loja": "LOJA", "data_baixa": "Data e Hora da Baixa", "motivo": "Motivo", "produto_hortifruti": "Produto Hortifrúti"})
-            df_exib_baixas_final = df_display_baixas[["N° OCORRÊNCIA", "LOJA", "Data e Hora da Baixa", "Valor da Baixa (R$)", "Motivo", "Produto Hortifrúti"]]
-            df_exib_baixas_final.index = range(1, len(df_exib_baixas_final) + 1)
-            st.dataframe(df_exib_baixas_final, use_container_width=True)
-        else: st.info("Nenhuma baixa de avaria encontrada para a Loja 02.")
+            # Formata colunas para exibição idêntica à planilha enviada
+            df_display_plan = df_bx_table.copy()
+            df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
+            df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_display_plan["Saldo"] = df_display_plan["saldo_restante_nota"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_display_plan["Saldo Total disponível"] = df_display_plan["saldo_total_disponivel"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_display_plan["NF da baixa"] = df_display_plan["nf_baixa"].apply(lambda x: "📄 Ver Anexo" if x and os.path.exists(str(x)) else "S/Anexo")
+            
+            df_display_plan = df_display_plan.rename(columns={
+                "loja_baixa": "LOJAS",
+                "data_baixa": "Data Baixa",
+                "ref_bon_transferen": "Ref. Bon. transferen",
+                "nf_b_entrada": "NF da b. ENTRADA",
+                "produto_hortifruti": "Produto Hortifrúti"
+            })
+            
+            df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total disponível"]]
+            df_final_show.index = range(1, len(df_final_show) + 1)
+            
+            st.dataframe(df_final_show, use_container_width=True)
+        else:
+            st.info("Nenhum registro de baixa encontrado com os filtros informados.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
@@ -1309,11 +1416,11 @@ else:
                     
                 if not df_bonf_rel.empty:
                     st.markdown("---")
-                    st.subheader("🎁 Análise Gerencial de Bonificações")
+                    st.subheader("🎁 Análise Gerencial de Bonificações (Incluindo Transferências entre Lojas)")
                     col_bg1, col_bg2 = st.columns(2)
                     with col_bg1:
                         fig_bonf_loja = px.bar(df_bonf_rel.groupby("loja")["valor_bonificacao"].sum().reset_index(), x="loja", y="valor_bonificacao", text_auto=".2f", color="valor_bonificacao", color_continuous_scale="Oranges")
-                        fig_bonf_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor Bonificado (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                        fig_bonf_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor Bonificado / Transferido (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_bonf_loja, use_container_width=True)
                     with col_bg2:
                         fig_bonf_pie = px.pie(df_bonf_rel.groupby("status")["valor_bonificacao"].sum().reset_index(), names="status", values="valor_bonificacao", color="status", color_discrete_map={"Disponível": "#2E7D32", "Parcialmente Utilizada": "#FFB300", "Totalmente Utilizada": "#C62828"})
@@ -1323,8 +1430,8 @@ else:
                 if not df_baixas_rel.empty:
                     st.markdown("---")
                     st.subheader("📉 Análise Gerencial de Baixas e Avarias")
-                    fig_baixas_loja = px.bar(df_baixas_rel.groupby("loja")["valor_baixa"].sum().reset_index(), x="loja", y="valor_baixa", text_auto=".2f", color="valor_baixa", color_continuous_scale="Reds")
-                    fig_baixas_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor da Baixa (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                    fig_baixas_loja = px.bar(df_baixas_rel.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index(), x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Reds")
+                    fig_baixas_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor da Avaria (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_baixas_loja, use_container_width=True)
 
                 st.markdown("---")
@@ -1356,7 +1463,7 @@ else:
                         conn.commit()
                         st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
                         st.rerun()
-                    except Exception as e: st.error(f"Erro ao cadastrar produto (Nome ou Código duplicado): {e}")
+                    except Exception as e: st.error(f"Erro ao cadastrar produto: {e}")
                     finally: conn.close()
                         
         st.markdown("---")
