@@ -383,8 +383,17 @@ def init_db():
                 valor_bonificacao REAL NOT NULL,
                 status VARCHAR(100) NOT NULL,
                 produto_hortifruti VARCHAR(255) NOT NULL,
-                caminho_anexo TEXT
+                caminho_anexo TEXT,
+                tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação'
             )
+        """)
+        cursor.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bonificacoes' and column_name='tipo_bonificacao') THEN
+                    ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação';
+                END IF;
+            END $$;
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
@@ -475,9 +484,15 @@ def init_db():
                 valor_bonificacao REAL NOT NULL,
                 status TEXT NOT NULL,
                 produto_hortifruti TEXT NOT NULL,
-                caminho_anexo TEXT
+                caminho_anexo TEXT,
+                tipo_bonificacao TEXT DEFAULT 'Bonificação'
             )
         """)
+        cursor.execute("PRAGMA table_info(bonificacoes)")
+        colunas_bonf = [col[1] for col in cursor.fetchall()]
+        if "tipo_bonificacao" not in colunas_bonf:
+            cursor.execute("ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao TEXT DEFAULT 'Bonificação'")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -716,20 +731,21 @@ def gerar_pdf_bonificacoes(df_bonf_data):
     story.append(header_table)
     story.append(Spacer(1, 15))
     
-    table_content = [[Paragraph("N° Nota", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data Entrada", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Status", style_header_center), Paragraph("Produto Hortifrúti", style_header_left)]]
+    table_content = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data Entrada", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Status", style_header_center), Paragraph("Produto Hortifrúti", style_header_left)]]
     
     tot_val = 0.0
     for _, r in df_bonf_data.iterrows():
         v_b = float(r["valor_bonificacao"]) if r["valor_bonificacao"] else 0.0
         tot_val += v_b
-        table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
+        t_bonf = r.get("tipo_bonificacao", "Bonificação")
+        table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
         
-    bonf_table = Table(table_content, colWidths=[65, 75, 95, 75, 95, 135])
+    bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
     bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(bonf_table)
     story.append(Spacer(1, 10))
     
-    total_table = Table([[f"VALOR TOTAL BONIFICADO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
+    total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
     total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#C62828")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
     story.append(total_table)
     doc.build(story)
@@ -937,7 +953,7 @@ else:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
-                try: qtd_input = float(qtd_str_input.replace(".", "").replace(".", ".")) if qtd_str_input else 0.0
+                try: qtd_input = float(qtd_str_input.replace(".", "").replace(",", ".")) if qtd_str_input else 0.0
                 except ValueError: qtd_input = 0.0
                 try: val_unit_val = float(val_unit_str_input.replace(".", "").replace(",", ".")) if val_unit_str_input else 0.0
                 except ValueError: val_unit_val = 0.0
@@ -1189,25 +1205,29 @@ else:
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
                     num_nota_bonf = st.text_input("N° Nota Fiscal", value="")
-                    loja_bonf = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key="loja_bonf_sel")
+                    loja_bonf = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=None, placeholder="Selecione a loja", key="loja_bonf_sel")
                 with col_b2:
                     valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="")
-                    status_bonf = st.selectbox("STATUS", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0)
+                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["Bonificação", "Transferência de Bonificação"], index=None, placeholder="Selecione o tipo", key="tipo_bonf_input_sel")
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0)
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0, placeholder="Selecione o produto")
                     anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
-                col_dt1, col_dt2 = st.columns(2)
-                with col_dt1: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
+                col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
+                with col_dt1:
+                    status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status")
                 with col_dt2:
+                    data_entrada_manual = st.date_input("Data de Entrada", value=None, format="DD/MM/YYYY")
+                with col_dt3:
                     hora_auto = datetime.now().strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada (Automática)", value=hora_auto, disabled=True)
                 
-                dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}"
+                dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
                 
                 btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
                 if btn_salvar_bonf:
-                    if not num_nota_bonf.strip() or not prod_bonf: st.error("O Número da Nota e o Produto são obrigatórios.")
+                    if not num_nota_bonf.strip() or not loja_bonf or not tipo_bonf_sel or not prod_bonf or not status_bonf or not data_entrada_manual:
+                        st.error("Preencha todos os campos obrigatórios em branco (N° Nota, Loja, Tipo, Produto, Status e Data de Entrada).")
                     else:
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
                         except ValueError: valor_bonf_val = 0.0
@@ -1220,7 +1240,10 @@ else:
                         try:
                             conn_b, db_tb = get_db_connection()
                             cursor_b = conn_b.cursor()
-                            cursor_b.execute("INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo) VALUES (%s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo) VALUES (?, ?, ?, ?, ?, ?, ?)", (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf))
+                            cursor_b.execute(
+                                "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel)
+                            )
                             conn_b.commit()
                             conn_b.close()
                             st.success(f"Bonificação Nota N° {num_nota_bonf} gravada com sucesso!")
@@ -1274,8 +1297,9 @@ else:
             
             df_display_bonf = df_bonf.copy()
             df_display_bonf["Valor da Bonificação (R$)"] = df_display_bonf["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_bonf = df_display_bonf.rename(columns={"numero_nota": "N° NOTA", "loja": "LOJAS", "data_entrada": "Data de Entrada", "status": "STATUS", "produto_hortifruti": "Produto Hortifrúti"})
-            df_exib_final = df_display_bonf[["N° NOTA", "LOJAS", "Data de Entrada", "Valor da Bonificação (R$)", "STATUS", "Produto Hortifrúti"]]
+            df_display_bonf["tipo_bonificacao"] = df_display_bonf["tipo_bonificacao"].fillna("Bonificação")
+            df_display_bonf = df_display_bonf.rename(columns={"numero_nota": "N° NOTA", "tipo_bonificacao": "TIPO", "loja": "LOJAS", "data_entrada": "Data de Entrada", "status": "STATUS", "produto_hortifruti": "Produto Hortifrúti"})
+            df_exib_final = df_display_bonf[["N° NOTA", "TIPO", "LOJAS", "Data de Entrada", "Valor da Bonificação (R$)", "STATUS", "Produto Hortifrúti"]]
             df_exib_final.index = range(1, len(df_exib_final) + 1)
             st.dataframe(df_exib_final, use_container_width=True)
             
@@ -1384,11 +1408,11 @@ else:
             with st.form("form_registro_baixa_modelo", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
-                    lojas_baixa_sel = st.selectbox("LOJAS", ["LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0)
+                    lojas_baixa_sel = st.selectbox("LOJAS", ["", "LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=None, placeholder="Selecione a loja")
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="")
                 with col_m2:
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja2] if notas_com_saldo_loja2 else ["Nenhuma Nota Disponível"])
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0)
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0, placeholder="Selecione o produto")
                 with col_m3:
                     qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="")
                     valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="")
@@ -1396,17 +1420,17 @@ else:
                 nf_baixa_file = st.file_uploader("NF da baixa (Comprovante / Anexo PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=None, format="DD/MM/YYYY")
                 with col_dm2:
                     hora_baixa_aut = datetime.now().strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa (Automática)", value=hora_baixa_aut, disabled=True)
                     
-                data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}"
+                data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}" if data_baixa_man else ""
                 
                 btn_gravar_baixa_mod = st.form_submit_button("✅ Registrar Baixa na Planilha", type="primary")
                 if btn_gravar_baixa_mod:
-                    if not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
-                        st.error("Preencha todos os campos obrigatórios e selecione a Nota de Entrada e o Produto.")
+                    if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel or not data_baixa_man:
+                        st.error("Preencha todos os campos obrigatórios em branco.")
                     else:
                         try:
                             qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
@@ -1565,7 +1589,7 @@ else:
                     
                 if not df_bonf_rel.empty:
                     st.markdown("---")
-                    st.subheader("🎁 Análise Gerencial de Bonificações (Incluindo Transferências entre Lojas)")
+                    st.subheader("🎁 Análise Gerencial de Bonificações e Transferências")
                     col_bg1, col_bg2 = st.columns(2)
                     with col_bg1:
                         fig_bonf_loja = px.bar(df_bonf_rel.groupby("loja")["valor_bonificacao"].sum().reset_index(), x="loja", y="valor_bonificacao", text_auto=".2f", color="valor_bonificacao", color_continuous_scale="Oranges")
