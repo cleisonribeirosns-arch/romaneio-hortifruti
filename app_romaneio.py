@@ -20,13 +20,6 @@ import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
-# Tenta importar fitz (PyMuPDF) para converter PDF em imagens para visualização direta
-try:
-    import fitz  # PyMuPDF
-    HAS_PYMUPDF = True
-except ImportError:
-    HAS_PYMUPDF = False
-
 # Tenta importar psycopg2 para suporte ao PostgreSQL permanente
 try:
     import psycopg2
@@ -84,31 +77,18 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DIRETA NA TELA (PDF CONVERTIDO OU IMAGEM)
+# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO
 # ---------------------------------------------------------
-@st.dialog("📄 Visualização Direta da Nota Fiscal / Anexo", width="large")
+@st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
-            if HAS_PYMUPDF:
-                try:
-                    doc_pdf = fitz.open(caminho_foto)
-                    st.success(f"Visualizando PDF ({len(doc_pdf)} página(s)):")
-                    for pagina_num in range(len(doc_pdf)):
-                        pagina = doc_pdf[pagina_num]
-                        pix = pagina.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("png")
-                        st.image(img_bytes, use_container_width=True, caption=f"Página {pagina_num + 1} de {nome_arquivo}")
-                except Exception as e:
-                    st.error(f"Erro ao renderizar PDF na tela: {e}")
-            else:
-                st.info("📄 Arquivo PDF carregado. Utilize o botão abaixo para baixar ou visualizar.")
-            
+            st.info(f"📄 Arquivo PDF pronto para visualização e download: **{nome_arquivo}**")
             with open(caminho_foto, "rb") as f_pdf:
                 pdf_bytes = f_pdf.read()
             st.download_button(
-                label=f"📥 Baixar Arquivo PDF ({nome_arquivo})",
+                label=f"📥 Baixar / Abrir Arquivo PDF ({nome_arquivo})",
                 data=pdf_bytes,
                 file_name=nome_arquivo,
                 mime="application/pdf",
@@ -1174,7 +1154,7 @@ else:
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
                         st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
-                        if st.button("🔍 Ampliar Foto da Nota (Tela Cheia)", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
+                        if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
                             
                     conn_i, db_t_i = get_db_connection()
                     df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
@@ -1343,7 +1323,7 @@ else:
             )
             st.markdown("")
             
-            # Tabela Interativa de Bonificações com visualizador direto de anexo na tela
+            # Tabela Interativa de Bonificações com visualizador limpo (sem ícone de olho)
             for _, r in df_bonf.iterrows():
                 with st.container():
                     col_t1, col_t2, col_t3, col_t4, col_t5, col_t6, col_t7 = st.columns([1, 1.2, 1.5, 1.8, 1.2, 1.5, 1.5])
@@ -1356,7 +1336,7 @@ else:
                     with col_t7:
                         caminho_anexo_reg = r.get("caminho_anexo", "")
                         if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
-                            if st.button("👁️ Visualizar Nota", key=f"btn_ver_anexo_{r['id']}"):
+                            if st.button("📄 Visualizar Nota", key=f"btn_ver_anexo_{r['id']}"):
                                 exibir_foto_modal(caminho_anexo_reg)
                         else:
                             st.write("Sem Anexo")
