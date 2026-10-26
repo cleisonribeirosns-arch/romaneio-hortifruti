@@ -20,6 +20,13 @@ import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
+# Tenta importar fitz (PyMuPDF) para converter PDF em imagens para visualização direta
+try:
+    import fitz  # PyMuPDF
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
+
 # Tenta importar psycopg2 para suporte ao PostgreSQL permanente
 try:
     import psycopg2
@@ -77,18 +84,31 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VER FOTO / ANEXO EM TELA CHEIA (COM DOWNLOAD SEGURO)
+# MODAL PARA VISUALIZAÇÃO DIRETA NA TELA (PDF CONVERTIDO OU IMAGEM)
 # ---------------------------------------------------------
-@st.dialog("📷 Visualização do Anexo / Nota Fiscal", width="large")
+@st.dialog("📄 Visualização Direta da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
-            st.info("📄 Arquivo PDF detectado. Utilize o botão abaixo para descarregar ou visualizar com segurança.")
+            if HAS_PYMUPDF:
+                try:
+                    doc_pdf = fitz.open(caminho_foto)
+                    st.success(f"Visualizando PDF ({len(doc_pdf)} página(s)):")
+                    for pagina_num in range(len(doc_pdf)):
+                        pagina = doc_pdf[pagina_num]
+                        pix = pagina.get_pixmap(dpi=150)
+                        img_bytes = pix.tobytes("png")
+                        st.image(img_bytes, use_container_width=True, caption=f"Página {pagina_num + 1} de {nome_arquivo}")
+                except Exception as e:
+                    st.error(f"Erro ao renderizar PDF na tela: {e}")
+            else:
+                st.info("📄 Arquivo PDF carregado. Utilize o botão abaixo para baixar ou visualizar.")
+            
             with open(caminho_foto, "rb") as f_pdf:
                 pdf_bytes = f_pdf.read()
             st.download_button(
-                label=f"📥 Baixar / Abrir PDF ({nome_arquivo})",
+                label=f"📥 Baixar Arquivo PDF ({nome_arquivo})",
                 data=pdf_bytes,
                 file_name=nome_arquivo,
                 mime="application/pdf",
@@ -1323,7 +1343,7 @@ else:
             )
             st.markdown("")
             
-            # Tabela Interativa de Bonificações com visualizador de anexo seguro
+            # Tabela Interativa de Bonificações com visualizador direto de anexo na tela
             for _, r in df_bonf.iterrows():
                 with st.container():
                     col_t1, col_t2, col_t3, col_t4, col_t5, col_t6, col_t7 = st.columns([1, 1.2, 1.5, 1.8, 1.2, 1.5, 1.5])
@@ -1336,7 +1356,7 @@ else:
                     with col_t7:
                         caminho_anexo_reg = r.get("caminho_anexo", "")
                         if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
-                            if st.button("👁️ Ver Anexo", key=f"btn_ver_anexo_{r['id']}"):
+                            if st.button("👁️ Visualizar Nota", key=f"btn_ver_anexo_{r['id']}"):
                                 exibir_foto_modal(caminho_anexo_reg)
                         else:
                             st.write("Sem Anexo")
