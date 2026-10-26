@@ -77,32 +77,31 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (COMPLETO)
+# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (CORRIGIDO)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
-            st.info(f"📄 Arquivo PDF carregado: **{nome_arquivo}**")
+            st.info(f"📄 Arquivo PDF disponível: **{nome_arquivo}**")
+            st.write("Como o navegador bloqueia a leitura direta de arquivos locais na tela, você pode abrir o documento em uma nova aba com zoom completo ou baixá-lo diretamente:")
             
-            # Converte o PDF para Base64 para exibir o leitor embutido na tela
             with open(caminho_foto, "rb") as f_pdf:
-                base64_pdf = base64.b64encode(f_pdf.read()).decode('utf-8')
+                pdf_bytes = f_pdf.read()
             
-            # Exibe o PDF diretamente embutido no modal (visualização completa)
-            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
-            st.markdown(pdf_display, unsafe_allow_html=True)
+            # Codifica em base64 para criar um link seguro de abertura em nova aba
+            b64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+            href = f'<a href="data:application/pdf;base64,{b64_pdf}" target="_blank" style="text-decoration: none;"><button style="background-color: #1B5E20; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 16px; box-shadow: 0px 4px 8px rgba(0,0,0,0.4);">🌐 Abrir PDF em Nova Aba (Tela Cheia)</button></a>'
+            st.markdown(href, unsafe_allow_html=True)
             
             st.markdown("")
-            with open(caminho_foto, "rb") as f_pdf_dl:
-                pdf_bytes = f_pdf_dl.read()
             st.download_button(
                 label=f"📥 Baixar Arquivo PDF ({nome_arquivo})",
                 data=pdf_bytes,
                 file_name=nome_arquivo,
                 mime="application/pdf",
-                type="primary"
+                type="secondary"
             )
         else:
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
@@ -112,8 +111,8 @@ def exibir_foto_modal(caminho_foto):
                 label=f"📥 Baixar Imagem ({nome_arquivo})",
                 data=img_bytes,
                 file_name=nome_arquivo,
-                mime="image/jpeg",
-                type="secondary"
+                mime="application/jpeg",
+                type="primary"
             )
     else:
         st.error("Arquivo de anexo não encontrado no servidor.")
@@ -1333,7 +1332,6 @@ else:
             )
             st.markdown("")
             
-            # Tabela Interativa de Bonificações com visualizador limpo (sem ícone de olho)
             for _, r in df_bonf.iterrows():
                 with st.container():
                     col_t1, col_t2, col_t3, col_t4, col_t5, col_t6, col_t7 = st.columns([1, 1.2, 1.5, 1.8, 1.2, 1.5, 1.5])
