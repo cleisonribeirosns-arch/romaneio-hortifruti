@@ -350,8 +350,18 @@ def init_db():
                 data_pagamento VARCHAR(50),
                 caminho_foto TEXT,
                 assinatura_conferente TEXT,
-                assinatura_entregador TEXT
+                assinatura_entregador TEXT,
+                status_nota VARCHAR(50) DEFAULT 'Pendente'
             )
+        """)
+        # Garante a coluna status_nota caso a tabela já exista
+        cursor.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='status_nota') THEN
+                    ALTER TABLE romaneios ADD COLUMN status_nota VARCHAR(50) DEFAULT 'Pendente';
+                END IF;
+            END $$;
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
@@ -432,9 +442,16 @@ def init_db():
                 data_pagamento TEXT,
                 caminho_foto TEXT,
                 assinatura_conferente TEXT,
-                assinatura_entregador TEXT
+                assinatura_entregador TEXT,
+                status_nota TEXT DEFAULT 'Pendente'
             )
         """)
+        # Garante a coluna status_nota no SQLite se não existir
+        cursor.execute("PRAGMA table_info(romaneios)")
+        colunas_rom = [col[1] for col in cursor.fetchall()]
+        if "status_nota" not in colunas_rom:
+            cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -988,10 +1005,10 @@ else:
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente'))
                         romaneio_id = cursor.fetchone()[0]
                     else:
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente'))
                         romaneio_id = cursor.lastrowid
                         
                     itens_salvos_pdf = []
@@ -1047,7 +1064,41 @@ else:
             for idx, row in df_rom.iterrows():
                 fornecedor_txt = row['fornecedor'] if row['fornecedor'] else 'N/A'
                 if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip(): fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
-                with st.expander(f"Romaneio: {row['numero_romaneio']} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
+                
+                # Ícone de Validação de Emissão de Nota
+                status_atual_nota = row.get("status_nota", "Pendente")
+                icone_status = "🟢 Nota Emitida" if status_atual_nota == "Nota Emitida" else "🔴 Pendente"
+                
+                with st.expander(f"Romaneio: {row['numero_romaneio']} | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
+                    
+                    # Seletor para alterar o status da nota diretamente na consulta
+                    col_st1, col_st2 = st.columns([2, 3])
+                    with col_st1:
+                        novo_status_nota = st.selectbox(
+                            "Status da Nota Fiscal",
+                            ["Pendente", "Nota Emitida"],
+                            index=0 if status_atual_nota == "Pendente" else 1,
+                            key=f"status_nota_{row['id']}"
+                        )
+                    with col_st2:
+                        st.write("")
+                        st.write("")
+                        if st.button("💾 Salvar Status da Nota", key=f"btn_salvar_status_{row['id']}"):
+                            try:
+                                conn_st, db_t_st = get_db_connection()
+                                cur_st = conn_st.cursor()
+                                cur_st.execute(
+                                    "UPDATE romaneios SET status_nota = %s WHERE id = %s" if db_t_st == "postgres" else "UPDATE romaneios SET status_nota = ? WHERE id = ?",
+                                    (novo_status_nota, int(row["id"]) if db_t_st == "postgres" else row["id"])
+                                )
+                                conn_st.commit()
+                                conn_st.close()
+                                st.success(f"Status do romaneio {row['numero_romaneio']} atualizado para: {novo_status_nota}!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao atualizar status: {e}")
+                    
+                    st.markdown("---")
                     st.write(f"**Loja:** {row['loja']}")
                     st.write(f"**Código do Fornecedor:** {row['codigo_fornecedor'] if row['codigo_fornecedor'] else 'N/A'} | **Telefone:** {row['telefone_fornecedor'] if row['telefone_fornecedor'] else 'N/A'}")
                     st.write(f"**Conferente:** {row['conferente']}")
