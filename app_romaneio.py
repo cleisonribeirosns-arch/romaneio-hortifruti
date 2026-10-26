@@ -77,18 +77,28 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO
+# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (COMPLETO)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
-            st.info(f"📄 Arquivo PDF pronto para visualização e download: **{nome_arquivo}**")
+            st.info(f"📄 Arquivo PDF carregado: **{nome_arquivo}**")
+            
+            # Converte o PDF para Base64 para exibir o leitor embutido na tela
             with open(caminho_foto, "rb") as f_pdf:
-                pdf_bytes = f_pdf.read()
+                base64_pdf = base64.b64encode(f_pdf.read()).decode('utf-8')
+            
+            # Exibe o PDF diretamente embutido no modal (visualização completa)
+            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+            st.markdown(pdf_display, unsafe_allow_html=True)
+            
+            st.markdown("")
+            with open(caminho_foto, "rb") as f_pdf_dl:
+                pdf_bytes = f_pdf_dl.read()
             st.download_button(
-                label=f"📥 Baixar / Abrir Arquivo PDF ({nome_arquivo})",
+                label=f"📥 Baixar Arquivo PDF ({nome_arquivo})",
                 data=pdf_bytes,
                 file_name=nome_arquivo,
                 mime="application/pdf",
