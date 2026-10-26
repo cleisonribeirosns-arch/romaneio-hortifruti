@@ -151,7 +151,6 @@ if bg_login_path:
     with open(bg_login_path, "rb") as img_f:
         b64_img = base64.b64encode(img_f.read()).decode()
 
-# Determina qual estilo aplicar dependendo do modo selecionado
 tema_atual = st.session_state["tipo_tema"]
 modo_efetivo = "original"
 
@@ -177,7 +176,6 @@ elif tema_atual == "Personalizado (Horário Automático)":
 else:
     modo_efetivo = "original"
 
-# Opacidade baseada no nível de brilho (10% a 100%)
 fator_brilho = st.session_state["nivel_brilho"] / 100.0
 
 if modo_efetivo == "claro":
@@ -203,7 +201,6 @@ elif modo_efetivo == "escuro":
         }}
     """
 else:
-    # Tema Padrão do Aplicativo (Original)
     if b64_img:
         css_fundo = f"""
             .stApp {{
@@ -351,15 +348,19 @@ def init_db():
                 caminho_foto TEXT,
                 assinatura_conferente TEXT,
                 assinatura_entregador TEXT,
-                status_nota VARCHAR(50) DEFAULT 'Pendente'
+                status_nota VARCHAR(50) DEFAULT 'Pendente',
+                tipo_operacao VARCHAR(50) DEFAULT 'Compra'
             )
         """)
-        # Garante a coluna status_nota caso a tabela já exista
+        # Garante a coluna tipo_operacao e status_nota caso a tabela já exista no Postgres
         cursor.execute("""
             DO $$ 
             BEGIN 
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='status_nota') THEN
                     ALTER TABLE romaneios ADD COLUMN status_nota VARCHAR(50) DEFAULT 'Pendente';
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='tipo_operacao') THEN
+                    ALTER TABLE romaneios ADD COLUMN tipo_operacao VARCHAR(50) DEFAULT 'Compra';
                 END IF;
             END $$;
         """)
@@ -443,14 +444,17 @@ def init_db():
                 caminho_foto TEXT,
                 assinatura_conferente TEXT,
                 assinatura_entregador TEXT,
-                status_nota TEXT DEFAULT 'Pendente'
+                status_nota TEXT DEFAULT 'Pendente',
+                tipo_operacao TEXT DEFAULT 'Compra'
             )
         """)
-        # Garante a coluna status_nota no SQLite se não existir
+        # Garante as colunas no SQLite se não existirem
         cursor.execute("PRAGMA table_info(romaneios)")
         colunas_rom = [col[1] for col in cursor.fetchall()]
         if "status_nota" not in colunas_rom:
             cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
+        if "tipo_operacao" not in colunas_rom:
+            cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
 
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
@@ -590,17 +594,17 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     else:
         logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
 
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Romaneio de Recebimento - Hortifrúti", styles["Normal"]), Paragraph(f"<b>ROM:</b> {romaneio_data['numero_romaneio']}<br/><b>Data:</b> {romaneio_data['data_recebimento']}", styles["Normal"])]], colWidths=[80, 300, 160])
+    tipo_op_pdf = romaneio_data.get('tipo_operacao', 'Compra')
+    header_table = Table([[logo_img_header, Paragraph(f"<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Romaneio de Recebimento - Hortifrúti ({tipo_op_pdf.upper()})", styles["Normal"]), Paragraph(f"<b>ROM:</b> {romaneio_data['numero_romaneio']}<br/><b>Data:</b> {romaneio_data['data_recebimento']}", styles["Normal"])]], colWidths=[80, 300, 160])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 10))
     info_data = [
-        [Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Cód. Fornecedor:</b> {romaneio_data.get('codigo_fornecedor','')}", styles["Normal"])],
-        [Paragraph(f"<b>Telefone:</b> {romaneio_data.get('telefone_fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Loja:</b> {romaneio_data.get('loja','')}", styles["Normal"])],
-        [Paragraph(f"<b>Conferente:</b> {romaneio_data.get('conferente','')}", styles["Normal"]), Paragraph(f"<b>Pagamento à Vista:</b> {romaneio_data.get('pagamento_a_vista','')}", styles["Normal"])],
+        [Paragraph(f"<b>Tipo de Operação:</b> {tipo_op_pdf}", styles["Normal"]), Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"])],
+        [Paragraph(f"<b>Cód. Fornecedor:</b> {romaneio_data.get('codigo_fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Telefone:</b> {romaneio_data.get('telefone_fornecedor','')}", styles["Normal"])],
+        [Paragraph(f"<b>Loja:</b> {romaneio_data.get('loja','')}", styles["Normal"]), Paragraph(f"<b>Conferente:</b> {romaneio_data.get('conferente','')}", styles["Normal"])],
+        [Paragraph(f"<b>Pagamento à Vista:</b> {romaneio_data.get('pagamento_a_vista','')}", styles["Normal"]), Paragraph(f"<b>Data Pagamento:</b> {romaneio_data.get('data_pagamento','')}" if romaneio_data.get("pagamento_a_vista") == "NÃO" else "", styles["Normal"])],
     ]
-    if romaneio_data.get("pagamento_a_vista") == "NÃO" and romaneio_data.get("data_pagamento"):
-        info_data.append([Paragraph(f"<b>Data para Pagamento:</b> {romaneio_data.get('data_pagamento','')}", styles["Normal"]), Paragraph("", styles["Normal"])])
     info_table = Table(info_data, colWidths=[270, 270])
     info_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke)]))
     story.append(info_table)
@@ -904,7 +908,12 @@ else:
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
                 tel_fornecedor = st.text_input("Telefone do Fornecedor", value="", key=tel_key, on_change=formatar_tel)
-            pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
+            
+            col_op1, col_op2 = st.columns([2, 2])
+            with col_op1:
+                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=0, key=f"tipo_op_{k_suffix}")
+            with col_op2:
+                pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
             
             data_pag_str = ""
             if pag_a_vista == "NÃO":
@@ -1005,10 +1014,10 @@ else:
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente'))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao))
                         romaneio_id = cursor.fetchone()[0]
                     else:
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente'))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao))
                         romaneio_id = cursor.lastrowid
                         
                     itens_salvos_pdf = []
@@ -1021,7 +1030,7 @@ else:
                     conn.commit()
                     conn.close()
                     
-                    romaneio_dict_atual = {"numero_romaneio": num_romaneio, "data_recebimento": data_rec_str, "fornecedor": fornecedor, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str}
+                    romaneio_dict_atual = {"numero_romaneio": num_romaneio, "data_recebimento": data_rec_str, "fornecedor": fornecedor, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao}
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_romaneio
@@ -1065,13 +1074,12 @@ else:
                 fornecedor_txt = row['fornecedor'] if row['fornecedor'] else 'N/A'
                 if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip(): fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
                 
-                # Ícone de Validação de Emissão de Nota
                 status_atual_nota = row.get("status_nota", "Pendente")
                 icone_status = "🟢 Nota Emitida" if status_atual_nota == "Nota Emitida" else "🔴 Pendente"
+                tipo_op_reg = row.get("tipo_operacao", "Compra")
                 
-                with st.expander(f"Romaneio: {row['numero_romaneio']} | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
+                with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
                     
-                    # Seletor para alterar o status da nota diretamente na consulta
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
                         novo_status_nota = st.selectbox(
@@ -1099,7 +1107,7 @@ else:
                                 st.error(f"Erro ao atualizar status: {e}")
                     
                     st.markdown("---")
-                    st.write(f"**Loja:** {row['loja']}")
+                    st.write(f"**Tipo de Operação:** {tipo_op_reg} &nbsp;|&nbsp; **Loja:** {row['loja']}")
                     st.write(f"**Código do Fornecedor:** {row['codigo_fornecedor'] if row['codigo_fornecedor'] else 'N/A'} | **Telefone:** {row['telefone_fornecedor'] if row['telefone_fornecedor'] else 'N/A'}")
                     st.write(f"**Conferente:** {row['conferente']}")
                     st.write(f"**Pagamento à Vista:** {row['pagamento_a_vista']} | **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}")
