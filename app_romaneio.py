@@ -352,7 +352,6 @@ def init_db():
                 tipo_operacao VARCHAR(50) DEFAULT 'Compra'
             )
         """)
-        # Garante a coluna tipo_operacao e status_nota caso a tabela já exista no Postgres
         cursor.execute("""
             DO $$ 
             BEGIN 
@@ -448,7 +447,6 @@ def init_db():
                 tipo_operacao TEXT DEFAULT 'Compra'
             )
         """)
-        # Garante as colunas no SQLite se não existirem
         cursor.execute("PRAGMA table_info(romaneios)")
         colunas_rom = [col[1] for col in cursor.fetchall()]
         if "status_nota" not in colunas_rom:
@@ -911,7 +909,7 @@ else:
             
             col_op1, col_op2 = st.columns([2, 2])
             with col_op1:
-                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=0, key=f"tipo_op_{k_suffix}")
+                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=None, placeholder="Selecione o tipo de operação", key=f"tipo_op_{k_suffix}")
             with col_op2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
             
@@ -939,7 +937,7 @@ else:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
-                try: qtd_input = float(qtd_str_input.replace(".", "").replace(",", ".")) if qtd_str_input else 0.0
+                try: qtd_input = float(qtd_str_input.replace(".", "").replace(".", ".")) if qtd_str_input else 0.0
                 except ValueError: qtd_input = 0.0
                 try: val_unit_val = float(val_unit_str_input.replace(".", "").replace(",", ".")) if val_unit_str_input else 0.0
                 except ValueError: val_unit_val = 0.0
@@ -987,6 +985,7 @@ else:
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             if not num_romaneio.strip() or not fornecedor.strip(): st.error("Preencha o número do romaneio e o fornecedor.")
             elif not data_rec_str: st.error("A Data do Recebimento é obrigatória! Selecione a data no calendário.")
+            elif not tipo_operacao: st.error("O Tipo de Operação é obrigatório! Selecione se é Compra, Bonificação ou Transferência.")
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo! Selecione a data.")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
