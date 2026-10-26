@@ -77,18 +77,34 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
+# MODAL PARA VER FOTO / ANEXO EM TELA CHEIA (COM DOWNLOAD SEGURO)
 # ---------------------------------------------------------
-@st.dialog("📷 Visualização do Anexo / Nota", width="large")
+@st.dialog("📷 Visualização do Anexo / Nota Fiscal", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
+        nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
+            st.info("📄 Arquivo PDF detectado. Utilize o botão abaixo para descarregar ou visualizar com segurança.")
             with open(caminho_foto, "rb") as f_pdf:
-                base64_pdf = base64.b64encode(f_pdf.read()).decode("utf-8")
-            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
-            st.markdown(pdf_display, unsafe_allow_html=True)
+                pdf_bytes = f_pdf.read()
+            st.download_button(
+                label=f"📥 Baixar / Abrir PDF ({nome_arquivo})",
+                data=pdf_bytes,
+                file_name=nome_arquivo,
+                mime="application/pdf",
+                type="primary"
+            )
         else:
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
+            with open(caminho_foto, "rb") as f_img:
+                img_bytes = f_img.read()
+            st.download_button(
+                label=f"📥 Baixar Imagem ({nome_arquivo})",
+                data=img_bytes,
+                file_name=nome_arquivo,
+                mime="image/jpeg",
+                type="secondary"
+            )
     else:
         st.error("Arquivo de anexo não encontrado no servidor.")
 
@@ -1307,7 +1323,7 @@ else:
             )
             st.markdown("")
             
-            # Tabela Interativa de Bonificações com visualizador de anexo
+            # Tabela Interativa de Bonificações com visualizador de anexo seguro
             for _, r in df_bonf.iterrows():
                 with st.container():
                     col_t1, col_t2, col_t3, col_t4, col_t5, col_t6, col_t7 = st.columns([1, 1.2, 1.5, 1.8, 1.2, 1.5, 1.5])
