@@ -895,7 +895,9 @@ else:
         
         prod_dict = {}
         for p in produtos_lista:
-            label = f"{p[0]} | Cód: {p[2] or 'S/N'} | Barras: {p[3] or 'S/N'}"
+            c_prod = p[2] if p[2] and str(p[2]).strip() else "S/Cód"
+            c_bar = p[3] if p[3] and str(p[3]).strip() else "S/Barras"
+            label = f"{c_prod} | Barras: {c_bar} | {p[0]}"
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
             
         prod_nomes_keys = list(prod_dict.keys())
@@ -940,7 +942,7 @@ else:
             
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns([2.5, 1.2, 1.2, 1.2, 1])
         with col_p1:
-            prod_label_sel = st.selectbox("Produto / Código", options=prod_nomes_keys, index=None, placeholder="", key=f"prod_sel_{k_suffix}_{i_suffix}")
+            prod_label_sel = st.selectbox("Produto / Código / Barras", options=prod_nomes_keys, index=None, placeholder="", key=f"prod_sel_{k_suffix}_{i_suffix}")
             prod_nome_real = prod_dict[prod_label_sel][0] if prod_label_sel and prod_dict else ""
         with col_p2:
             und_padrao = prod_dict[prod_label_sel][1] if prod_label_sel and prod_dict else "KG"
@@ -1169,11 +1171,15 @@ else:
         
         conn_prod, db_p = get_db_connection()
         cursor_p = conn_prod.cursor()
-        cursor_p.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
+        cursor_p.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
         prods_cad = cursor_p.fetchall()
         conn_prod.close()
         
-        lista_opcoes_prod = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad] if prods_cad else []
+        lista_opcoes_prod = []
+        for p in prods_cad:
+            c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
+            c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
+            lista_opcoes_prod.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
         
         with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
             with st.form("form_cad_prod_rapido_bonf", clear_on_submit=True):
@@ -1210,7 +1216,7 @@ else:
                     valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="")
                     tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["Bonificação", "Transferência de Bonificação"], index=None, placeholder="Selecione o tipo", key="tipo_bonf_input_sel")
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0, placeholder="Selecione o produto")
+                    prod_bonf = st.selectbox("Produto Hortifrúti (Cód | Barras | Nome)", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0, placeholder="Selecione o produto")
                     anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
@@ -1379,10 +1385,15 @@ else:
 
         conn_prod_v, db_pv = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
-        cursor_pv.execute("SELECT codigo_produto, nome FROM produtos ORDER BY nome")
+        cursor_pv.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
         prods_cad_v = cursor_pv.fetchall()
         conn_prod_v.close()
-        lista_opcoes_prod_v = [f"{p[0] if p[0] else 'S/N'} - {p[1]}" for p in prods_cad_v] if prods_cad_v else []
+        
+        lista_opcoes_prod_v = []
+        for p in prods_cad_v:
+            c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
+            c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
+            lista_opcoes_prod_v.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
         with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
             with st.form("form_cad_prod_rapido_reg_baixa", clear_on_submit=True):
@@ -1412,7 +1423,7 @@ else:
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="")
                 with col_m2:
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja2] if notas_com_saldo_loja2 else ["Nenhuma Nota Disponível"])
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0, placeholder="Selecione o produto")
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti (Cód | Barras | Nome)", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0, placeholder="Selecione o produto")
                 with col_m3:
                     qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="")
                     valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="")
