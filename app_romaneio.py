@@ -79,12 +79,18 @@ def get_db_connection():
 # ---------------------------------------------------------
 # MODAL PARA VER FOTO EM TELA CHEIA (DIALOG)
 # ---------------------------------------------------------
-@st.dialog("📷 Visualização da Foto Anexada", width="large")
+@st.dialog("📷 Visualização do Anexo / Nota", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
-        st.image(caminho_foto, use_container_width=True, caption="Comprovante / Nota Anexada")
+        if caminho_foto.lower().endswith(".pdf"):
+            with open(caminho_foto, "rb") as f_pdf:
+                base64_pdf = base64.b64encode(f_pdf.read()).decode("utf-8")
+            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+            st.markdown(pdf_display, unsafe_allow_html=True)
+        else:
+            st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
     else:
-        st.error("Arquivo de imagem não encontrado no servidor.")
+        st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
 # 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
@@ -1301,13 +1307,24 @@ else:
             )
             st.markdown("")
             
-            df_display_bonf = df_bonf.copy()
-            df_display_bonf["Valor da Bonificação (R$)"] = df_display_bonf["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_bonf["tipo_bonificacao"] = df_display_bonf["tipo_bonificacao"].fillna("Bonificação")
-            df_display_bonf = df_display_bonf.rename(columns={"numero_nota": "N° NOTA", "tipo_bonificacao": "TIPO", "loja": "LOJAS", "data_entrada": "Data de Entrada", "status": "STATUS", "produto_hortifruti": "Produto Hortifrúti"})
-            df_exib_final = df_display_bonf[["N° NOTA", "TIPO", "LOJAS", "Data de Entrada", "Valor da Bonificação (R$)", "STATUS", "Produto Hortifrúti"]]
-            df_exib_final.index = range(1, len(df_exib_final) + 1)
-            st.dataframe(df_exib_final, use_container_width=True)
+            # Tabela Interativa de Bonificações com visualizador de anexo
+            for _, r in df_bonf.iterrows():
+                with st.container():
+                    col_t1, col_t2, col_t3, col_t4, col_t5, col_t6, col_t7 = st.columns([1, 1.2, 1.5, 1.8, 1.2, 1.5, 1.5])
+                    with col_t1: st.write(f"**Nota:** {r['numero_nota']}")
+                    with col_t2: st.write(f"**Tipo:** {r.get('tipo_bonificacao', 'Bonificação')}")
+                    with col_t3: st.write(f"**Loja:** {r['loja']}")
+                    with col_t4: st.write(f"**Data:** {r['data_entrada']}")
+                    with col_t5: st.write(f"**R$:** {fmt_ptbr(r['valor_bonificacao'], 2)}")
+                    with col_t6: st.write(f"**Status:** {r['status']}")
+                    with col_t7:
+                        caminho_anexo_reg = r.get("caminho_anexo", "")
+                        if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
+                            if st.button("👁️ Ver Anexo", key=f"btn_ver_anexo_{r['id']}"):
+                                exibir_foto_modal(caminho_anexo_reg)
+                        else:
+                            st.write("Sem Anexo")
+                    st.markdown("---")
             
             st.markdown("### ✏️ Alterar Status da Bonificação")
             col_alt_b1, col_alt_b2, col_alt_b3 = st.columns([2.5, 2, 1.5])
