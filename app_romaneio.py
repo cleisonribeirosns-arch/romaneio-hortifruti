@@ -77,7 +77,7 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (LIMPO)
+# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
@@ -85,11 +85,8 @@ def exibir_foto_modal(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
             st.info(f"📄 Arquivo PDF disponível: **{nome_arquivo}**")
-            
             with open(caminho_foto, "rb") as f_pdf:
                 pdf_bytes = f_pdf.read()
-            
-            # Botão de download direto e seguro (sem alertas de link não seguro)
             st.download_button(
                 label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})",
                 data=pdf_bytes,
@@ -112,11 +109,10 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
+# 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA
 # ---------------------------------------------------------
 with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Aparelhos)", expanded=False):
     col_t1, col_t2 = st.columns([2, 2])
-    
     with col_t1:
         sel_tema = st.selectbox(
             "Modo de Exibição / Tema",
@@ -127,7 +123,6 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
         if sel_tema != st.session_state["tipo_tema"]:
             st.session_state["tipo_tema"] = sel_tema
             st.rerun()
-
     with col_t2:
         st.write("☀️ **Nível do Brilho da Tela (%)**")
         slider_brilho = st.slider(
@@ -150,14 +145,13 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             h_c = st.time_input("Horário de Início do Modo Claro", value=st.session_state["hora_inicio_claro"], key="time_claro")
         with col_h2:
             h_e = st.time_input("Horário de Início do Modo Escuro", value=st.session_state["hora_inicio_escuro"], key="time_escuro")
-        
         if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
             st.session_state["hora_inicio_claro"] = h_c
             st.session_state["hora_inicio_escuro"] = h_e
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E BRILHO
+# 3. MOTOR DINÂMICO DE TEMAS, CORES E BRILHO
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -178,7 +172,6 @@ if bg_login_path:
 
 tema_atual = st.session_state["tipo_tema"]
 modo_efetivo = "original"
-
 if tema_atual == "Modo Claro":
     modo_efetivo = "claro"
 elif tema_atual == "Modo Escuro":
@@ -187,7 +180,6 @@ elif tema_atual == "Personalizado (Horário Automático)":
     hora_atual = datetime.now().time()
     h_claro = st.session_state["hora_inicio_claro"]
     h_escuro = st.session_state["hora_inicio_escuro"]
-    
     if h_claro < h_escuro:
         if h_claro <= hora_atual < h_escuro:
             modo_efetivo = "claro"
@@ -203,6 +195,7 @@ else:
 
 fator_brilho = st.session_state["nivel_brilho"] / 100.0
 
+# Cores dinâmicas para inputs baseadas no tema efetivo (resolve o problema dos campos pretos no modo claro)
 if modo_efetivo == "claro":
     css_fundo = f"""
         .stApp {{
@@ -212,6 +205,15 @@ if modo_efetivo == "claro":
         .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
             color: #111111 !important;
             text-shadow: none !important;
+        }}
+        div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
+            background-color: #FFFFFF !important;
+            color: #111111 !important;
+            -webkit-text-fill-color: #111111 !important;
+        }}
+        div[data-baseweb="select"] > div {{
+            background-color: #FFFFFF !important;
+            color: #111111 !important;
         }}
     """
 elif modo_efetivo == "escuro":
@@ -224,6 +226,15 @@ elif modo_efetivo == "escuro":
             color: #FFFFFF !important;
             text-shadow: none !important;
         }}
+        div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
+            background-color: #262730 !important;
+            color: #FFFFFF !important;
+            -webkit-text-fill-color: #FFFFFF !important;
+        }}
+        div[data-baseweb="select"] > div {{
+            background-color: #262730 !important;
+            color: #FFFFFF !important;
+        }}
     """
 else:
     if b64_img:
@@ -235,12 +246,30 @@ else:
                 background-repeat: no-repeat !important;
                 background-attachment: fixed !important;
             }}
+            div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
+                background-color: rgba(255, 255, 255, 0.95) !important;
+                color: #000000 !important;
+                -webkit-text-fill-color: #000000 !important;
+            }}
+            div[data-baseweb="select"] > div {{
+                background-color: rgba(255, 255, 255, 0.95) !important;
+                color: #000000 !important;
+            }}
         """
     else:
         css_fundo = f"""
             .stApp {{
                 background: linear-gradient(135deg, rgba(27,94,32,{fator_brilho}) 0%, rgba(46,125,50,{fator_brilho}) 50%, rgba(198,40,40,{fator_brilho}) 100%) !important;
                 background-attachment: fixed !important;
+            }}
+            div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
+                background-color: rgba(255, 255, 255, 0.95) !important;
+                color: #000000 !important;
+                -webkit-text-fill-color: #000000 !important;
+            }}
+            div[data-baseweb="select"] > div {{
+                background-color: rgba(255, 255, 255, 0.95) !important;
+                color: #000000 !important;
             }}
         """
 
@@ -305,12 +334,6 @@ st.markdown(
     .stApp label {{
         font-size: 15px !important;
         font-weight: bold !important;
-    }}
-    div[data-baseweb="input"] input {{
-        color: #000000 !important;
-        background-color: rgba(255, 255, 255, 0.95) !important;
-        border-radius: 6px !important;
-        font-size: 15px !important;
     }}
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
@@ -487,7 +510,6 @@ def init_db():
             cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
         if "tipo_operacao" not in colunas_rom:
             cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -517,7 +539,6 @@ def init_db():
         colunas_bonf = [col[1] for col in cursor.fetchall()]
         if "tipo_bonificacao" not in colunas_bonf:
             cursor.execute("ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao TEXT DEFAULT 'Bonificação'")
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -637,6 +658,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 10))
+
     info_data = [
         [Paragraph(f"<b>Tipo de Operação:</b> {tipo_op_pdf}", styles["Normal"]), Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"])],
         [Paragraph(f"<b>Cód. Fornecedor:</b> {romaneio_data.get('codigo_fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Telefone:</b> {romaneio_data.get('telefone_fornecedor','')}", styles["Normal"])],
@@ -647,6 +669,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     info_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke)]))
     story.append(info_table)
     story.append(Spacer(1, 15))
+
     table_content = [[Paragraph("Item", style_header_center), Paragraph("Descrição do Produto", style_header_left), Paragraph("Qtd / Peso", style_header_center), Paragraph("UND", style_header_center), Paragraph("Vl. Unit", style_header_left), Paragraph("Total", style_header_left)]]
     
     total_geral = 0.0
@@ -662,6 +685,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     itens_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(itens_table)
     story.append(Spacer(1, 8))
+
     total_table = Table([[f"TOTAL GERAL DO ROMANEIO: R$ {fmt_ptbr(total_geral, 2)}"]], colWidths=[540])
     total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#C62828")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
     story.append(total_table)
@@ -750,7 +774,6 @@ def gerar_pdf_bonificacoes(df_bonf_data):
         if logo_path: break
 
     logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Controle de Bonificação Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -798,7 +821,6 @@ def gerar_pdf_baixas(df_baixas_data):
         if logo_path: break
 
     logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Registro de Baixas de Avarias - Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -1645,14 +1667,12 @@ else:
                         fig_bonf_pie = px.pie(df_bonf_rel.groupby("status")["valor_bonificacao"].sum().reset_index(), names="status", values="valor_bonificacao", color="status", color_discrete_map={"Disponível": "#2E7D32", "Parcialmente Utilizada": "#FFB300", "Totalmente Utilizada": "#C62828"})
                         fig_bonf_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_bonf_pie, use_container_width=True)
-
                 if not df_baixas_rel.empty:
                     st.markdown("---")
                     st.subheader("📉 Análise Gerencial de Baixas e Avarias")
                     fig_baixas_loja = px.bar(df_baixas_rel.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index(), x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Reds")
                     fig_baixas_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor da Avaria (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_baixas_loja, use_container_width=True)
-
                 st.markdown("---")
                 df_export = df_filtrado[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "produto", "quantidade", "unidade", "valor_unitario", "valor_total", "conferente"]].copy()
                 df_export['quantidade'] = df_export['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
@@ -1717,7 +1737,7 @@ else:
                         st.rerun()
                     except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum produto cadastrado.")
-            
+
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.form("cad_usuario_form", clear_on_submit=True):
