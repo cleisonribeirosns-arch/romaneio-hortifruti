@@ -150,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E FUNDOS TRANSPARENTES
+# 3. MOTOR DINÂMICO DE TEMAS E CORREÇÃO DE CAIXAS PRETAS
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -298,23 +298,27 @@ st.markdown(
         font-weight: bold !important;
     }}
     
-    /* SOLUÇÃO COM FUNDO TRANSPARENTE E LEGIBILIDADE PERFEITA EM TODAS AS ABAS */
+    /* ELIMINAÇÃO TOTAL DA COR PRETA / FUNDOS ESCUROS NOS INPUTS E CAMPOS DE DATA EM TODAS AS ABAS */
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
     input, 
-    div[data-testid="stDateInput"] input {{
+    div[data-testid="stDateInput"] input,
+    div[data-baseweb="select"] > div {{
         color: #111111 !important;
         -webkit-text-fill-color: #111111 !important;
-        background: transparent !important;
-        border: 1px solid rgba(0, 0, 0, 0.3) !important;
+        background-color: #FFFFFF !important;
+        background: #FFFFFF !important;
+        border: 1px solid #B0BEC5 !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
     
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background: transparent !important;
-        border: 1px dashed rgba(0, 0, 0, 0.3) !important;
+        background-color: #FFFFFF !important;
+        background: #FFFFFF !important;
+        color: #111111 !important;
+        border: 1px dashed #B0BEC5 !important;
         border-radius: 8px !important;
     }}
 
