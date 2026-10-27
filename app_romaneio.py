@@ -237,6 +237,20 @@ if modo_efetivo == "claro":
         div[data-testid="stExpander"] details summary * {{
             color: #111111 !important;
         }}
+        div[data-testid="stFileUploader"] {{
+            background-color: #FFFFFF !important;
+            border: 1px solid #CCCCCC !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+        }}
+        div[data-testid="stFileUploader"] section {{
+            background-color: #F8F9FA !important;
+            color: #111111 !important;
+            border: 2px dashed #CCCCCC !important;
+        }}
+        div[data-testid="stFileUploader"] section * {{
+            color: #111111 !important;
+        }}
         button[kind="secondary"], .stButton > button[kind="secondary"] {{
             background-color: #E0E0E0 !important;
             color: #111111 !important;
@@ -287,6 +301,19 @@ elif modo_efetivo == "escuro":
         div[data-testid="stExpander"] details summary * {{
             color: #FFFFFF !important;
         }}
+        div[data-testid="stFileUploader"] {{
+            background-color: #262730 !important;
+            border: 1px solid #444444 !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+        }}
+        div[data-testid="stFileUploader"] section {{
+            background-color: #1E1E1E !important;
+            color: #FFFFFF !important;
+        }}
+        div[data-testid="stFileUploader"] section * {{
+            color: #FFFFFF !important;
+        }}
         button[kind="secondary"], .stButton > button[kind="secondary"] {{
             background-color: #333333 !important;
             color: #FFFFFF !important;
@@ -296,7 +323,7 @@ elif modo_efetivo == "escuro":
 else:
     if b64_img:
         css_fundo = f"""
-            .stApp {{
+            .stApp, div[data-testid="stAppViewContainer"] {{
                 background-image: linear-gradient(rgba(27,94,32,{0.85 * fator_brilho}), rgba(198,40,40,{0.85 * fator_brilho})), url("data:image/jpeg;base64,{b64_img}") !important;
                 background-size: cover !important;
                 background-position: center !important;
@@ -306,12 +333,11 @@ else:
         """
     else:
         css_fundo = f"""
-            .stApp {{
+            .stApp, div[data-testid="stAppViewContainer"] {{
                 background: linear-gradient(135deg, rgba(27,94,32,{fator_brilho}) 0%, rgba(46,125,50,{fator_brilho}) 50%, rgba(198,40,40,{fator_brilho}) 100%) !important;
                 background-attachment: fixed !important;
             }}
         """
-    # Regras universais para caixas e inputs no Modo Original (fundo translúcido claro para máxima legibilidade)
     css_fundo += f"""
         div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea, div[data-testid="stDateInput"] input {{
             background-color: rgba(255, 255, 255, 0.95) !important;
@@ -337,6 +363,19 @@ else:
             border-radius: 8px !important;
         }}
         div[data-testid="stExpander"] details summary * {{
+            color: #111111 !important;
+        }}
+        div[data-testid="stFileUploader"] {{
+            background-color: rgba(255, 255, 255, 0.90) !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+            border-radius: 8px !important;
+            padding: 15px !important;
+        }}
+        div[data-testid="stFileUploader"] section {{
+            background-color: rgba(248, 249, 250, 0.95) !important;
+            color: #111111 !important;
+        }}
+        div[data-testid="stFileUploader"] section * {{
             color: #111111 !important;
         }}
         button[kind="secondary"], .stButton > button[kind="secondary"] {{
@@ -1865,7 +1904,7 @@ else:
                         try:
                             conn_del, db_t_del = get_db_connection()
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_perfil_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_para_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Usuário '{usr_para_excluir[1]}' removido!")
