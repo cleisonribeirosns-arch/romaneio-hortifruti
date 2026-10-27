@@ -303,15 +303,6 @@ else:
                 background-repeat: no-repeat !important;
                 background-attachment: fixed !important;
             }}
-            div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
-                background-color: rgba(255, 255, 255, 0.95) !important;
-                color: #000000 !important;
-                -webkit-text-fill-color: #000000 !important;
-            }}
-            div[data-baseweb="select"] > div {{
-                background-color: rgba(255, 255, 255, 0.95) !important;
-                color: #000000 !important;
-            }}
         """
     else:
         css_fundo = f"""
@@ -319,16 +310,41 @@ else:
                 background: linear-gradient(135deg, rgba(27,94,32,{fator_brilho}) 0%, rgba(46,125,50,{fator_brilho}) 50%, rgba(198,40,40,{fator_brilho}) 100%) !important;
                 background-attachment: fixed !important;
             }}
-            div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
-                background-color: rgba(255, 255, 255, 0.95) !important;
-                color: #000000 !important;
-                -webkit-text-fill-color: #000000 !important;
-            }}
-            div[data-baseweb="select"] > div {{
-                background-color: rgba(255, 255, 255, 0.95) !important;
-                color: #000000 !important;
-            }}
         """
+    # Regras universais para caixas e inputs no Modo Original (fundo translúcido claro para máxima legibilidade)
+    css_fundo += f"""
+        div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea, div[data-testid="stDateInput"] input {{
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            color: #000000 !important;
+            -webkit-text-fill-color: #000000 !important;
+        }}
+        div[data-baseweb="select"] > div {{
+            background-color: rgba(255, 255, 255, 0.95) !important;
+            color: #000000 !important;
+        }}
+        div[data-baseweb="select"] span, div[data-baseweb="select"] svg {{
+            color: #000000 !important;
+            fill: #000000 !important;
+        }}
+        div[data-testid="stExpander"] {{
+            background-color: rgba(255, 255, 255, 0.90) !important;
+            border: 1px solid rgba(255, 255, 255, 0.5) !important;
+            border-radius: 8px !important;
+        }}
+        div[data-testid="stExpander"] details summary {{
+            background-color: rgba(240, 242, 245, 0.95) !important;
+            color: #111111 !important;
+            border-radius: 8px !important;
+        }}
+        div[data-testid="stExpander"] details summary * {{
+            color: #111111 !important;
+        }}
+        button[kind="secondary"], .stButton > button[kind="secondary"] {{
+            background-color: rgba(240, 240, 240, 0.9) !important;
+            color: #111111 !important;
+            border: 1px solid #CCCCCC !important;
+        }}
+    """
 
 st.markdown(
     f"""
@@ -1849,7 +1865,7 @@ else:
                         try:
                             conn_del, db_t_del = get_db_connection()
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_para_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_perfil_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Usuário '{usr_para_excluir[1]}' removido!")
