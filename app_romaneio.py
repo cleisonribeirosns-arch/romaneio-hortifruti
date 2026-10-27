@@ -150,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E CORREÇÃO DE CAIXAS PRETAS
+# 3. MOTOR DINÂMICO DE TEMAS E TRANSPARÊNCIA ABSOLUTA NOS INPUTS
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -298,27 +298,38 @@ st.markdown(
         font-weight: bold !important;
     }}
     
-    /* ELIMINAÇÃO TOTAL DA COR PRETA / FUNDOS ESCUROS NOS INPUTS E CAMPOS DE DATA EM TODAS AS ABAS */
+    /* REMOÇÃO ABSOLUTA DA COR PRETA / FORÇANDO TRANSPARÊNCIA E CLAREZA EM TODOS OS CAMPOS (INCLUSIVE DATE_INPUT) */
+    div[data-baseweb="input"], 
+    div[data-baseweb="base-input"], 
+    div[data-baseweb="select"], 
+    div[data-testid="stDateInput"],
+    div[data-testid="stDateInput"] > div,
+    div[data-baseweb="calendar"] {{
+        background: transparent !important;
+        background-color: transparent !important;
+    }}
+
+    input, 
+    select, 
+    textarea,
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
-    input, 
     div[data-testid="stDateInput"] input,
-    div[data-baseweb="select"] > div {{
+    div[data-baseweb="select"] span {{
         color: #111111 !important;
         -webkit-text-fill-color: #111111 !important;
-        background-color: #FFFFFF !important;
-        background: #FFFFFF !important;
-        border: 1px solid #B0BEC5 !important;
+        background: rgba(255, 255, 255, 0.15) !important;
+        background-color: rgba(255, 255, 255, 0.15) !important;
+        border: 1px solid rgba(255, 255, 255, 0.4) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
     
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background-color: #FFFFFF !important;
-        background: #FFFFFF !important;
-        color: #111111 !important;
-        border: 1px dashed #B0BEC5 !important;
+        background: transparent !important;
+        background-color: transparent !important;
+        border: 1px dashed rgba(255, 255, 255, 0.5) !important;
         border-radius: 8px !important;
     }}
 
