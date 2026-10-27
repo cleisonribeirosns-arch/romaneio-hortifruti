@@ -298,44 +298,59 @@ st.markdown(
         font-weight: bold !important;
     }}
     
-    /* FUNDO 100% TRANSPARENTE E SEM CORES SÓLIDAS EM TODOS OS CAMPOS (TEXTO, DATA E SELECIONADORES) */
-    div[data-baseweb="input"], 
-    div[data-baseweb="base-input"], 
-    div[data-baseweb="select"], 
+    /* Campos, cabeçalho e componentes: cores adaptadas ao tema selecionado */
+    div[data-testid="stAppViewContainer"],
+    div[data-testid="stHeader"],
+    header[data-testid="stHeader"],
+    section[data-testid="stSidebar"],
+    div[data-baseweb="input"],
+    div[data-baseweb="base-input"],
+    div[data-baseweb="select"],
     div[data-testid="stDateInput"],
     div[data-testid="stDateInput"] > div,
     div[data-baseweb="calendar"],
-    input, 
-    select, 
-    textarea,
-    div[data-baseweb="input"] input, 
-    div[data-baseweb="base-input"] input, 
+    div[data-testid="stFileUploader"],
+    div[data-testid="stFileUploader"] section,
+    input, select, textarea,
+    div[data-baseweb="input"] input,
+    div[data-baseweb="base-input"] input,
     div[data-testid="stDateInput"] input,
+    div[data-baseweb="select"] > div,
     div[data-baseweb="select"] span {{
-        background: transparent !important;
         background-color: transparent !important;
+        box-shadow: none !important;
     }}
 
-    input, 
-    select, 
-    textarea,
-    div[data-baseweb="input"] input, 
-    div[data-baseweb="base-input"] input, 
-    div[data-testid="stDateInput"] input {{
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        border: 1px solid rgba(255, 255, 255, 0.4) !important;
+    /* No modo claro, texto escuro e campos claros/translúcidos */
+    .stApp input, .stApp select, .stApp textarea,
+    .stApp [data-baseweb="select"] input,
+    .stApp [data-testid="stDateInput"] input {{
+        color: {("#202124" if modo_efetivo == "claro" else "#F5F5F5")} !important;
+        -webkit-text-fill-color: {("#202124" if modo_efetivo == "claro" else "#F5F5F5")} !important;
+        background-color: {("rgba(255, 255, 255, 0.72)" if modo_efetivo == "claro" else "rgba(35, 35, 35, 0.55)")} !important;
+        border: 1px solid {("#C7CDD4" if modo_efetivo == "claro" else "rgba(255, 255, 255, 0.35)")} !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
-    
-    div[data-testid="stFileUploader"], 
-    div[data-testid="stFileUploader"] section {{
-        background: transparent !important;
-        background-color: transparent !important;
-        border: 1px dashed rgba(255, 255, 255, 0.5) !important;
+
+    .stApp [data-baseweb="input"] > div,
+    .stApp [data-baseweb="base-input"],
+    .stApp [data-baseweb="select"] > div,
+    .stApp [data-testid="stDateInput"] > div {{
+        background-color: {("rgba(255, 255, 255, 0.72)" if modo_efetivo == "claro" else "rgba(35, 35, 35, 0.55)")} !important;
+        border-color: #C7CDD4 !important;
+    }}
+
+    .stApp [data-testid="stFileUploader"],
+    .stApp [data-testid="stFileUploader"] section {{
+        background-color: {("rgba(255, 255, 255, 0.45)" if modo_efetivo == "claro" else "rgba(35, 35, 35, 0.35)")} !important;
+        border: 1px dashed {("#AAB3BD" if modo_efetivo == "claro" else "rgba(255, 255, 255, 0.5)")} !important;
         border-radius: 8px !important;
     }}
+
+    /* Mantém boa leitura no tema escuro */
+    }}
+
 
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
