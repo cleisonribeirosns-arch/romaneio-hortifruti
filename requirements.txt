@@ -5,3 +5,4 @@ reportlab
 Pillow
 streamlit-drawable-canvas
 plotly
+psycopg2-binary
