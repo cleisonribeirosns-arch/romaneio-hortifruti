@@ -150,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E BRILHO (CORRIGIDO PARA INPUTS E DATAS)
+# 3. MOTOR DINÂMICO DE TEMAS E BRILHO (CORREÇÃO DE FUNDOS E DATAS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -297,16 +297,21 @@ st.markdown(
         font-size: 15px !important;
         font-weight: bold !important;
     }}
-    /* Correção universal para todos os inputs e caixas de data do Streamlit */
+    /* Correção universal e rigorosa para campos de texto, datas e uploads em todas as abas */
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
     input, 
-    div[data-testid="stDateInput"] input {{
+    div[data-testid="stDateInput"] input,
+    div[data-testid="stFileUploader"] {{
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
+    }}
+    div[data-testid="stFileUploader"] section {{
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        color: #000000 !important;
     }}
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
