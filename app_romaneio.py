@@ -77,7 +77,7 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO
+# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (LIMPO)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
@@ -109,7 +109,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA
+# 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
 # ---------------------------------------------------------
 with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Aparelhos)", expanded=False):
     col_t1, col_t2 = st.columns([2, 2])
@@ -137,7 +137,6 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
         if slider_brilho != st.session_state["nivel_brilho"]:
             st.session_state["nivel_brilho"] = slider_brilho
             st.rerun()
-
     if st.session_state["tipo_tema"] == "Personalizado (Horário Automático)":
         st.markdown("---")
         col_h1, col_h2 = st.columns(2)
@@ -151,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS, CORES E BRILHO
+# 3. MOTOR DINÂMICO DE TEMAS, CORES E BRILHO (CSS COMPLETO FIX)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -195,45 +194,103 @@ else:
 
 fator_brilho = st.session_state["nivel_brilho"] / 100.0
 
-# Cores dinâmicas para inputs baseadas no tema efetivo (resolve o problema dos campos pretos no modo claro)
 if modo_efetivo == "claro":
     css_fundo = f"""
-        .stApp {{
-            background: rgba(245, 247, 250, {fator_brilho}) !important;
+        .stApp, div[data-testid="stAppViewContainer"] {{
+            background-color: rgba(245, 247, 250, {fator_brilho}) !important;
             color: #111111 !important;
         }}
-        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
+        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span, .stApp div {{
             color: #111111 !important;
             text-shadow: none !important;
         }}
-        div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
+        div[data-baseweb="input"] input, 
+        div[data-baseweb="base-input"] input, 
+        input, 
+        textarea, 
+        div[data-testid="stDateInput"] input {{
             background-color: #FFFFFF !important;
             color: #111111 !important;
             -webkit-text-fill-color: #111111 !important;
+            border: 1px solid #CCCCCC !important;
+            border-radius: 6px !important;
         }}
         div[data-baseweb="select"] > div {{
             background-color: #FFFFFF !important;
             color: #111111 !important;
+            border: 1px solid #CCCCCC !important;
+        }}
+        div[data-baseweb="select"] span, div[data-baseweb="select"] svg {{
+            color: #111111 !important;
+            fill: #111111 !important;
+        }}
+        div[data-testid="stExpander"] {{
+            background-color: #FFFFFF !important;
+            border: 1px solid #DDDDDD !important;
+            border-radius: 8px !important;
+        }}
+        div[data-testid="stExpander"] details summary {{
+            background-color: #F0F2F5 !important;
+            color: #111111 !important;
+            border-radius: 8px !important;
+        }}
+        div[data-testid="stExpander"] details summary * {{
+            color: #111111 !important;
+        }}
+        button[kind="secondary"], .stButton > button[kind="secondary"] {{
+            background-color: #E0E0E0 !important;
+            color: #111111 !important;
+            border: 1px solid #CCCCCC !important;
+        }}
+        button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
+            background-color: #D6D6D6 !important;
+            color: #000000 !important;
         }}
     """
 elif modo_efetivo == "escuro":
     css_fundo = f"""
-        .stApp {{
-            background: rgba(18, 18, 18, {fator_brilho}) !important;
+        .stApp, div[data-testid="stAppViewContainer"] {{
+            background-color: rgba(18, 18, 18, {fator_brilho}) !important;
             color: #FFFFFF !important;
         }}
-        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
+        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span, .stApp div {{
             color: #FFFFFF !important;
             text-shadow: none !important;
         }}
-        div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea {{
+        div[data-baseweb="input"] input, 
+        div[data-baseweb="base-input"] input, 
+        input, 
+        textarea, 
+        div[data-testid="stDateInput"] input {{
             background-color: #262730 !important;
             color: #FFFFFF !important;
             -webkit-text-fill-color: #FFFFFF !important;
+            border: 1px solid #444444 !important;
         }}
         div[data-baseweb="select"] > div {{
             background-color: #262730 !important;
             color: #FFFFFF !important;
+            border: 1px solid #444444 !important;
+        }}
+        div[data-baseweb="select"] span, div[data-baseweb="select"] svg {{
+            color: #FFFFFF !important;
+            fill: #FFFFFF !important;
+        }}
+        div[data-testid="stExpander"] {{
+            background-color: #1E1E1E !important;
+            border: 1px solid #333333 !important;
+        }}
+        div[data-testid="stExpander"] details summary {{
+            background-color: #2A2A2A !important;
+            color: #FFFFFF !important;
+        }}
+        div[data-testid="stExpander"] details summary * {{
+            color: #FFFFFF !important;
+        }}
+        button[kind="secondary"], .stButton > button[kind="secondary"] {{
+            background-color: #333333 !important;
+            color: #FFFFFF !important;
+            border: 1px solid #555555 !important;
         }}
     """
 else:
@@ -458,7 +515,6 @@ def init_db():
                 saldo_total_disponivel REAL NOT NULL
             )
         """)
-        
         cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
         if not cursor.fetchone():
             cursor.execute("DELETE FROM usuarios WHERE login = %s", ('admin',))
@@ -554,7 +610,6 @@ def init_db():
                 saldo_total_disponivel REAL NOT NULL
             )
         """)
-        
         cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
         if not cursor.fetchone():
             cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
@@ -637,7 +692,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
                 break
         if logo_path:
             break
-
     def add_watermark(canvas_obj, doc_obj):
         if logo_path and os.path.exists(logo_path):
             canvas_obj.saveState()
@@ -647,18 +701,15 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             except Exception:
                 pass
             canvas_obj.restoreState()
-
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
         logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
     tipo_op_pdf = romaneio_data.get('tipo_operacao', 'Compra')
     header_table = Table([[logo_img_header, Paragraph(f"<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Romaneio de Recebimento - Hortifrúti ({tipo_op_pdf.upper()})", styles["Normal"]), Paragraph(f"<b>ROM:</b> {romaneio_data['numero_romaneio']}<br/><b>Data:</b> {romaneio_data['data_recebimento']}", styles["Normal"])]], colWidths=[80, 300, 160])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 10))
-
     info_data = [
         [Paragraph(f"<b>Tipo de Operação:</b> {tipo_op_pdf}", styles["Normal"]), Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"])],
         [Paragraph(f"<b>Cód. Fornecedor:</b> {romaneio_data.get('codigo_fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Telefone:</b> {romaneio_data.get('telefone_fornecedor','')}", styles["Normal"])],
@@ -669,7 +720,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     info_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke)]))
     story.append(info_table)
     story.append(Spacer(1, 15))
-
     table_content = [[Paragraph("Item", style_header_center), Paragraph("Descrição do Produto", style_header_left), Paragraph("Qtd / Peso", style_header_center), Paragraph("UND", style_header_center), Paragraph("Vl. Unit", style_header_left), Paragraph("Total", style_header_left)]]
     
     total_geral = 0.0
@@ -678,14 +728,12 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         v_tot = float(item[5]) if len(item) > 5 and item[5] is not None else 0.0
         qtd_val = float(item[2]) if len(item) > 2 and item[2] is not None else 0.0
         total_geral += v_tot
-        
         table_content.append([Paragraph(str(idx), style_center), Paragraph(str(item[1]), style_left), Paragraph(fmt_ptbr(qtd_val, 3), style_center), Paragraph(str(item[3]), style_center), Paragraph(f"R$ {fmt_ptbr(v_unit, 2)}", style_left), Paragraph(f"R$ {fmt_ptbr(v_tot, 2)}", style_left)])
         
     itens_table = Table(table_content, colWidths=[35, 215, 75, 50, 75, 90])
     itens_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(itens_table)
     story.append(Spacer(1, 8))
-
     total_table = Table([[f"TOTAL GERAL DO ROMANEIO: R$ {fmt_ptbr(total_geral, 2)}"]], colWidths=[540])
     total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#C62828")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
     story.append(total_table)
@@ -731,12 +779,10 @@ def gerar_pdf_produtos(produtos_data):
                 break
         if logo_path:
             break
-
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
         logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Produtos Cadastrados - Almoxarifado / Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now().strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -772,7 +818,6 @@ def gerar_pdf_bonificacoes(df_bonf_data):
                 logo_path = pos_p
                 break
         if logo_path: break
-
     logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Controle de Bonificação Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
@@ -819,7 +864,6 @@ def gerar_pdf_baixas(df_baixas_data):
                 logo_path = pos_p
                 break
         if logo_path: break
-
     logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Registro de Baixas de Avarias - Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
@@ -1143,7 +1187,6 @@ else:
                 tipo_op_reg = row.get("tipo_operacao", "Compra")
                 
                 with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
-                    
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
                         novo_status_nota = st.selectbox(
@@ -1280,7 +1323,7 @@ else:
                 btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
                 if btn_salvar_bonf:
                     if not num_nota_bonf.strip() or not loja_bonf or not tipo_bonf_sel or not prod_bonf or not status_bonf or not data_entrada_manual:
-                        st.error("Preencha todos os campos obrigatórios em branco (N° Nota, Loja, Tipo, Produto, Status e Data de Entrada).")
+                        st.error("Preencha todos os campos obrigatórios em branco.")
                     else:
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
                         except ValueError: valor_bonf_val = 0.0
@@ -1427,7 +1470,6 @@ else:
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
                     })
-
         st.info(f"💡 **Saldo Total Disponível para a Loja 02: R$ {fmt_ptbr(saldo_total_disp_loja2, 2)}**")
         
         if notas_com_saldo_loja2:
@@ -1667,12 +1709,14 @@ else:
                         fig_bonf_pie = px.pie(df_bonf_rel.groupby("status")["valor_bonificacao"].sum().reset_index(), names="status", values="valor_bonificacao", color="status", color_discrete_map={"Disponível": "#2E7D32", "Parcialmente Utilizada": "#FFB300", "Totalmente Utilizada": "#C62828"})
                         fig_bonf_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_bonf_pie, use_container_width=True)
+
                 if not df_baixas_rel.empty:
                     st.markdown("---")
                     st.subheader("📉 Análise Gerencial de Baixas e Avarias")
                     fig_baixas_loja = px.bar(df_baixas_rel.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index(), x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Reds")
                     fig_baixas_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor da Avaria (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_baixas_loja, use_container_width=True)
+
                 st.markdown("---")
                 df_export = df_filtrado[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "produto", "quantidade", "unidade", "valor_unitario", "valor_total", "conferente"]].copy()
                 df_export['quantidade'] = df_export['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
