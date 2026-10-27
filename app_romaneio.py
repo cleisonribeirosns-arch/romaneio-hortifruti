@@ -2,10 +2,6 @@ import base64
 from datetime import datetime, time, timedelta
 import io
 import os
-import tempfile
-import uuid
-from urllib.request import Request, urlopen
-from urllib.parse import quote
 import pandas as pd
 from PIL import Image
 import plotly.express as px
@@ -56,55 +52,6 @@ st.set_page_config(
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
-# Supabase Storage privado: o banco guarda referências estáveis aos objetos.
-SUPABASE_BUCKET = "romaneio-arquivos"
-STORAGE_PREFIX = "supabase://"
-
-def _supabase_storage_config():
-    try:
-        cfg = st.secrets["supabase"]
-        url, key = str(cfg["url"]).rstrip("/"), str(cfg["service_role_key"])
-        if not url or not key:
-            raise ValueError("URL ou chave vazia")
-        return url, key
-    except Exception as e:
-        raise RuntimeError("Confira [supabase], url e service_role_key nos Secrets do Streamlit Cloud.") from e
-
-def storage_upload_bytes(file_bytes, original_name, folder="arquivos"):
-    url, key = _supabase_storage_config()
-    safe_name = os.path.basename(str(original_name).replace(chr(92), "/")).replace("/", "_")
-    object_key = f"{folder}/{uuid.uuid4().hex}_{safe_name}"
-    endpoint = f"{url}/storage/v1/object/{SUPABASE_BUCKET}/{quote(object_key, safe='/')}"
-    lower = safe_name.lower()
-    mime = "image/png" if lower.endswith(".png") else ("image/jpeg" if lower.endswith((".jpg", ".jpeg")) else ("application/pdf" if lower.endswith(".pdf") else "application/octet-stream"))
-    req = Request(endpoint, data=bytes(file_bytes), method="POST", headers={"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": mime, "x-upsert": "false"})
-    try:
-        with urlopen(req, timeout=45) as response:
-            if response.status not in (200, 201):
-                raise RuntimeError(f"HTTP {response.status}")
-    except Exception as e:
-        raise RuntimeError(f"Falha ao enviar '{safe_name}' ao Supabase Storage; o registro não deve ser salvo sem o arquivo. Detalhe: {e}") from e
-    return STORAGE_PREFIX + object_key
-
-def storage_read_bytes(file_ref):
-    if not file_ref:
-        raise FileNotFoundError("Referência de arquivo vazia.")
-    if not str(file_ref).startswith(STORAGE_PREFIX):
-        with open(file_ref, "rb") as f:
-            return f.read()
-    url, key = _supabase_storage_config()
-    object_key = str(file_ref)[len(STORAGE_PREFIX):]
-    endpoint = f"{url}/storage/v1/object/{SUPABASE_BUCKET}/{quote(object_key, safe='/')}"
-    req = Request(endpoint, headers={"apikey": key, "Authorization": f"Bearer {key}"})
-    try:
-        with urlopen(req, timeout=45) as response:
-            return response.read()
-    except Exception as e:
-        raise FileNotFoundError(f"Não foi possível recuperar o arquivo no Supabase Storage: {e}") from e
-
-def storage_is_ref(file_ref):
-    return bool(file_ref) and str(file_ref).startswith(STORAGE_PREFIX)
-
 # Estado Global de Temas
 if "tipo_tema" not in st.session_state:
     st.session_state["tipo_tema"] = "Padrão do Aplicativo (Original)"
@@ -119,15 +66,13 @@ if "nivel_brilho" not in st.session_state:
 # CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL OU SQLITE)
 # ---------------------------------------------------------
 def get_db_connection():
-    postgres_configurado = "database" in st.secrets and "db_url" in st.secrets["database"]
-    if postgres_configurado and not HAS_POSTGRES:
-        raise RuntimeError("O PostgreSQL está configurado, mas psycopg2 não está instalado. Adicione psycopg2-binary às dependências.")
-    if postgres_configurado:
+    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
         try:
             conn = psycopg2.connect(st.secrets["database"]["db_url"])
             return conn, "postgres"
         except Exception as e:
-            raise RuntimeError("Não foi possível conectar ao PostgreSQL configurado. Sistema interrompido para evitar abrir outro banco por engano. Detalhe: " + str(e)) from e
+            st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+    
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
 
@@ -136,27 +81,42 @@ def get_db_connection():
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
-    if not caminho_foto:
-        st.error("Arquivo de anexo não informado.")
-        return
-    nome_arquivo = os.path.basename(str(caminho_foto).replace(STORAGE_PREFIX, ""))
-    try:
-        arquivo_bytes = storage_read_bytes(caminho_foto)
-        if nome_arquivo.lower().endswith(".pdf"):
+    if os.path.exists(caminho_foto):
+        nome_arquivo = os.path.basename(caminho_foto)
+        if caminho_foto.lower().endswith(".pdf"):
             st.info(f"📄 Arquivo PDF disponível: **{nome_arquivo}**")
-            st.download_button(label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})", data=arquivo_bytes, file_name=nome_arquivo, mime="application/pdf", type="primary")
+            
+            with open(caminho_foto, "rb") as f_pdf:
+                pdf_bytes = f_pdf.read()
+            
+            # Botão de download direto e seguro (sem alertas de link não seguro)
+            st.download_button(
+                label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})",
+                data=pdf_bytes,
+                file_name=nome_arquivo,
+                mime="application/pdf",
+                type="primary"
+            )
         else:
-            st.image(arquivo_bytes, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
-            mime = "image/png" if nome_arquivo.lower().endswith(".png") else "image/jpeg"
-            st.download_button(label=f"📥 Baixar Imagem ({nome_arquivo})", data=arquivo_bytes, file_name=nome_arquivo, mime=mime, type="primary")
-    except Exception as e:
-        st.error(f"Não foi possível abrir o anexo. {e}")
+            st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
+            with open(caminho_foto, "rb") as f_img:
+                img_bytes = f_img.read()
+            st.download_button(
+                label=f"📥 Baixar Imagem ({nome_arquivo})",
+                data=img_bytes,
+                file_name=nome_arquivo,
+                mime="application/jpeg",
+                type="primary"
+            )
+    else:
+        st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
 # 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
 # ---------------------------------------------------------
 with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Aparelhos)", expanded=False):
     col_t1, col_t2 = st.columns([2, 2])
+    
     with col_t1:
         sel_tema = st.selectbox(
             "Modo de Exibição / Tema",
@@ -167,6 +127,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
         if sel_tema != st.session_state["tipo_tema"]:
             st.session_state["tipo_tema"] = sel_tema
             st.rerun()
+
     with col_t2:
         st.write("☀️ **Nível do Brilho da Tela (%)**")
         slider_brilho = st.slider(
@@ -181,6 +142,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
         if slider_brilho != st.session_state["nivel_brilho"]:
             st.session_state["nivel_brilho"] = slider_brilho
             st.rerun()
+
     if st.session_state["tipo_tema"] == "Personalizado (Horário Automático)":
         st.markdown("---")
         col_h1, col_h2 = st.columns(2)
@@ -188,13 +150,14 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             h_c = st.time_input("Horário de Início do Modo Claro", value=st.session_state["hora_inicio_claro"], key="time_claro")
         with col_h2:
             h_e = st.time_input("Horário de Início do Modo Escuro", value=st.session_state["hora_inicio_escuro"], key="time_escuro")
+        
         if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
             st.session_state["hora_inicio_claro"] = h_c
             st.session_state["hora_inicio_escuro"] = h_e
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E TRANSPARÊNCIA TOTAL (SEM CINZA / SEM PRETO)
+# 3. MOTOR DINÂMICO DE TEMAS E BRILHO
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -215,6 +178,7 @@ if bg_login_path:
 
 tema_atual = st.session_state["tipo_tema"]
 modo_efetivo = "original"
+
 if tema_atual == "Modo Claro":
     modo_efetivo = "claro"
 elif tema_atual == "Modo Escuro":
@@ -223,6 +187,7 @@ elif tema_atual == "Personalizado (Horário Automático)":
     hora_atual = datetime.now().time()
     h_claro = st.session_state["hora_inicio_claro"]
     h_escuro = st.session_state["hora_inicio_escuro"]
+    
     if h_claro < h_escuro:
         if h_claro <= hora_atual < h_escuro:
             modo_efetivo = "claro"
@@ -341,61 +306,12 @@ st.markdown(
         font-size: 15px !important;
         font-weight: bold !important;
     }}
-    
-    /* Campos, cabeçalho e componentes: cores adaptadas ao tema selecionado */
-    div[data-testid="stAppViewContainer"],
-    div[data-testid="stHeader"],
-    header[data-testid="stHeader"],
-    section[data-testid="stSidebar"],
-    div[data-baseweb="input"],
-    div[data-baseweb="base-input"],
-    div[data-baseweb="select"],
-    div[data-testid="stDateInput"],
-    div[data-testid="stDateInput"] > div,
-    div[data-baseweb="calendar"],
-    div[data-testid="stFileUploader"],
-    div[data-testid="stFileUploader"] section,
-    input, select, textarea,
-    div[data-baseweb="input"] input,
-    div[data-baseweb="base-input"] input,
-    div[data-testid="stDateInput"] input,
-    div[data-baseweb="select"] > div,
-    div[data-baseweb="select"] span {{
-        background-color: transparent !important;
-        box-shadow: none !important;
-    }}
-
-    /* No modo claro, texto escuro e campos claros/translúcidos */
-    .stApp input, .stApp select, .stApp textarea,
-    .stApp [data-baseweb="select"] input,
-    .stApp [data-testid="stDateInput"] input {{
-        color: {("#202124" if modo_efetivo == "claro" else "#F5F5F5")} !important;
-        -webkit-text-fill-color: {("#202124" if modo_efetivo == "claro" else "#F5F5F5")} !important;
-        background-color: {("rgba(255, 255, 255, 0.72)" if modo_efetivo == "claro" else "rgba(35, 35, 35, 0.55)")} !important;
-        border: 1px solid {("#C7CDD4" if modo_efetivo == "claro" else "rgba(255, 255, 255, 0.35)")} !important;
+    div[data-baseweb="input"] input {{
+        color: #000000 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
-
-    .stApp [data-baseweb="input"] > div,
-    .stApp [data-baseweb="base-input"],
-    .stApp [data-baseweb="select"] > div,
-    .stApp [data-testid="stDateInput"] > div {{
-        background-color: {("rgba(255, 255, 255, 0.72)" if modo_efetivo == "claro" else "rgba(35, 35, 35, 0.55)")} !important;
-        border-color: #C7CDD4 !important;
-    }}
-
-    .stApp [data-testid="stFileUploader"],
-    .stApp [data-testid="stFileUploader"] section {{
-        background-color: {("rgba(255, 255, 255, 0.45)" if modo_efetivo == "claro" else "rgba(35, 35, 35, 0.35)")} !important;
-        border: 1px dashed {("#AAB3BD" if modo_efetivo == "claro" else "rgba(255, 255, 255, 0.5)")} !important;
-        border-radius: 8px !important;
-    }}
-
-    /* Mantém boa leitura no tema escuro */
-    }}
-
-
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -571,6 +487,7 @@ def init_db():
             cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
         if "tipo_operacao" not in colunas_rom:
             cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -600,6 +517,7 @@ def init_db():
         colunas_bonf = [col[1] for col in cursor.fetchall()]
         if "tipo_bonificacao" not in colunas_bonf:
             cursor.execute("ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao TEXT DEFAULT 'Bonificação'")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -657,15 +575,10 @@ def fmt_ptbr(val, decimais=2):
         return "0,00"
 
 def remover_fundo_branco(caminho_imagem):
-    if not caminho_imagem:
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
         return caminho_imagem
     try:
-        if storage_is_ref(caminho_imagem):
-            img = Image.open(io.BytesIO(storage_read_bytes(caminho_imagem))).convert("RGBA")
-        else:
-            if not os.path.exists(caminho_imagem):
-                return caminho_imagem
-            img = Image.open(caminho_imagem).convert("RGBA")
+        img = Image.open(caminho_imagem).convert("RGBA")
         datas = img.getdata()
         newData = []
         for item in datas:
@@ -674,12 +587,7 @@ def remover_fundo_branco(caminho_imagem):
             else:
                 newData.append(item)
         img.putdata(newData)
-        if storage_is_ref(caminho_imagem):
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix="_transp.png")
-            caminho_transparente = tmp.name
-            tmp.close()
-        else:
-            caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
+        caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
         img.save(caminho_transparente, "PNG")
         return caminho_transparente
     except Exception:
@@ -708,6 +616,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
                 break
         if logo_path:
             break
+
     def add_watermark(canvas_obj, doc_obj):
         if logo_path and os.path.exists(logo_path):
             canvas_obj.saveState()
@@ -717,10 +626,12 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
             except Exception:
                 pass
             canvas_obj.restoreState()
+
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
         logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+
     tipo_op_pdf = romaneio_data.get('tipo_operacao', 'Compra')
     header_table = Table([[logo_img_header, Paragraph(f"<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Romaneio de Recebimento - Hortifrúti ({tipo_op_pdf.upper()})", styles["Normal"]), Paragraph(f"<b>ROM:</b> {romaneio_data['numero_romaneio']}<br/><b>Data:</b> {romaneio_data['data_recebimento']}", styles["Normal"])]], colWidths=[80, 300, 160])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
@@ -796,10 +707,12 @@ def gerar_pdf_produtos(produtos_data):
                 break
         if logo_path:
             break
+
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
         logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Produtos Cadastrados - Almoxarifado / Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now().strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -835,7 +748,9 @@ def gerar_pdf_bonificacoes(df_bonf_data):
                 logo_path = pos_p
                 break
         if logo_path: break
+
     logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Controle de Bonificação Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -881,7 +796,9 @@ def gerar_pdf_baixas(df_baixas_data):
                 logo_path = pos_p
                 break
         if logo_path: break
+
     logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Registro de Baixas de Avarias - Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -1116,27 +1033,26 @@ else:
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
                 try:
+                    if not os.path.exists("uploads"): os.makedirs("uploads")
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
-                        buf_c = io.BytesIO()
-                        img_c.save(buf_c, format="PNG")
-                        path_ass_conf = storage_upload_bytes(buf_c.getvalue(), f"ass_conf_{num_romaneio}.png", f"assinaturas/{num_romaneio}")
-
+                        path_ass_conf = os.path.join("uploads", f"ass_conf_{num_romaneio}.png")
+                        img_c.save(path_ass_conf)
+                    
                     path_ass_ent = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
-                        buf_e = io.BytesIO()
-                        img_e.save(buf_e, format="PNG")
-                        path_ass_ent = storage_upload_bytes(buf_e.getvalue(), f"ass_ent_{num_romaneio}.png", f"assinaturas/{num_romaneio}")
-
+                        path_ass_ent = os.path.join("uploads", f"ass_ent_{num_romaneio}.png")
+                        img_e.save(path_ass_ent)
+                    
                     caminho_foto_salva = ""
                     if fotos_upload:
-                        # O esquema atual do banco aceita um caminho de foto por romaneio.
-                        # Guarda a última foto, como fazia o código original, sem enviar arquivos extras sem referência.
-                        f = fotos_upload[-1]
-                        caminho_foto_salva = storage_upload_bytes(f.getvalue(), f.name, f"romaneios/{num_romaneio}")
-
+                        for f in fotos_upload:
+                            path_f = os.path.join("uploads", f.name)
+                            with open(path_f, "wb") as f_out: f_out.write(f.getbuffer())
+                            caminho_foto_salva = path_f
+                    
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
@@ -1205,6 +1121,7 @@ else:
                 tipo_op_reg = row.get("tipo_operacao", "Compra")
                 
                 with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
+                    
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
                         novo_status_nota = st.selectbox(
@@ -1237,15 +1154,10 @@ else:
                     st.write(f"**Conferente:** {row['conferente']}")
                     st.write(f"**Pagamento à Vista:** {row['pagamento_a_vista']} | **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}")
                     
-                    if row['caminho_foto']:
+                    if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
-                        try:
-                            foto_bytes = storage_read_bytes(row['caminho_foto'])
-                            st.image(foto_bytes, width=280, caption="Foto Anexada (Miniatura)")
-                            if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"):
-                                exibir_foto_modal(row['caminho_foto'])
-                        except Exception as e:
-                            st.warning(f"Anexo não disponível: {e}")
+                        st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
+                        if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
                             
                     conn_i, db_t_i = get_db_connection()
                     df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
@@ -1353,7 +1265,8 @@ else:
                             
                         path_anexo_bonf = ""
                         if anexo_bonf:
-                            path_anexo_bonf = storage_upload_bytes(anexo_bonf.getvalue(), f"NF_{num_nota_bonf}_{anexo_bonf.name}", "bonificacoes")
+                            path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
+                            with open(path_anexo_bonf, "wb") as f_out: f_out.write(anexo_bonf.getbuffer())
                                 
                         try:
                             conn_b, db_tb = get_db_connection()
@@ -1424,7 +1337,7 @@ else:
                     with col_t6: st.write(f"**Status:** {r['status']}")
                     with col_t7:
                         caminho_anexo_reg = r.get("caminho_anexo", "")
-                        if caminho_anexo_reg:
+                        if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
                             if st.button("📄 Visualizar Nota", key=f"btn_ver_anexo_{r['id']}"):
                                 exibir_foto_modal(caminho_anexo_reg)
                         else:
@@ -1492,6 +1405,7 @@ else:
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
                     })
+
         st.info(f"💡 **Saldo Total Disponível para a Loja 02: R$ {fmt_ptbr(saldo_total_disp_loja2, 2)}**")
         
         if notas_com_saldo_loja2:
@@ -1578,7 +1492,8 @@ else:
                         else:
                             path_nf_baixa = ""
                             if nf_baixa_file:
-                                path_nf_baixa = storage_upload_bytes(nf_baixa_file.getvalue(), f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}", "baixas")
+                                path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
+                                with open(path_nf_baixa, "wb") as f_out: f_out.write(nf_baixa_file.getbuffer())
                                 
                             novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
                             novo_saldo_total_disp = saldo_total_disp_loja2 - val_avaria_f
@@ -1802,7 +1717,7 @@ else:
                         st.rerun()
                     except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum produto cadastrado.")
-
+            
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.form("cad_usuario_form", clear_on_submit=True):
