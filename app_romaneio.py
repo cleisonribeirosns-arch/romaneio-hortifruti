@@ -63,15 +63,16 @@ if "nivel_brilho" not in st.session_state:
     st.session_state["nivel_brilho"] = 100
 
 # ---------------------------------------------------------
-# CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL OU SQLITE)
+# CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL COM FALLBACK PARA SQLITE)
 # ---------------------------------------------------------
 def get_db_connection():
     if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
         try:
-            conn = psycopg2.connect(st.secrets["database"]["db_url"])
+            conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
             return conn, "postgres"
-        except Exception as e:
-            st.error(f"Erro ao conectar ao PostgreSQL: {e}")
+        except Exception:
+            # Em caso de falha de DNS ou conexão com o Supabase, utiliza o SQLite local sem travar
+            pass
     
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
@@ -85,11 +86,8 @@ def exibir_foto_modal(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
             st.info(f"📄 Arquivo PDF disponível: **{nome_arquivo}**")
-            
             with open(caminho_foto, "rb") as f_pdf:
                 pdf_bytes = f_pdf.read()
-            
-            # Botão de download direto e seguro (sem alertas de link não seguro)
             st.download_button(
                 label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})",
                 data=pdf_bytes,
@@ -116,7 +114,6 @@ def exibir_foto_modal(caminho_foto):
 # ---------------------------------------------------------
 with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Aparelhos)", expanded=False):
     col_t1, col_t2 = st.columns([2, 2])
-    
     with col_t1:
         sel_tema = st.selectbox(
             "Modo de Exibição / Tema",
@@ -127,7 +124,6 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
         if sel_tema != st.session_state["tipo_tema"]:
             st.session_state["tipo_tema"] = sel_tema
             st.rerun()
-
     with col_t2:
         st.write("☀️ **Nível do Brilho da Tela (%)**")
         slider_brilho = st.slider(
@@ -142,7 +138,6 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
         if slider_brilho != st.session_state["nivel_brilho"]:
             st.session_state["nivel_brilho"] = slider_brilho
             st.rerun()
-
     if st.session_state["tipo_tema"] == "Personalizado (Horário Automático)":
         st.markdown("---")
         col_h1, col_h2 = st.columns(2)
@@ -150,14 +145,13 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             h_c = st.time_input("Horário de Início do Modo Claro", value=st.session_state["hora_inicio_claro"], key="time_claro")
         with col_h2:
             h_e = st.time_input("Horário de Início do Modo Escuro", value=st.session_state["hora_inicio_escuro"], key="time_escuro")
-        
         if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
             st.session_state["hora_inicio_claro"] = h_c
             st.session_state["hora_inicio_escuro"] = h_e
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E BRILHO
+# 3. MOTOR DINÂMICO DE TEMAS E TRANSPARÊNCIA TOTAL
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -178,7 +172,6 @@ if bg_login_path:
 
 tema_atual = st.session_state["tipo_tema"]
 modo_efetivo = "original"
-
 if tema_atual == "Modo Claro":
     modo_efetivo = "claro"
 elif tema_atual == "Modo Escuro":
@@ -187,7 +180,6 @@ elif tema_atual == "Personalizado (Horário Automático)":
     hora_atual = datetime.now().time()
     h_claro = st.session_state["hora_inicio_claro"]
     h_escuro = st.session_state["hora_inicio_escuro"]
-    
     if h_claro < h_escuro:
         if h_claro <= hora_atual < h_escuro:
             modo_efetivo = "claro"
@@ -202,7 +194,6 @@ else:
     modo_efetivo = "original"
 
 fator_brilho = st.session_state["nivel_brilho"] / 100.0
-
 if modo_efetivo == "claro":
     css_fundo = f"""
         .stApp {{
@@ -306,11 +297,42 @@ st.markdown(
         font-size: 15px !important;
         font-weight: bold !important;
     }}
-    div[data-baseweb="input"] input {{
-        color: #000000 !important;
-        background-color: rgba(255, 255, 255, 0.95) !important;
+    
+    div[data-baseweb="input"], 
+    div[data-baseweb="base-input"], 
+    div[data-baseweb="select"], 
+    div[data-testid="stDateInput"],
+    div[data-testid="stDateInput"] > div,
+    div[data-baseweb="calendar"],
+    input, 
+    select, 
+    textarea,
+    div[data-baseweb="input"] input, 
+    div[data-baseweb="base-input"] input, 
+    div[data-testid="stDateInput"] input,
+    div[data-baseweb="select"] span {{
+        background: transparent !important;
+        background-color: transparent !important;
+    }}
+    input, 
+    select, 
+    textarea,
+    div[data-baseweb="input"] input, 
+    div[data-baseweb="base-input"] input, 
+    div[data-testid="stDateInput"] input {{
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        border: 1px solid rgba(255, 255, 255, 0.4) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
+    }}
+    
+    div[data-testid="stFileUploader"], 
+    div[data-testid="stFileUploader"] section {{
+        background: transparent !important;
+        background-color: transparent !important;
+        border: 1px dashed rgba(255, 255, 255, 0.5) !important;
+        border-radius: 8px !important;
     }}
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
@@ -487,7 +509,6 @@ def init_db():
             cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
         if "tipo_operacao" not in colunas_rom:
             cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -517,7 +538,6 @@ def init_db():
         colunas_bonf = [col[1] for col in cursor.fetchall()]
         if "tipo_bonificacao" not in colunas_bonf:
             cursor.execute("ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao TEXT DEFAULT 'Bonificação'")
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -637,6 +657,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 10))
+
     info_data = [
         [Paragraph(f"<b>Tipo de Operação:</b> {tipo_op_pdf}", styles["Normal"]), Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"])],
         [Paragraph(f"<b>Cód. Fornecedor:</b> {romaneio_data.get('codigo_fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Telefone:</b> {romaneio_data.get('telefone_fornecedor','')}", styles["Normal"])],
@@ -647,6 +668,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     info_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke)]))
     story.append(info_table)
     story.append(Spacer(1, 15))
+
     table_content = [[Paragraph("Item", style_header_center), Paragraph("Descrição do Produto", style_header_left), Paragraph("Qtd / Peso", style_header_center), Paragraph("UND", style_header_center), Paragraph("Vl. Unit", style_header_left), Paragraph("Total", style_header_left)]]
     
     total_geral = 0.0
@@ -662,6 +684,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     itens_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(itens_table)
     story.append(Spacer(1, 8))
+
     total_table = Table([[f"TOTAL GERAL DO ROMANEIO: R$ {fmt_ptbr(total_geral, 2)}"]], colWidths=[540])
     total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#C62828")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 10), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
     story.append(total_table)
@@ -750,7 +773,6 @@ def gerar_pdf_bonificacoes(df_bonf_data):
         if logo_path: break
 
     logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório de Controle de Bonificação Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -798,7 +820,6 @@ def gerar_pdf_baixas(df_baixas_data):
         if logo_path: break
 
     logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Registro de Baixas de Avarias - Hortifrúti", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -859,6 +880,7 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
+
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
         if logo_display:
@@ -871,6 +893,7 @@ if st.session_state["usuario_logado"] is None:
         else:
             st.markdown("""<div class='titulo-logo'><span class='palavra-sup-mercado'>Supermercado</span><br><span class='palavra-super'>SUPER</span> <span class='palavra-nova'>NOVA</span><br><span class='palavra-cidade'>Cidade</span></div>""", unsafe_allow_html=True)
             st.markdown("<h3>Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login ou Nome Completo", value="")
             senha_input = st.text_input("Senha", type="password", value="")
@@ -1121,7 +1144,6 @@ else:
                 tipo_op_reg = row.get("tipo_operacao", "Compra")
                 
                 with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
-                    
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
                         novo_status_nota = st.selectbox(
@@ -1645,14 +1667,12 @@ else:
                         fig_bonf_pie = px.pie(df_bonf_rel.groupby("status")["valor_bonificacao"].sum().reset_index(), names="status", values="valor_bonificacao", color="status", color_discrete_map={"Disponível": "#2E7D32", "Parcialmente Utilizada": "#FFB300", "Totalmente Utilizada": "#C62828"})
                         fig_bonf_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_bonf_pie, use_container_width=True)
-
                 if not df_baixas_rel.empty:
                     st.markdown("---")
                     st.subheader("📉 Análise Gerencial de Baixas e Avarias")
                     fig_baixas_loja = px.bar(df_baixas_rel.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index(), x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Reds")
                     fig_baixas_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor da Avaria (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_baixas_loja, use_container_width=True)
-
                 st.markdown("---")
                 df_export = df_filtrado[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "produto", "quantidade", "unidade", "valor_unitario", "valor_total", "conferente"]].copy()
                 df_export['quantidade'] = df_export['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
@@ -1717,7 +1737,7 @@ else:
                         st.rerun()
                     except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum produto cadastrado.")
-            
+
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.form("cad_usuario_form", clear_on_submit=True):
