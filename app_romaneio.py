@@ -150,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E TRANSPARÊNCIA ABSOLUTA NOS INPUTS
+# 3. MOTOR DINÂMICO DE TEMAS E TRANSPARÊNCIA TOTAL (SEM CINZA / SEM PRETO)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -298,13 +298,20 @@ st.markdown(
         font-weight: bold !important;
     }}
     
-    /* REMOÇÃO ABSOLUTA DA COR PRETA / FORÇANDO TRANSPARÊNCIA E CLAREZA EM TODOS OS CAMPOS (INCLUSIVE DATE_INPUT) */
+    /* FUNDO 100% TRANSPARENTE E SEM CORES SÓLIDAS EM TODOS OS CAMPOS (TEXTO, DATA E SELECIONADORES) */
     div[data-baseweb="input"], 
     div[data-baseweb="base-input"], 
     div[data-baseweb="select"], 
     div[data-testid="stDateInput"],
     div[data-testid="stDateInput"] > div,
-    div[data-baseweb="calendar"] {{
+    div[data-baseweb="calendar"],
+    input, 
+    select, 
+    textarea,
+    div[data-baseweb="input"] input, 
+    div[data-baseweb="base-input"] input, 
+    div[data-testid="stDateInput"] input,
+    div[data-baseweb="select"] span {{
         background: transparent !important;
         background-color: transparent !important;
     }}
@@ -314,12 +321,9 @@ st.markdown(
     textarea,
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
-    div[data-testid="stDateInput"] input,
-    div[data-baseweb="select"] span {{
-        color: #111111 !important;
-        -webkit-text-fill-color: #111111 !important;
-        background: rgba(255, 255, 255, 0.15) !important;
-        background-color: rgba(255, 255, 255, 0.15) !important;
+    div[data-testid="stDateInput"] input {{
+        color: #FFFFFF !important;
+        -webkit-text-fill-color: #FFFFFF !important;
         border: 1px solid rgba(255, 255, 255, 0.4) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
