@@ -2,6 +2,10 @@ import base64
 from datetime import datetime, time, timedelta
 import io
 import os
+import tempfile
+import uuid
+from urllib.request import Request, urlopen
+from urllib.parse import quote
 import pandas as pd
 from PIL import Image
 import plotly.express as px
@@ -52,6 +56,55 @@ st.set_page_config(
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
+# Supabase Storage privado: o banco guarda referências estáveis aos objetos.
+SUPABASE_BUCKET = "romaneio-arquivos"
+STORAGE_PREFIX = "supabase://"
+
+def _supabase_storage_config():
+    try:
+        cfg = st.secrets["supabase"]
+        url, key = str(cfg["url"]).rstrip("/"), str(cfg["service_role_key"])
+        if not url or not key:
+            raise ValueError("URL ou chave vazia")
+        return url, key
+    except Exception as e:
+        raise RuntimeError("Confira [supabase], url e service_role_key nos Secrets do Streamlit Cloud.") from e
+
+def storage_upload_bytes(file_bytes, original_name, folder="arquivos"):
+    url, key = _supabase_storage_config()
+    safe_name = os.path.basename(str(original_name).replace(chr(92), "/")).replace("/", "_")
+    object_key = f"{folder}/{uuid.uuid4().hex}_{safe_name}"
+    endpoint = f"{url}/storage/v1/object/{SUPABASE_BUCKET}/{quote(object_key, safe='/')}"
+    lower = safe_name.lower()
+    mime = "image/png" if lower.endswith(".png") else ("image/jpeg" if lower.endswith((".jpg", ".jpeg")) else ("application/pdf" if lower.endswith(".pdf") else "application/octet-stream"))
+    req = Request(endpoint, data=bytes(file_bytes), method="POST", headers={"apikey": key, "Authorization": f"Bearer {key}", "Content-Type": mime, "x-upsert": "false"})
+    try:
+        with urlopen(req, timeout=45) as response:
+            if response.status not in (200, 201):
+                raise RuntimeError(f"HTTP {response.status}")
+    except Exception as e:
+        raise RuntimeError(f"Falha ao enviar '{safe_name}' ao Supabase Storage; o registro não deve ser salvo sem o arquivo. Detalhe: {e}") from e
+    return STORAGE_PREFIX + object_key
+
+def storage_read_bytes(file_ref):
+    if not file_ref:
+        raise FileNotFoundError("Referência de arquivo vazia.")
+    if not str(file_ref).startswith(STORAGE_PREFIX):
+        with open(file_ref, "rb") as f:
+            return f.read()
+    url, key = _supabase_storage_config()
+    object_key = str(file_ref)[len(STORAGE_PREFIX):]
+    endpoint = f"{url}/storage/v1/object/{SUPABASE_BUCKET}/{quote(object_key, safe='/')}"
+    req = Request(endpoint, headers={"apikey": key, "Authorization": f"Bearer {key}"})
+    try:
+        with urlopen(req, timeout=45) as response:
+            return response.read()
+    except Exception as e:
+        raise FileNotFoundError(f"Não foi possível recuperar o arquivo no Supabase Storage: {e}") from e
+
+def storage_is_ref(file_ref):
+    return bool(file_ref) and str(file_ref).startswith(STORAGE_PREFIX)
+
 # Estado Global de Temas
 if "tipo_tema" not in st.session_state:
     st.session_state["tipo_tema"] = "Padrão do Aplicativo (Original)"
@@ -66,13 +119,15 @@ if "nivel_brilho" not in st.session_state:
 # CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL OU SQLITE)
 # ---------------------------------------------------------
 def get_db_connection():
-    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
+    postgres_configurado = "database" in st.secrets and "db_url" in st.secrets["database"]
+    if postgres_configurado and not HAS_POSTGRES:
+        raise RuntimeError("O PostgreSQL está configurado, mas psycopg2 não está instalado. Adicione psycopg2-binary às dependências.")
+    if postgres_configurado:
         try:
             conn = psycopg2.connect(st.secrets["database"]["db_url"])
             return conn, "postgres"
         except Exception as e:
-            st.error(f"Erro ao conectar ao PostgreSQL: {e}")
-    
+            raise RuntimeError("Não foi possível conectar ao PostgreSQL configurado. Sistema interrompido para evitar abrir outro banco por engano. Detalhe: " + str(e)) from e
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
 
@@ -81,32 +136,21 @@ def get_db_connection():
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
-    if os.path.exists(caminho_foto):
-        nome_arquivo = os.path.basename(caminho_foto)
-        if caminho_foto.lower().endswith(".pdf"):
+    if not caminho_foto:
+        st.error("Arquivo de anexo não informado.")
+        return
+    nome_arquivo = os.path.basename(str(caminho_foto).replace(STORAGE_PREFIX, ""))
+    try:
+        arquivo_bytes = storage_read_bytes(caminho_foto)
+        if nome_arquivo.lower().endswith(".pdf"):
             st.info(f"📄 Arquivo PDF disponível: **{nome_arquivo}**")
-            with open(caminho_foto, "rb") as f_pdf:
-                pdf_bytes = f_pdf.read()
-            st.download_button(
-                label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})",
-                data=pdf_bytes,
-                file_name=nome_arquivo,
-                mime="application/pdf",
-                type="primary"
-            )
+            st.download_button(label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})", data=arquivo_bytes, file_name=nome_arquivo, mime="application/pdf", type="primary")
         else:
-            st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
-            with open(caminho_foto, "rb") as f_img:
-                img_bytes = f_img.read()
-            st.download_button(
-                label=f"📥 Baixar Imagem ({nome_arquivo})",
-                data=img_bytes,
-                file_name=nome_arquivo,
-                mime="application/jpeg",
-                type="primary"
-            )
-    else:
-        st.error("Arquivo de anexo não encontrado no servidor.")
+            st.image(arquivo_bytes, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
+            mime = "image/png" if nome_arquivo.lower().endswith(".png") else "image/jpeg"
+            st.download_button(label=f"📥 Baixar Imagem ({nome_arquivo})", data=arquivo_bytes, file_name=nome_arquivo, mime=mime, type="primary")
+    except Exception as e:
+        st.error(f"Não foi possível abrir o anexo. {e}")
 
 # ---------------------------------------------------------
 # 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
@@ -613,10 +657,15 @@ def fmt_ptbr(val, decimais=2):
         return "0,00"
 
 def remover_fundo_branco(caminho_imagem):
-    if not caminho_imagem or not os.path.exists(caminho_imagem):
+    if not caminho_imagem:
         return caminho_imagem
     try:
-        img = Image.open(caminho_imagem).convert("RGBA")
+        if storage_is_ref(caminho_imagem):
+            img = Image.open(io.BytesIO(storage_read_bytes(caminho_imagem))).convert("RGBA")
+        else:
+            if not os.path.exists(caminho_imagem):
+                return caminho_imagem
+            img = Image.open(caminho_imagem).convert("RGBA")
         datas = img.getdata()
         newData = []
         for item in datas:
@@ -625,7 +674,12 @@ def remover_fundo_branco(caminho_imagem):
             else:
                 newData.append(item)
         img.putdata(newData)
-        caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
+        if storage_is_ref(caminho_imagem):
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix="_transp.png")
+            caminho_transparente = tmp.name
+            tmp.close()
+        else:
+            caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
         img.save(caminho_transparente, "PNG")
         return caminho_transparente
     except Exception:
@@ -1062,26 +1116,27 @@ else:
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
                 try:
-                    if not os.path.exists("uploads"): os.makedirs("uploads")
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
-                        path_ass_conf = os.path.join("uploads", f"ass_conf_{num_romaneio}.png")
-                        img_c.save(path_ass_conf)
-                    
+                        buf_c = io.BytesIO()
+                        img_c.save(buf_c, format="PNG")
+                        path_ass_conf = storage_upload_bytes(buf_c.getvalue(), f"ass_conf_{num_romaneio}.png", f"assinaturas/{num_romaneio}")
+
                     path_ass_ent = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
-                        path_ass_ent = os.path.join("uploads", f"ass_ent_{num_romaneio}.png")
-                        img_e.save(path_ass_ent)
-                    
+                        buf_e = io.BytesIO()
+                        img_e.save(buf_e, format="PNG")
+                        path_ass_ent = storage_upload_bytes(buf_e.getvalue(), f"ass_ent_{num_romaneio}.png", f"assinaturas/{num_romaneio}")
+
                     caminho_foto_salva = ""
                     if fotos_upload:
-                        for f in fotos_upload:
-                            path_f = os.path.join("uploads", f.name)
-                            with open(path_f, "wb") as f_out: f_out.write(f.getbuffer())
-                            caminho_foto_salva = path_f
-                    
+                        # O esquema atual do banco aceita um caminho de foto por romaneio.
+                        # Guarda a última foto, como fazia o código original, sem enviar arquivos extras sem referência.
+                        f = fotos_upload[-1]
+                        caminho_foto_salva = storage_upload_bytes(f.getvalue(), f.name, f"romaneios/{num_romaneio}")
+
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
@@ -1182,10 +1237,15 @@ else:
                     st.write(f"**Conferente:** {row['conferente']}")
                     st.write(f"**Pagamento à Vista:** {row['pagamento_a_vista']} | **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}")
                     
-                    if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
+                    if row['caminho_foto']:
                         st.write("")
-                        st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
-                        if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
+                        try:
+                            foto_bytes = storage_read_bytes(row['caminho_foto'])
+                            st.image(foto_bytes, width=280, caption="Foto Anexada (Miniatura)")
+                            if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"):
+                                exibir_foto_modal(row['caminho_foto'])
+                        except Exception as e:
+                            st.warning(f"Anexo não disponível: {e}")
                             
                     conn_i, db_t_i = get_db_connection()
                     df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
@@ -1293,8 +1353,7 @@ else:
                             
                         path_anexo_bonf = ""
                         if anexo_bonf:
-                            path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
-                            with open(path_anexo_bonf, "wb") as f_out: f_out.write(anexo_bonf.getbuffer())
+                            path_anexo_bonf = storage_upload_bytes(anexo_bonf.getvalue(), f"NF_{num_nota_bonf}_{anexo_bonf.name}", "bonificacoes")
                                 
                         try:
                             conn_b, db_tb = get_db_connection()
@@ -1365,7 +1424,7 @@ else:
                     with col_t6: st.write(f"**Status:** {r['status']}")
                     with col_t7:
                         caminho_anexo_reg = r.get("caminho_anexo", "")
-                        if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
+                        if caminho_anexo_reg:
                             if st.button("📄 Visualizar Nota", key=f"btn_ver_anexo_{r['id']}"):
                                 exibir_foto_modal(caminho_anexo_reg)
                         else:
@@ -1519,8 +1578,7 @@ else:
                         else:
                             path_nf_baixa = ""
                             if nf_baixa_file:
-                                path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
-                                with open(path_nf_baixa, "wb") as f_out: f_out.write(nf_baixa_file.getbuffer())
+                                path_nf_baixa = storage_upload_bytes(nf_baixa_file.getvalue(), f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}", "baixas")
                                 
                             novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
                             novo_saldo_total_disp = saldo_total_disp_loja2 - val_avaria_f
