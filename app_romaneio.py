@@ -150,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E BRILHO (CORREÇÃO DE FUNDOS E DATAS)
+# 3. MOTOR DINÂMICO DE TEMAS E FUNDOS TRANSPARENTES
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -297,22 +297,27 @@ st.markdown(
         font-size: 15px !important;
         font-weight: bold !important;
     }}
-    /* Correção universal e rigorosa para campos de texto, datas e uploads em todas as abas */
+    
+    /* SOLUÇÃO COM FUNDO TRANSPARENTE E LEGIBILIDADE PERFEITA EM TODAS AS ABAS */
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
     input, 
-    div[data-testid="stDateInput"] input,
-    div[data-testid="stFileUploader"] {{
-        color: #000000 !important;
-        -webkit-text-fill-color: #000000 !important;
-        background-color: rgba(255, 255, 255, 0.95) !important;
+    div[data-testid="stDateInput"] input {{
+        color: #111111 !important;
+        -webkit-text-fill-color: #111111 !important;
+        background: transparent !important;
+        border: 1px solid rgba(0, 0, 0, 0.3) !important;
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
+    
+    div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background-color: rgba(255, 255, 255, 0.95) !important;
-        color: #000000 !important;
+        background: transparent !important;
+        border: 1px dashed rgba(0, 0, 0, 0.3) !important;
+        border-radius: 8px !important;
     }}
+
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
