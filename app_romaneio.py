@@ -150,7 +150,7 @@ with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Apa
             st.rerun()
 
 # ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS, CORES E BRILHO (CSS COMPLETO FIX)
+# 3. MOTOR DINÂMICO DE TEMAS E BRILHO (CORRIGIDO PARA INPUTS E DATAS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -196,134 +196,30 @@ fator_brilho = st.session_state["nivel_brilho"] / 100.0
 
 if modo_efetivo == "claro":
     css_fundo = f"""
-        .stApp, div[data-testid="stAppViewContainer"] {{
-            background-color: rgba(245, 247, 250, {fator_brilho}) !important;
+        .stApp {{
+            background: rgba(245, 247, 250, {fator_brilho}) !important;
             color: #111111 !important;
         }}
-        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span, .stApp div {{
+        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
             color: #111111 !important;
             text-shadow: none !important;
-        }}
-        div[data-baseweb="input"] input, 
-        div[data-baseweb="base-input"] input, 
-        input, 
-        textarea, 
-        div[data-testid="stDateInput"] input {{
-            background-color: #FFFFFF !important;
-            color: #111111 !important;
-            -webkit-text-fill-color: #111111 !important;
-            border: 1px solid #CCCCCC !important;
-            border-radius: 6px !important;
-        }}
-        div[data-baseweb="select"] > div {{
-            background-color: #FFFFFF !important;
-            color: #111111 !important;
-            border: 1px solid #CCCCCC !important;
-        }}
-        div[data-baseweb="select"] span, div[data-baseweb="select"] svg {{
-            color: #111111 !important;
-            fill: #111111 !important;
-        }}
-        div[data-testid="stExpander"] {{
-            background-color: #FFFFFF !important;
-            border: 1px solid #DDDDDD !important;
-            border-radius: 8px !important;
-        }}
-        div[data-testid="stExpander"] details summary {{
-            background-color: #F0F2F5 !important;
-            color: #111111 !important;
-            border-radius: 8px !important;
-        }}
-        div[data-testid="stExpander"] details summary * {{
-            color: #111111 !important;
-        }}
-        div[data-testid="stFileUploader"] {{
-            background-color: #FFFFFF !important;
-            border: 1px solid #CCCCCC !important;
-            border-radius: 8px !important;
-            padding: 15px !important;
-        }}
-        div[data-testid="stFileUploader"] section {{
-            background-color: #F8F9FA !important;
-            color: #111111 !important;
-            border: 2px dashed #CCCCCC !important;
-        }}
-        div[data-testid="stFileUploader"] section * {{
-            color: #111111 !important;
-        }}
-        button[kind="secondary"], .stButton > button[kind="secondary"] {{
-            background-color: #E0E0E0 !important;
-            color: #111111 !important;
-            border: 1px solid #CCCCCC !important;
-        }}
-        button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
-            background-color: #D6D6D6 !important;
-            color: #000000 !important;
         }}
     """
 elif modo_efetivo == "escuro":
     css_fundo = f"""
-        .stApp, div[data-testid="stAppViewContainer"] {{
-            background-color: rgba(18, 18, 18, {fator_brilho}) !important;
+        .stApp {{
+            background: rgba(18, 18, 18, {fator_brilho}) !important;
             color: #FFFFFF !important;
         }}
-        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span, .stApp div {{
+        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
             color: #FFFFFF !important;
             text-shadow: none !important;
-        }}
-        div[data-baseweb="input"] input, 
-        div[data-baseweb="base-input"] input, 
-        input, 
-        textarea, 
-        div[data-testid="stDateInput"] input {{
-            background-color: #262730 !important;
-            color: #FFFFFF !important;
-            -webkit-text-fill-color: #FFFFFF !important;
-            border: 1px solid #444444 !important;
-        }}
-        div[data-baseweb="select"] > div {{
-            background-color: #262730 !important;
-            color: #FFFFFF !important;
-            border: 1px solid #444444 !important;
-        }}
-        div[data-baseweb="select"] span, div[data-baseweb="select"] svg {{
-            color: #FFFFFF !important;
-            fill: #FFFFFF !important;
-        }}
-        div[data-testid="stExpander"] {{
-            background-color: #1E1E1E !important;
-            border: 1px solid #333333 !important;
-        }}
-        div[data-testid="stExpander"] details summary {{
-            background-color: #2A2A2A !important;
-            color: #FFFFFF !important;
-        }}
-        div[data-testid="stExpander"] details summary * {{
-            color: #FFFFFF !important;
-        }}
-        div[data-testid="stFileUploader"] {{
-            background-color: #262730 !important;
-            border: 1px solid #444444 !important;
-            border-radius: 8px !important;
-            padding: 15px !important;
-        }}
-        div[data-testid="stFileUploader"] section {{
-            background-color: #1E1E1E !important;
-            color: #FFFFFF !important;
-        }}
-        div[data-testid="stFileUploader"] section * {{
-            color: #FFFFFF !important;
-        }}
-        button[kind="secondary"], .stButton > button[kind="secondary"] {{
-            background-color: #333333 !important;
-            color: #FFFFFF !important;
-            border: 1px solid #555555 !important;
         }}
     """
 else:
     if b64_img:
         css_fundo = f"""
-            .stApp, div[data-testid="stAppViewContainer"] {{
+            .stApp {{
                 background-image: linear-gradient(rgba(27,94,32,{0.85 * fator_brilho}), rgba(198,40,40,{0.85 * fator_brilho})), url("data:image/jpeg;base64,{b64_img}") !important;
                 background-size: cover !important;
                 background-position: center !important;
@@ -333,57 +229,11 @@ else:
         """
     else:
         css_fundo = f"""
-            .stApp, div[data-testid="stAppViewContainer"] {{
+            .stApp {{
                 background: linear-gradient(135deg, rgba(27,94,32,{fator_brilho}) 0%, rgba(46,125,50,{fator_brilho}) 50%, rgba(198,40,40,{fator_brilho}) 100%) !important;
                 background-attachment: fixed !important;
             }}
         """
-    css_fundo += f"""
-        div[data-baseweb="input"] input, div[data-baseweb="base-input"] input, input, textarea, div[data-testid="stDateInput"] input {{
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            color: #000000 !important;
-            -webkit-text-fill-color: #000000 !important;
-        }}
-        div[data-baseweb="select"] > div {{
-            background-color: rgba(255, 255, 255, 0.95) !important;
-            color: #000000 !important;
-        }}
-        div[data-baseweb="select"] span, div[data-baseweb="select"] svg {{
-            color: #000000 !important;
-            fill: #000000 !important;
-        }}
-        div[data-testid="stExpander"] {{
-            background-color: rgba(255, 255, 255, 0.90) !important;
-            border: 1px solid rgba(255, 255, 255, 0.5) !important;
-            border-radius: 8px !important;
-        }}
-        div[data-testid="stExpander"] details summary {{
-            background-color: rgba(240, 242, 245, 0.95) !important;
-            color: #111111 !important;
-            border-radius: 8px !important;
-        }}
-        div[data-testid="stExpander"] details summary * {{
-            color: #111111 !important;
-        }}
-        div[data-testid="stFileUploader"] {{
-            background-color: rgba(255, 255, 255, 0.90) !important;
-            border: 1px solid rgba(255, 255, 255, 0.5) !important;
-            border-radius: 8px !important;
-            padding: 15px !important;
-        }}
-        div[data-testid="stFileUploader"] section {{
-            background-color: rgba(248, 249, 250, 0.95) !important;
-            color: #111111 !important;
-        }}
-        div[data-testid="stFileUploader"] section * {{
-            color: #111111 !important;
-        }}
-        button[kind="secondary"], .stButton > button[kind="secondary"] {{
-            background-color: rgba(240, 240, 240, 0.9) !important;
-            color: #111111 !important;
-            border: 1px solid #CCCCCC !important;
-        }}
-    """
 
 st.markdown(
     f"""
@@ -446,6 +296,17 @@ st.markdown(
     .stApp label {{
         font-size: 15px !important;
         font-weight: bold !important;
+    }}
+    /* Correção universal para todos os inputs e caixas de data do Streamlit */
+    div[data-baseweb="input"] input, 
+    div[data-baseweb="base-input"] input, 
+    input, 
+    div[data-testid="stDateInput"] input {{
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        background-color: rgba(255, 255, 255, 0.95) !important;
+        border-radius: 6px !important;
+        font-size: 15px !important;
     }}
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
@@ -570,6 +431,7 @@ def init_db():
                 saldo_total_disponivel REAL NOT NULL
             )
         """)
+        
         cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
         if not cursor.fetchone():
             cursor.execute("DELETE FROM usuarios WHERE login = %s", ('admin',))
@@ -665,6 +527,7 @@ def init_db():
                 saldo_total_disponivel REAL NOT NULL
             )
         """)
+        
         cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
         if not cursor.fetchone():
             cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
@@ -783,6 +646,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         v_tot = float(item[5]) if len(item) > 5 and item[5] is not None else 0.0
         qtd_val = float(item[2]) if len(item) > 2 and item[2] is not None else 0.0
         total_geral += v_tot
+        
         table_content.append([Paragraph(str(idx), style_center), Paragraph(str(item[1]), style_left), Paragraph(fmt_ptbr(qtd_val, 3), style_center), Paragraph(str(item[3]), style_center), Paragraph(f"R$ {fmt_ptbr(v_unit, 2)}", style_left), Paragraph(f"R$ {fmt_ptbr(v_tot, 2)}", style_left)])
         
     itens_table = Table(table_content, colWidths=[35, 215, 75, 50, 75, 90])
@@ -1378,7 +1242,7 @@ else:
                 btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
                 if btn_salvar_bonf:
                     if not num_nota_bonf.strip() or not loja_bonf or not tipo_bonf_sel or not prod_bonf or not status_bonf or not data_entrada_manual:
-                        st.error("Preencha todos os campos obrigatórios em branco.")
+                        st.error("Preencha todos os campos obrigatórios em branco (N° Nota, Loja, Tipo, Produto, Status e Data de Entrada).")
                     else:
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
                         except ValueError: valor_bonf_val = 0.0
