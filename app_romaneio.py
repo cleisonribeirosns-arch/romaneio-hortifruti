@@ -16,11 +16,10 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
-import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
-# Tenta importar psycopg2 para suporte ao PostgreSQL permanente
+# Importação obrigatória do psycopg2 para conexão com o Supabase
 try:
     import psycopg2
     import psycopg2.extras
@@ -63,19 +62,23 @@ if "nivel_brilho" not in st.session_state:
     st.session_state["nivel_brilho"] = 100
 
 # ---------------------------------------------------------
-# CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL COM FALLBACK PARA SQLITE)
+# CONEXÃO EXCLUSIVA E SEGURA COM O SUPABASE (NUVEM PERMANENTE)
 # ---------------------------------------------------------
 def get_db_connection():
-    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
-        try:
-            conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
-            return conn, "postgres"
-        except Exception:
-            # Em caso de falha de DNS ou conexão com o Supabase, utiliza o SQLite local sem travar
-            pass
-    
-    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-    return conn, "sqlite"
+    if not HAS_POSTGRES:
+        st.error("Erro crítico: A biblioteca 'psycopg2' não está instalada. O sistema exige conexão com o PostgreSQL/Supabase.")
+        st.stop()
+        
+    if "database" not in st.secrets or "db_url" not in st.secrets["database"]:
+        st.error("Erro crítico: A URL de conexão com o banco de dados (db_url) não está configurada nos Secrets do Streamlit.")
+        st.stop()
+        
+    try:
+        conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=10)
+        return conn, "postgres"
+    except Exception as e:
+        st.error(f"Erro ao conectar à nuvem Supabase: {e}. Verifique a sua conexão ou os segredos configurados.")
+        st.stop()
 
 # ---------------------------------------------------------
 # MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (LIMPO)
@@ -355,212 +358,116 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 4. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
+# 4. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO SUPABASE
 # ---------------------------------------------------------
 def init_db():
-    conn, db_type = get_db_connection()
+    conn, _ = get_db_connection()
     cursor = conn.cursor()
     
-    if db_type == "postgres":
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
-                nome VARCHAR(255) NOT NULL,
-                login VARCHAR(255) UNIQUE NOT NULL,
-                senha VARCHAR(255) NOT NULL,
-                perfil VARCHAR(255) NOT NULL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS produtos (
-                id SERIAL PRIMARY KEY,
-                codigo_barras VARCHAR(255),
-                codigo_produto VARCHAR(255) UNIQUE,
-                nome VARCHAR(255) UNIQUE NOT NULL,
-                unidade_padrao VARCHAR(50) NOT NULL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS romaneios (
-                id SERIAL PRIMARY KEY,
-                numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
-                loja VARCHAR(255) NOT NULL,
-                data_recebimento VARCHAR(50) NOT NULL,
-                fornecedor VARCHAR(255),
-                codigo_fornecedor VARCHAR(255),
-                telefone_fornecedor VARCHAR(255),
-                conferente VARCHAR(255) NOT NULL,
-                pagamento_a_vista VARCHAR(50) NOT NULL,
-                data_pagamento VARCHAR(50),
-                caminho_foto TEXT,
-                assinatura_conferente TEXT,
-                assinatura_entregador TEXT,
-                status_nota VARCHAR(50) DEFAULT 'Pendente',
-                tipo_operacao VARCHAR(50) DEFAULT 'Compra'
-            )
-        """)
-        cursor.execute("""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='status_nota') THEN
-                    ALTER TABLE romaneios ADD COLUMN status_nota VARCHAR(50) DEFAULT 'Pendente';
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='tipo_operacao') THEN
-                    ALTER TABLE romaneios ADD COLUMN tipo_operacao VARCHAR(50) DEFAULT 'Compra';
-                END IF;
-            END $$;
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS romaneio_itens (
-                id SERIAL PRIMARY KEY,
-                romaneio_id INTEGER NOT NULL REFERENCES romaneios(id) ON DELETE CASCADE,
-                produto VARCHAR(255) NOT NULL,
-                quantidade REAL NOT NULL,
-                unidade VARCHAR(50) NOT NULL,
-                valor_unitario REAL,
-                valor_total REAL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bonificacoes (
-                id SERIAL PRIMARY KEY,
-                numero_nota VARCHAR(255) NOT NULL,
-                loja VARCHAR(255) NOT NULL,
-                data_entrada VARCHAR(50) NOT NULL,
-                valor_bonificacao REAL NOT NULL,
-                status VARCHAR(100) NOT NULL,
-                produto_hortifruti VARCHAR(255) NOT NULL,
-                caminho_anexo TEXT,
-                tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação'
-            )
-        """)
-        cursor.execute("""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bonificacoes' and column_name='tipo_bonificacao') THEN
-                    ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação';
-                END IF;
-            END $$;
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS baixas_avarias (
-                id SERIAL PRIMARY KEY,
-                loja_baixa VARCHAR(255) NOT NULL,
-                data_baixa VARCHAR(50) NOT NULL,
-                ref_bon_transferen VARCHAR(255) NOT NULL,
-                nf_baixa TEXT,
-                nf_b_entrada VARCHAR(255) NOT NULL,
-                produto_hortifruti VARCHAR(255) NOT NULL,
-                quantidade_kg_cx REAL NOT NULL,
-                valor_total_avaria REAL NOT NULL,
-                saldo_restante_nota REAL NOT NULL,
-                saldo_total_disponivel REAL NOT NULL
-            )
-        """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id SERIAL PRIMARY KEY,
+            nome VARCHAR(255) NOT NULL,
+            login VARCHAR(255) UNIQUE NOT NULL,
+            senha VARCHAR(255) NOT NULL,
+            perfil VARCHAR(255) NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS produtos (
+            id SERIAL PRIMARY KEY,
+            codigo_barras VARCHAR(255),
+            codigo_produto VARCHAR(255) UNIQUE,
+            nome VARCHAR(255) UNIQUE NOT NULL,
+            unidade_padrao VARCHAR(50) NOT NULL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS romaneios (
+            id SERIAL PRIMARY KEY,
+            numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
+            loja VARCHAR(255) NOT NULL,
+            data_recebimento VARCHAR(50) NOT NULL,
+            fornecedor VARCHAR(255),
+            codigo_fornecedor VARCHAR(255),
+            telefone_fornecedor VARCHAR(255),
+            conferente VARCHAR(255) NOT NULL,
+            pagamento_a_vista VARCHAR(50) NOT NULL,
+            data_pagamento VARCHAR(50),
+            caminho_foto TEXT,
+            assinatura_conferente TEXT,
+            assinatura_entregador TEXT,
+            status_nota VARCHAR(50) DEFAULT 'Pendente',
+            tipo_operacao VARCHAR(50) DEFAULT 'Compra'
+        )
+    """)
+    cursor.execute("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='status_nota') THEN
+                ALTER TABLE romaneios ADD COLUMN status_nota VARCHAR(50) DEFAULT 'Pendente';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='tipo_operacao') THEN
+                ALTER TABLE romaneios ADD COLUMN tipo_operacao VARCHAR(50) DEFAULT 'Compra';
+            END IF;
+        END $$;
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS romaneio_itens (
+            id SERIAL PRIMARY KEY,
+            romaneio_id INTEGER NOT NULL REFERENCES romaneios(id) ON DELETE CASCADE,
+            produto VARCHAR(255) NOT NULL,
+            quantidade REAL NOT NULL,
+            unidade VARCHAR(50) NOT NULL,
+            valor_unitario REAL,
+            valor_total REAL
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bonificacoes (
+            id SERIAL PRIMARY KEY,
+            numero_nota VARCHAR(255) NOT NULL,
+            loja VARCHAR(255) NOT NULL,
+            data_entrada VARCHAR(50) NOT NULL,
+            valor_bonificacao REAL NOT NULL,
+            status VARCHAR(100) NOT NULL,
+            produto_hortifruti VARCHAR(255) NOT NULL,
+            caminho_anexo TEXT,
+            tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação'
+        )
+    """)
+    cursor.execute("""
+        DO $$ 
+        BEGIN 
+            IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bonificacoes' and column_name='tipo_bonificacao') THEN
+                ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação';
+            END IF;
+        END $$;
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS baixas_avarias (
+            id SERIAL PRIMARY KEY,
+            loja_baixa VARCHAR(255) NOT NULL,
+            data_baixa VARCHAR(50) NOT NULL,
+            ref_bon_transferen VARCHAR(255) NOT NULL,
+            nf_baixa TEXT,
+            nf_b_entrada VARCHAR(255) NOT NULL,
+            produto_hortifruti VARCHAR(255) NOT NULL,
+            quantidade_kg_cx REAL NOT NULL,
+            valor_total_avaria REAL NOT NULL,
+            saldo_restante_nota REAL NOT NULL,
+            saldo_total_disponivel REAL NOT NULL
+        )
+    """)
+    
+    cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
+    if not cursor.fetchone():
+        cursor.execute("DELETE FROM usuarios WHERE login = %s", ('admin',))
+        cursor.execute(
+            "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)",
+            ('Administrador', '908', '0332', 'Gestor')
+        )
         
-        cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
-        if not cursor.fetchone():
-            cursor.execute("DELETE FROM usuarios WHERE login = %s", ('admin',))
-            cursor.execute(
-                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)",
-                ('Administrador', '908', '0332', 'Gestor')
-            )
-    else:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nome TEXT NOT NULL,
-                login TEXT UNIQUE NOT NULL,
-                senha TEXT NOT NULL,
-                perfil TEXT NOT NULL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS produtos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                codigo_barras TEXT,
-                codigo_produto TEXT UNIQUE,
-                nome TEXT UNIQUE NOT NULL,
-                unidade_padrao TEXT NOT NULL
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS romaneios (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero_romaneio TEXT UNIQUE NOT NULL,
-                loja TEXT NOT NULL,
-                data_recebimento TEXT NOT NULL,
-                fornecedor TEXT,
-                codigo_fornecedor TEXT,
-                telefone_fornecedor TEXT,
-                conferente TEXT NOT NULL,
-                pagamento_a_vista TEXT NOT NULL,
-                data_pagamento TEXT,
-                caminho_foto TEXT,
-                assinatura_conferente TEXT,
-                assinatura_entregador TEXT,
-                status_nota TEXT DEFAULT 'Pendente',
-                tipo_operacao TEXT DEFAULT 'Compra'
-            )
-        """)
-        cursor.execute("PRAGMA table_info(romaneios)")
-        colunas_rom = [col[1] for col in cursor.fetchall()]
-        if "status_nota" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
-        if "tipo_operacao" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS romaneio_itens (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                romaneio_id INTEGER NOT NULL,
-                produto TEXT NOT NULL,
-                quantidade REAL NOT NULL,
-                unidade TEXT NOT NULL,
-                valor_unitario REAL,
-                valor_total REAL,
-                FOREIGN KEY (romaneio_id) REFERENCES romaneios (id)
-            )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS bonificacoes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                numero_nota TEXT NOT NULL,
-                loja TEXT NOT NULL,
-                data_entrada TEXT NOT NULL,
-                valor_bonificacao REAL NOT NULL,
-                status TEXT NOT NULL,
-                produto_hortifruti TEXT NOT NULL,
-                caminho_anexo TEXT,
-                tipo_bonificacao TEXT DEFAULT 'Bonificação'
-            )
-        """)
-        cursor.execute("PRAGMA table_info(bonificacoes)")
-        colunas_bonf = [col[1] for col in cursor.fetchall()]
-        if "tipo_bonificacao" not in colunas_bonf:
-            cursor.execute("ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao TEXT DEFAULT 'Bonificação'")
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS baixas_avarias (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                loja_baixa TEXT NOT NULL,
-                data_baixa TEXT NOT NULL,
-                ref_bon_transferen TEXT NOT NULL,
-                nf_baixa TEXT,
-                nf_b_entrada TEXT NOT NULL,
-                produto_hortifruti TEXT NOT NULL,
-                quantidade_kg_cx REAL NOT NULL,
-                valor_total_avaria REAL NOT NULL,
-                saldo_restante_nota REAL NOT NULL,
-                saldo_total_disponivel REAL NOT NULL
-            )
-        """)
-        
-        cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
-        if not cursor.fetchone():
-            cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
-            cursor.execute(
-                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES ('Administrador', '908', '0332', 'Gestor')"
-            )
-            
     conn.commit()
     conn.close()
 
@@ -570,18 +477,12 @@ if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
 def fazer_login(login_ou_nome, senha):
-    conn, db_type = get_db_connection()
+    conn, _ = get_db_connection()
     cursor = conn.cursor()
-    if db_type == "postgres":
-        cursor.execute(
-            "SELECT id, nome, perfil, login FROM usuarios WHERE (login = %s OR LOWER(nome) = LOWER(%s)) AND senha = %s",
-            (login_ou_nome.strip(), login_ou_nome.strip(), senha),
-        )
-    else:
-        cursor.execute(
-            "SELECT id, nome, perfil, login FROM usuarios WHERE (login = ? OR nome COLLATE NOCASE = ?) AND senha = ?",
-            (login_ou_nome.strip(), login_ou_nome.strip(), senha),
-        )
+    cursor.execute(
+        "SELECT id, nome, perfil, login FROM usuarios WHERE (login = %s OR LOWER(nome) = LOWER(%s)) AND senha = %s",
+        (login_ou_nome.strip(), login_ou_nome.strip(), senha),
+    )
     usr = cursor.fetchone()
     conn.close()
     return usr
@@ -935,7 +836,7 @@ else:
         k_suffix = st.session_state["form_key_suffix"]
         i_suffix = st.session_state["item_key_suffix"]
         
-        conn, db_type = get_db_connection()
+        conn, _ = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM produtos ORDER BY nome")
         produtos_lista = cursor.fetchall()
@@ -1076,21 +977,20 @@ else:
                             with open(path_f, "wb") as f_out: f_out.write(f.getbuffer())
                             caminho_foto_salva = path_f
                     
-                    conn, db_type = get_db_connection()
+                    conn, _ = get_db_connection()
                     cursor = conn.cursor()
-                    if db_type == "postgres":
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao))
-                        romaneio_id = cursor.fetchone()[0]
-                    else:
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao))
-                        romaneio_id = cursor.lastrowid
+                    cursor.execute(
+                        "INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+                        (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao)
+                    )
+                    romaneio_id = cursor.fetchone()[0]
                         
                     itens_salvos_pdf = []
                     for itm in st.session_state["itens_romaneio"]:
-                        if db_type == "postgres":
-                            cursor.execute("INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)", (romaneio_id, itm["produto"], itm["quantidade"], itm["unidade"], itm["valor_unitario"], itm["valor_total"]))
-                        else:
-                            cursor.execute("INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (?, ?, ?, ?, ?, ?)", (romaneio_id, itm["produto"], itm["quantidade"], itm["unidade"], itm["valor_unitario"], itm["valor_total"]))
+                        cursor.execute(
+                            "INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)",
+                            (romaneio_id, itm["produto"], itm["quantidade"], itm["unidade"], itm["valor_unitario"], itm["valor_total"])
+                        )
                         itens_salvos_pdf.append([None, itm["produto"], itm["quantidade"], itm["unidade"], itm["valor_unitario"], itm["valor_total"]])
                     conn.commit()
                     conn.close()
@@ -1102,7 +1002,7 @@ else:
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco permanente!")
+                    st.success(f"Romaneio {num_romaneio} salvo com sucesso no Supabase!")
                     st.rerun()
                 except Exception as e: st.error(f"Erro ao salvar romaneio: {e}")
                     
@@ -1122,7 +1022,7 @@ else:
                 filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
                 filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
                 
-        conn, db_type = get_db_connection()
+        conn, _ = get_db_connection()
         df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
         
@@ -1157,11 +1057,11 @@ else:
                         st.write("")
                         if st.button("💾 Salvar Status da Nota", key=f"btn_salvar_status_{row['id']}"):
                             try:
-                                conn_st, db_t_st = get_db_connection()
+                                conn_st, _ = get_db_connection()
                                 cur_st = conn_st.cursor()
                                 cur_st.execute(
-                                    "UPDATE romaneios SET status_nota = %s WHERE id = %s" if db_t_st == "postgres" else "UPDATE romaneios SET status_nota = ? WHERE id = ?",
-                                    (novo_status_nota, int(row["id"]) if db_t_st == "postgres" else row["id"])
+                                    "UPDATE romaneios SET status_nota = %s WHERE id = %s",
+                                    (novo_status_nota, int(row["id"]))
                                 )
                                 conn_st.commit()
                                 conn_st.close()
@@ -1181,8 +1081,8 @@ else:
                         st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
                         if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
                             
-                    conn_i, db_t_i = get_db_connection()
-                    df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
+                    conn_i, _ = get_db_connection()
+                    df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s", conn_i, params=(int(row["id"]),))
                     conn_i.close()
                     
                     df_itens_ex = df_itens.copy()
@@ -1199,10 +1099,10 @@ else:
                     with col_del:
                         if st.button("🗑️ Excluir Romaneio", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
                             try:
-                                conn_del, db_t_del = get_db_connection()
+                                conn_del, _ = get_db_connection()
                                 cursor_del = conn_del.cursor()
-                                cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s" if db_t_del == "postgres" else "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
-                                cursor_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
+                                cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s", (int(row["id"]),))
+                                cursor_del.execute("DELETE FROM romaneios WHERE id = %s", (int(row["id"]),))
                                 conn_del.commit()
                                 conn_del.close()
                                 st.success("Romaneio excluído!")
@@ -1216,7 +1116,7 @@ else:
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
         
-        conn_prod, db_p = get_db_connection()
+        conn_prod, _ = get_db_connection()
         cursor_p = conn_prod.cursor()
         cursor_p.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
         prods_cad = cursor_p.fetchall()
@@ -1240,10 +1140,10 @@ else:
                         st.error("Informe o nome do produto.")
                     else:
                         try:
-                            conn_rp, db_trp = get_db_connection()
+                            conn_rp, _ = get_db_connection()
                             cursor_rp = conn_rp.cursor()
                             cursor_rp.execute(
-                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_trp == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
+                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)",
                                 (r_cod.strip() if r_cod else None, r_bar.strip() if r_bar else None, r_nome.strip().upper(), r_und)
                             )
                             conn_rp.commit()
@@ -1291,10 +1191,10 @@ else:
                             with open(path_anexo_bonf, "wb") as f_out: f_out.write(anexo_bonf.getbuffer())
                                 
                         try:
-                            conn_b, db_tb = get_db_connection()
+                            conn_b, _ = get_db_connection()
                             cursor_b = conn_b.cursor()
                             cursor_b.execute(
-                                "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
                                 (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel)
                             )
                             conn_b.commit()
@@ -1313,7 +1213,7 @@ else:
             with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="f_status_bonf")
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", key="f_prod_bonf")
                 
-        conn_b_sel, db_tb_sel = get_db_connection()
+        conn_b_sel, _ = get_db_connection()
         df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
         conn_b_sel.close()
         
@@ -1377,9 +1277,9 @@ else:
                 st.write("")
                 if st.button("💾 Atualizar Status", type="primary", key="btn_upd_status_bonf"):
                     try:
-                        conn_up_b, db_t_up = get_db_connection()
+                        conn_up_b, _ = get_db_connection()
                         cursor_up = conn_up_b.cursor()
-                        cursor_up.execute("UPDATE bonificacoes SET status = %s WHERE id = %s" if db_t_up == "postgres" else "UPDATE bonificacoes SET status = ? WHERE id = ?", (novo_status_sel, int(bonf_selecionada[0]) if db_t_up == "postgres" else bonf_selecionada[0]))
+                        cursor_up.execute("UPDATE bonificacoes SET status = %s WHERE id = %s", (novo_status_sel, int(bonf_selecionada[0])))
                         conn_up_b.commit()
                         conn_up_b.close()
                         st.success("Status atualizado!")
@@ -1393,13 +1293,13 @@ else:
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Registro de Baixas das Avarias")
         
-        conn_b_all, db_tb_all = get_db_connection()
+        conn_b_all, _ = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
         conn_b_all.close()
         
         df_bonf_loja2 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
         
-        conn_bx_chk, db_tbx_chk = get_db_connection()
+        conn_bx_chk, _ = get_db_connection()
         df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
         conn_bx_chk.close()
         
@@ -1440,7 +1340,7 @@ else:
         else:
             st.warning("⚠️ Não há notas com saldo disponível para a Loja 02 no momento.")
 
-        conn_prod_v, db_pv = get_db_connection()
+        conn_prod_v, _ = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
         cursor_pv.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
         prods_cad_v = cursor_pv.fetchall()
@@ -1463,9 +1363,12 @@ else:
                     if not r_nome_v.strip(): st.error("Informe o nome.")
                     else:
                         try:
-                            conn_rp, db_trp = get_db_connection()
+                            conn_rp, _ = get_db_connection()
                             cursor_rp = conn_rp.cursor()
-                            cursor_rp.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_trp == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (r_cod_v.strip() if r_cod_v else None, r_bar_v.strip() if r_bar_v else None, r_nome_v.strip().upper(), r_und_v))
+                            cursor_rp.execute(
+                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)",
+                                (r_cod_v.strip() if r_cod_v else None, r_bar_v.strip() if r_bar_v else None, r_nome_v.strip().upper(), r_und_v)
+                            )
                             conn_rp.commit()
                             conn_rp.close()
                             st.success(f"Produto '{r_nome_v.strip().upper()}' cadastrado!")
@@ -1521,7 +1424,7 @@ else:
                             novo_saldo_total_disp = saldo_total_disp_loja2 - val_avaria_f
                             
                             try:
-                                conn_ins, db_tins = get_db_connection()
+                                conn_ins, _ = get_db_connection()
                                 cursor_ins = conn_ins.cursor()
                                 cursor_ins.execute(
                                     """
@@ -1530,12 +1433,6 @@ else:
                                         nf_b_entrada, produto_hortifruti, quantidade_kg_cx, 
                                         valor_total_avaria, saldo_restante_nota, saldo_total_disponivel
                                     ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """ if db_tins == "postgres" else """
-                                    INSERT INTO baixas_avarias (
-                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, 
-                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx, 
-                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     """,
                                     (
                                         lojas_baixa_sel, data_hora_baixa_str, ref_bon_transf.strip(), path_nf_baixa,
@@ -1558,7 +1455,7 @@ else:
             with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon. transferen", value="")
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="")
             
-        conn_bx_view, db_tbx_v = get_db_connection()
+        conn_bx_view, _ = get_db_connection()
         df_bx_table = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
         conn_bx_view.close()
         
@@ -1603,7 +1500,7 @@ else:
 
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
-        conn, db_type = get_db_connection()
+        conn, _ = get_db_connection()
         df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
         df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
         df_bonf_rel = pd.read_sql_query("SELECT * FROM bonificacoes", conn)
@@ -1695,10 +1592,10 @@ else:
             if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                 if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
                 else:
-                    conn, db_type = get_db_connection()
+                    conn, _ = get_db_connection()
                     cursor = conn.cursor()
                     try:
-                        cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
+                        cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
                         conn.commit()
                         st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
                         st.rerun()
@@ -1706,7 +1603,7 @@ else:
                     finally: conn.close()
                         
         st.markdown("---")
-        conn, db_type = get_db_connection()
+        conn, _ = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
         produtos_cadastrados = cursor.fetchall()
@@ -1728,9 +1625,9 @@ else:
                 st.write("")
                 if st.button("🗑️ Excluir Selecionado", type="secondary", key="btn_del_prod_sel"):
                     try:
-                        conn_del, db_t_del = get_db_connection()
+                        conn_del, _ = get_db_connection()
                         cursor_del = conn_del.cursor()
-                        cursor_del.execute("DELETE FROM produtos WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(prod_para_excluir[5]) if db_t_del == "postgres" else prod_para_excluir[5],))
+                        cursor_del.execute("DELETE FROM produtos WHERE id = %s", (int(prod_para_excluir[5]),))
                         conn_del.commit()
                         conn_del.close()
                         st.success(f"Produto '{prod_para_excluir[3]}' excluído!")
@@ -1750,10 +1647,10 @@ else:
             if st.form_submit_button("➕ Cadastrar Usuário", type="primary"):
                 if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
                 else:
-                    conn, db_type = get_db_connection()
+                    conn, _ = get_db_connection()
                     cursor = conn.cursor()
                     try:
-                        cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
+                        cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
                         conn.commit()
                         st.success(f"Usuário '{novo_nome.strip()}' cadastrado!")
                         st.rerun()
@@ -1761,7 +1658,7 @@ else:
                     finally: conn.close()
                         
         st.markdown("---")
-        conn, db_type = get_db_connection()
+        conn, _ = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id")
         usuarios_cadastrados = cursor.fetchall()
@@ -1783,9 +1680,9 @@ else:
                     if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip(): st.error("Preencha todos os campos.")
                     else:
                         try:
-                            conn_ed, db_t_ed = get_db_connection()
+                            conn_ed, _ = get_db_connection()
                             cursor_ed = conn_ed.cursor()
-                            cursor_ed.execute("UPDATE usuarios SET nome = %s, login = %s, senha = %s WHERE id = %s" if db_t_ed == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?", (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), int(usr_para_editar[5]) if db_t_ed == "postgres" else usr_para_editar[5]))
+                            cursor_ed.execute("UPDATE usuarios SET nome = %s, login = %s, senha = %s WHERE id = %s", (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), int(usr_para_editar[5])))
                             conn_ed.commit()
                             conn_ed.close()
                             st.success("Usuário atualizado!")
@@ -1803,9 +1700,9 @@ else:
                     if str(usr_para_excluir[2]) == "908": st.error("Não é permitido excluir o usuário Administrador principal (908)!")
                     else:
                         try:
-                            conn_del, db_t_del = get_db_connection()
+                            conn_del, _ = get_db_connection()
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_para_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s", (int(usr_para_excluir[5]),))
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Usuário '{usr_para_excluir[1]}' removido!")
