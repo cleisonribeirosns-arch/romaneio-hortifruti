@@ -903,7 +903,42 @@ else:
             
         prod_nomes_keys = list(prod_dict.keys())
         
-        forn_nomes_keys = [f[0] for f in fornecedores_lista] if fornecedores_lista else []
+        # Mapeamentos para preenchimento cruzado (Código <-> Nome <-> Telefone)
+        forn_por_codigo = {}
+        forn_por_nome = {}
+        forn_nomes_keys = []
+        for f in fornecedores_lista:
+            nome_f = f[0]
+            cod_f = str(f[1]).strip() if f[1] else ""
+            tel_f = f[2] if f[2] else ""
+            forn_nomes_keys.append(nome_f)
+            if cod_f:
+                forn_por_codigo[cod_f] = {"nome": nome_f, "telefone": tel_f}
+            forn_por_nome[nome_f] = {"codigo": cod_f, "telefone": tel_f}
+
+        # Inicializa session_state para sincronização dos campos de fornecedor se não existirem
+        if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
+        if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
+        if f"val_txt_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_txt_forn_{k_suffix}"] = ""
+        if f"val_tel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_tel_forn_{k_suffix}"] = ""
+
+        # Callbacks para automação
+        def on_change_codigo():
+            c_digitado = st.session_state.get(f"in_cod_forn_{k_suffix}", "").strip()
+            st.session_state[f"val_cod_forn_{k_suffix}"] = c_digitado
+            if c_digitado in forn_por_codigo:
+                info = forn_por_codigo[c_digitado]
+                st.session_state[f"val_sel_forn_{k_suffix}"] = info["nome"]
+                st.session_state[f"val_tel_forn_{k_suffix}"] = info["telefone"]
+                st.session_state[f"val_txt_forn_{k_suffix}"] = ""
+
+        def on_change_select_forn():
+            s_selecionado = st.session_state.get(f"sel_forn_{k_suffix}", "")
+            st.session_state[f"val_sel_forn_{k_suffix}"] = s_selecionado
+            if s_selecionado in forn_por_nome:
+                info = forn_por_nome[s_selecionado]
+                st.session_state[f"val_cod_forn_{k_suffix}"] = info["codigo"]
+                st.session_state[f"val_tel_forn_{k_suffix}"] = info["telefone"]
 
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns([1, 1, 1])
@@ -918,15 +953,21 @@ else:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 
-                if forn_nomes_keys:
-                    fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=0, key=f"forn_sel_{k_suffix}")
-                    fornecedor = fornecedor_sel if fornecedor_sel else st.text_input("Ou Digite o Fornecedor", value="", key=f"forn_{k_suffix}")
-                else:
-                    fornecedor = st.text_input("Fornecedor / Entregador", value="", key=f"forn_{k_suffix}")
+                # Campo de Seleção Cadastrado com callback de sincronização
+                idx_sel = 0
+                atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
+                if atual_sel in forn_nomes_keys:
+                    idx_sel = forn_nomes_keys.index(atual_sel) + 1
+
+                fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=idx_sel, key=f"sel_forn_{k_suffix}", on_change=on_change_select_forn)
             with col3:
-                cod_fornecedor = st.text_input("Código do Fornecedor", value="", key=f"cod_forn_{k_suffix}")
+                # Código do fornecedor com callback de sincronização
+                cod_fornecedor = st.text_input("Código do Fornecedor", value=st.session_state[f"val_cod_forn_{k_suffix}"], key=f"in_cod_forn_{k_suffix}", on_change=on_change_codigo)
+                
                 tel_key = f"tel_input_{k_suffix}"
-                if tel_key not in st.session_state: st.session_state[tel_key] = ""
+                if tel_key not in st.session_state: 
+                    st.session_state[tel_key] = st.session_state[f"val_tel_forn_{k_suffix}"]
+                
                 def formatar_tel():
                     val = st.session_state.get(tel_key, "")
                     raw = "".join(filter(str.isdigit, val))
@@ -936,8 +977,15 @@ else:
                     if len(raw) >= 3: fmt += f") {raw[2:7]}"
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
-                tel_fornecedor = st.text_input("Telefone do Fornecedor", value="", key=tel_key, on_change=formatar_tel)
+
+                tel_fornecedor = st.text_input("Telefone do Fornecedor", value=st.session_state[f"val_tel_forn_{k_suffix}"], key=tel_key, on_change=formatar_tel)
             
+            # Se não selecionou na lista cadastrada, permite digitar o nome manualmente
+            if not fornecedor_sel:
+                fornecedor = st.text_input("Ou Digite o Fornecedor (Caso não esteja na lista)", value=st.session_state[f"val_txt_forn_{k_suffix}"], key=f"forn_manual_{k_suffix}")
+            else:
+                fornecedor = fornecedor_sel
+
             col_op1, col_op2 = st.columns([2, 2])
             with col_op1:
                 tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=0, key=f"tipo_op_{k_suffix}")
@@ -1018,7 +1066,8 @@ else:
             
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             num_rom_final = st.session_state[f"num_rom_auto_{k_suffix}"]
-            if not fornecedor.strip(): st.error("Preencha o fornecedor.")
+            forn_final = fornecedor if isinstance(fornecedor, str) else ""
+            if not forn_final.strip(): st.error("Preencha ou selecione o fornecedor.")
             elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
             elif not tipo_operacao: st.error("O Tipo de Operação é obrigatório!")
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
@@ -1048,10 +1097,10 @@ else:
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_rom_final, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_rom_final, loja, data_rec_str, forn_final, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
                         romaneio_id = cursor.fetchone()[0]
                     else:
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_rom_final, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_rom_final, loja, data_rec_str, forn_final, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
                         romaneio_id = cursor.lastrowid
                         
                     itens_salvos_pdf = []
@@ -1064,7 +1113,7 @@ else:
                     conn.commit()
                     conn.close()
                     
-                    romaneio_dict_atual = {"numero_romaneio": num_rom_final, "data_recebimento": data_rec_str, "fornecedor": fornecedor, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao, "observacoes": observacoes_romaneio}
+                    romaneio_dict_atual = {"numero_romaneio": num_rom_final, "data_recebimento": data_rec_str, "fornecedor": forn_final, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao, "observacoes": observacoes_romaneio}
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_rom_final
@@ -1783,7 +1832,7 @@ else:
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     try:
-                        cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
+                        cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_t_ed == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
                         conn.commit()
                         st.success(f"Usuário '{novo_nome.strip()}' cadastrado!")
                         st.rerun()
