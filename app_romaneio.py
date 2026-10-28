@@ -29,7 +29,7 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA E ESTADOS DE TEMA
+# 1. CONFIGURAÇÃO DA PÁGINA
 # ---------------------------------------------------------
 logo_icon = None
 for nome in [
@@ -52,16 +52,6 @@ st.set_page_config(
 if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
-# Estado Global de Temas
-if "tipo_tema" not in st.session_state:
-    st.session_state["tipo_tema"] = "Padrão do Aplicativo (Original)"
-if "hora_inicio_claro" not in st.session_state:
-    st.session_state["hora_inicio_claro"] = time(6, 0)
-if "hora_inicio_escuro" not in st.session_state:
-    st.session_state["hora_inicio_escuro"] = time(18, 0)
-if "nivel_brilho" not in st.session_state:
-    st.session_state["nivel_brilho"] = 100
-
 # ---------------------------------------------------------
 # CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL COM FALLBACK PARA SQLITE)
 # ---------------------------------------------------------
@@ -71,7 +61,6 @@ def get_db_connection():
             conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
             return conn, "postgres"
         except Exception:
-            # Em caso de falha de DNS ou conexão com o Supabase, utiliza o SQLite local sem travar
             pass
     
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
@@ -110,48 +99,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. SELEÇÃO DE TEMA E BRILHO RESPONSIVA (NO CORPO PRINCIPAL)
-# ---------------------------------------------------------
-with st.expander("🎨 Ajustar Tema da Tela e Brilho (Visível para Todos os Aparelhos)", expanded=False):
-    col_t1, col_t2 = st.columns([2, 2])
-    with col_t1:
-        sel_tema = st.selectbox(
-            "Modo de Exibição / Tema",
-            ["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automático)"],
-            index=["Padrão do Aplicativo (Original)", "Modo Claro", "Modo Escuro", "Personalizado (Horário Automático)"].index(st.session_state["tipo_tema"]),
-            key="sel_tema_responsivo"
-        )
-        if sel_tema != st.session_state["tipo_tema"]:
-            st.session_state["tipo_tema"] = sel_tema
-            st.rerun()
-    with col_t2:
-        st.write("☀️ **Nível do Brilho da Tela (%)**")
-        slider_brilho = st.slider(
-            "Ajuste do Brilho",
-            min_value=10,
-            max_value=100,
-            value=st.session_state["nivel_brilho"],
-            step=5,
-            label_visibility="collapsed",
-            key="slider_brilho_responsivo"
-        )
-        if slider_brilho != st.session_state["nivel_brilho"]:
-            st.session_state["nivel_brilho"] = slider_brilho
-            st.rerun()
-    if st.session_state["tipo_tema"] == "Personalizado (Horário Automático)":
-        st.markdown("---")
-        col_h1, col_h2 = st.columns(2)
-        with col_h1:
-            h_c = st.time_input("Horário de Início do Modo Claro", value=st.session_state["hora_inicio_claro"], key="time_claro")
-        with col_h2:
-            h_e = st.time_input("Horário de Início do Modo Escuro", value=st.session_state["hora_inicio_escuro"], key="time_escuro")
-        if h_c != st.session_state["hora_inicio_claro"] or h_e != st.session_state["hora_inicio_escuro"]:
-            st.session_state["hora_inicio_claro"] = h_c
-            st.session_state["hora_inicio_escuro"] = h_e
-            st.rerun()
-
-# ---------------------------------------------------------
-# 3. MOTOR DINÂMICO DE TEMAS E TRANSPARÊNCIA TOTAL
+# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -170,70 +118,23 @@ if bg_login_path:
     with open(bg_login_path, "rb") as img_f:
         b64_img = base64.b64encode(img_f.read()).decode()
 
-tema_atual = st.session_state["tipo_tema"]
-modo_efetivo = "original"
-if tema_atual == "Modo Claro":
-    modo_efetivo = "claro"
-elif tema_atual == "Modo Escuro":
-    modo_efetivo = "escuro"
-elif tema_atual == "Personalizado (Horário Automático)":
-    hora_atual = datetime.now().time()
-    h_claro = st.session_state["hora_inicio_claro"]
-    h_escuro = st.session_state["hora_inicio_escuro"]
-    if h_claro < h_escuro:
-        if h_claro <= hora_atual < h_escuro:
-            modo_efetivo = "claro"
-        else:
-            modo_efetivo = "escuro"
-    else:
-        if h_escuro <= hora_atual < h_claro:
-            modo_efetivo = "escuro"
-        else:
-            modo_efetivo = "claro"
-else:
-    modo_efetivo = "original"
-
-fator_brilho = st.session_state["nivel_brilho"] / 100.0
-if modo_efetivo == "claro":
+if b64_img:
     css_fundo = f"""
         .stApp {{
-            background: rgba(245, 247, 250, {fator_brilho}) !important;
-            color: #111111 !important;
-        }}
-        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
-            color: #111111 !important;
-            text-shadow: none !important;
-        }}
-    """
-elif modo_efetivo == "escuro":
-    css_fundo = f"""
-        .stApp {{
-            background: rgba(18, 18, 18, {fator_brilho}) !important;
-            color: #FFFFFF !important;
-        }}
-        .stApp label, .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span {{
-            color: #FFFFFF !important;
-            text-shadow: none !important;
+            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-size: cover !important;
+            background-position: center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
         }}
     """
 else:
-    if b64_img:
-        css_fundo = f"""
-            .stApp {{
-                background-image: linear-gradient(rgba(27,94,32,{0.85 * fator_brilho}), rgba(198,40,40,{0.85 * fator_brilho})), url("data:image/jpeg;base64,{b64_img}") !important;
-                background-size: cover !important;
-                background-position: center !important;
-                background-repeat: no-repeat !important;
-                background-attachment: fixed !important;
-            }}
-        """
-    else:
-        css_fundo = f"""
-            .stApp {{
-                background: linear-gradient(135deg, rgba(27,94,32,{fator_brilho}) 0%, rgba(46,125,50,{fator_brilho}) 50%, rgba(198,40,40,{fator_brilho}) 100%) !important;
-                background-attachment: fixed !important;
-            }}
-        """
+    css_fundo = """
+        .stApp {
+            background: linear-gradient(135deg, rgba(27,94,32,1) 0%, rgba(46,125,50,1) 50%, rgba(198,40,40,1) 100%) !important;
+            background-attachment: fixed !important;
+        }
+    """
 
 st.markdown(
     f"""
@@ -297,7 +198,6 @@ st.markdown(
         font-size: 15px !important;
         font-weight: bold !important;
     }}
-    
     div[data-baseweb="input"], 
     div[data-baseweb="base-input"], 
     div[data-baseweb="select"], 
@@ -326,7 +226,6 @@ st.markdown(
         border-radius: 6px !important;
         font-size: 15px !important;
     }}
-    
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
         background: transparent !important;
@@ -355,7 +254,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 4. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
+# 3. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -872,8 +771,11 @@ def gerar_pdf_baixas(df_baixas_data):
     return buffer
 
 # ---------------------------------------------------------
-# 5. TELA DE LOGIN
+# 4. TELA DE LOGIN
 # ---------------------------------------------------------
+if "usuario_logado" not in st.session_state:
+    st.session_state["usuario_logado"] = None
+
 if st.session_state["usuario_logado"] is None:
     logo_display = None
     for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
