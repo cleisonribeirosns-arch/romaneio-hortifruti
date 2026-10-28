@@ -62,22 +62,21 @@ if "nivel_brilho" not in st.session_state:
     st.session_state["nivel_brilho"] = 100
 
 # ---------------------------------------------------------
-# CONEXÃO EXCLUSIVA E SEGURA COM O SUPABASE (NUVEM PERMANENTE)
+# CONEXÃO DIRETA E BLINDADA COM O SUPABASE (SEM FALHAS)
 # ---------------------------------------------------------
 def get_db_connection():
     if not HAS_POSTGRES:
-        st.error("Erro crítico: A biblioteca 'psycopg2' não está instalada. O sistema exige conexão com o PostgreSQL/Supabase.")
+        st.error("Erro crítico: A biblioteca 'psycopg2' não está instalada.")
         st.stop()
         
-    if "database" not in st.secrets or "db_url" not in st.secrets["database"]:
-        st.error("Erro crítico: A URL de conexão com o banco de dados (db_url) não está configurada nos Secrets do Streamlit.")
-        st.stop()
-        
+    # String de conexão direta blindada com a credencial real fornecida
+    db_url = "postgresql://postgres:M1zZMBiW2fudKGV@rdoithfmhzfotgmpya.supabase.co:5432/postgres"
+    
     try:
-        conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=10)
+        conn = psycopg2.connect(db_url, connect_timeout=10)
         return conn, "postgres"
     except Exception as e:
-        st.error(f"Erro ao conectar à nuvem Supabase: {e}. Verifique a sua conexão ou os segredos configurados.")
+        st.error(f"Erro ao conectar à nuvem Supabase: {e}. Verifique a sua conexão com a internet.")
         st.stop()
 
 # ---------------------------------------------------------
