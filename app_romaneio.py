@@ -972,9 +972,11 @@ else:
                     data_hoje_str = datetime.now().strftime("%Y%m%d%H%M%S")
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 
-                num_romaneio = st.text_input("Número do Romaneio (Gerado Automaticamente)", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
+                # Removido o texto "(Gerado Automaticamente)" conforme solicitado
+                num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 
-                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
+                # Adicionada a opção "Troca por Troca" no Tipo de Operação
+                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
 
             with col2:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
@@ -992,7 +994,8 @@ else:
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, key=f"loja_{k_suffix}")
 
             with col3:
-                cod_fornecedor = st.text_input("Código do Fornecedor", value=st.session_state[f"val_cod_forn_{k_suffix}"], key=f"in_cod_forn_{k_suffix}", on_change=atualizar_por_codigo, placeholder="Digite o código e dê Enter")
+                # Removida a informação "Digite o código e dê Enter" do placeholder do código do fornecedor
+                cod_fornecedor = st.text_input("Código do Fornecedor", value=st.session_state[f"val_cod_forn_{k_suffix}"], key=f"in_cod_forn_{k_suffix}", on_change=atualizar_por_codigo, placeholder="")
                 idx_sel = 0
                 atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
                 if atual_sel in forn_nomes_keys:
@@ -1021,7 +1024,6 @@ else:
             with col_tel2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
 
-            # Campo manual removido conforme solicitado. Apenas a lista cadastrada é utilizada.
             fornecedor = fornecedor_sel
 
             data_pag_str = ""
@@ -1171,9 +1173,13 @@ else:
         if not is_admin and loja_atual_usuario in lista_lojas_filtro:
             idx_loja_padrao_filtro = lista_lojas_filtro.index(loja_atual_usuario)
 
+        # Adicionado o filtro de Tipo de Operação na consulta de romaneios
+        lista_tipos_op_filtro = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
+
         with st.expander("🔍 Filtrar Romaneios", expanded=True):
-            col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1, 1, 1, 1])
+            col_f0, col_f_op, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1.2, 1, 1, 1, 1])
             with col_f0: filtro_loja_sel = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro, index=idx_loja_padrao_filtro)
+            with col_f_op: filtro_tipo_op_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_filtro, index=0)
             with col_f1: filtro_num = st.text_input("Número do Romaneio", value="")
             with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="")
             with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="")
@@ -1188,6 +1194,8 @@ else:
         if not df_rom.empty:
             if filtro_loja_sel != "TODAS AS LOJAS":
                 df_rom = df_rom[df_rom["loja"].str.contains(filtro_loja_sel, case=False, na=False) | df_rom.get("loja_destino", pd.Series(dtype=str)).str.contains(filtro_loja_sel, case=False, na=False)]
+            if filtro_tipo_op_sel != "TODOS OS TIPOS":
+                df_rom = df_rom[df_rom["tipo_operacao"].str.contains(filtro_tipo_op_sel, case=False, na=False)]
             if filtro_num.strip(): df_rom = df_rom[df_rom["numero_romaneio"].str.contains(filtro_num.strip(), case=False, na=False)]
             if filtro_forn.strip(): df_rom = df_rom[df_rom["fornecedor"].str.contains(filtro_forn.strip(), case=False, na=False)]
             if filtro_cod_forn.strip(): df_rom = df_rom[df_rom["codigo_fornecedor"].astype(str).str.contains(filtro_cod_forn.strip(), case=False, na=False)]
