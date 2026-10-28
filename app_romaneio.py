@@ -608,7 +608,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(Spacer(1, 10))
 
     loja_txt_pdf = romaneio_data.get('loja', '')
-    if tipo_op_pdf.lower() == 'transferência':
+    if tipo_op_pdf.lower() in ['transferência', 'transferência/bonificação']:
         loja_txt_pdf = f"Origem: {romaneio_data.get('loja_origem', '')} -> Destino: {romaneio_data.get('loja_destino', '')}"
 
     info_data = [
@@ -861,7 +861,6 @@ if st.session_state["usuario_logado"] is None:
             login_input = st.text_input("Usuário / Login ou Nome Completo", value="")
             senha_input = st.text_input("Senha", type="password", value="")
             
-            # Campo de seleção de loja na tela de login
             loja_login_sel = st.selectbox(
                 "Selecione a Loja de Atuação", 
                 ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], 
@@ -976,21 +975,22 @@ else:
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 
                 num_romaneio = st.text_input("Número do Romaneio (Gerado Automaticamente)", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
-                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
+                
+                # Adicionada a nova opção "Transferência/Bonificação"
+                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
 
             with col2:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 
-                # Se for Transferência, exibe origens e destinos. Se for Compra/Bonificação, assume a loja escolhida no login automaticamente (mas permite alteração se necessário ou fixa).
-                if tipo_operacao == "Transferência":
+                # Se for Transferência ou Transferência/Bonificação, abre os campos de Origem e Destino
+                if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
                     loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_orig_{k_suffix}")
                     loja_destino = st.selectbox("Loja de Destino (Entrou)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_dest_{k_suffix}")
                     loja = f"{loja_origem} -> {loja_destino}"
                 else:
                     loja_origem = ""
                     loja_destino = ""
-                    # Pré-seleciona a loja escolhida no login
                     lista_lojas_opc = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_loja_login = lista_lojas_opc.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_opc else 0
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, key=f"loja_{k_suffix}")
@@ -1108,8 +1108,8 @@ else:
             forn_final = fornecedor if isinstance(fornecedor, str) else ""
             if not forn_final.strip(): st.error("Preencha ou selecione o fornecedor.")
             elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
-            elif tipo_operacao == "Transferência" and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino para a transferência!")
-            elif tipo_operacao != "Transferência" and not loja: st.error("Selecione a loja!")
+            elif tipo_operacao in ["Transferência", "Transferência/Bonificação"] and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino para a operação!")
+            elif tipo_operacao not in ["Transferência", "Transferência/Bonificação"] and not loja: st.error("Selecione a loja!")
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
@@ -1171,8 +1171,16 @@ else:
             
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
+        
+        # Filtro por Loja incluído na consulta para cada conferente/gestor
+        lista_lojas_filtro = ["TODAS AS LOJAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+        idx_loja_padrao_filtro = 0
+        if not is_admin and loja_atual_usuario in lista_lojas_filtro:
+            idx_loja_padrao_filtro = lista_lojas_filtro.index(loja_atual_usuario)
+
         with st.expander("🔍 Filtrar Romaneios", expanded=True):
-            col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
+            col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1, 1, 1, 1])
+            with col_f0: filtro_loja_sel = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro, index=idx_loja_padrao_filtro)
             with col_f1: filtro_num = st.text_input("Número do Romaneio", value="")
             with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="")
             with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="")
@@ -1185,6 +1193,8 @@ else:
         conn.close()
         
         if not df_rom.empty:
+            if filtro_loja_sel != "TODAS AS LOJAS":
+                df_rom = df_rom[df_rom["loja"].str.contains(filtro_loja_sel, case=False, na=False) | df_rom.get("loja_destino", pd.Series(dtype=str)).str.contains(filtro_loja_sel, case=False, na=False)]
             if filtro_num.strip(): df_rom = df_rom[df_rom["numero_romaneio"].str.contains(filtro_num.strip(), case=False, na=False)]
             if filtro_forn.strip(): df_rom = df_rom[df_rom["fornecedor"].str.contains(filtro_forn.strip(), case=False, na=False)]
             if filtro_cod_forn.strip(): df_rom = df_rom[df_rom["codigo_fornecedor"].astype(str).str.contains(filtro_cod_forn.strip(), case=False, na=False)]
@@ -1230,7 +1240,7 @@ else:
                     
                     st.markdown("---")
                     loja_exibicao = row['loja']
-                    if tipo_op_reg.lower() == 'transferência' and row.get('loja_origem'):
+                    if tipo_op_reg.lower() in ['transferência', 'transferência/bonificação'] and row.get('loja_origem'):
                         loja_exibicao = f"Origem: {row['loja_origem']} -> Destino: {row['loja_destino']}"
                     
                     st.write(f"**Tipo de Operação:** {tipo_op_reg} &nbsp;|&nbsp; **Loja / Rota:** {loja_exibicao}")
@@ -1322,10 +1332,12 @@ else:
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
                     num_nota_bonf = st.text_input("N° Nota Fiscal", value="")
-                    loja_bonf = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=None, placeholder="Selecione a loja", key="loja_bonf_sel")
+                    lista_lojas_cad_b = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    idx_l_cad_b = lista_lojas_cad_b.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_cad_b else 0
+                    loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, key="loja_bonf_sel")
                 with col_b2:
                     valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="")
-                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["Bonificação", "Transferência de Bonificação"], index=None, placeholder="Selecione o tipo", key="tipo_bonf_input_sel")
+                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["Bonificação", "Transferência de Bonificação"], index=0, key="tipo_bonf_input_sel")
                 with col_b3:
                     prod_bonf = st.selectbox("Produto Hortifrúti (Cód | Barras | Nome)", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0, placeholder="Selecione o produto")
                     anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
@@ -1334,7 +1346,7 @@ else:
                 with col_dt1:
                     status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status")
                 with col_dt2:
-                    data_entrada_manual = st.date_input("Data de Entrada", value=None, format="DD/MM/YYYY")
+                    data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
                 with col_dt3:
                     hora_auto = datetime.now().strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada (Automática)", value=hora_auto, disabled=True)
@@ -1370,10 +1382,15 @@ else:
         st.markdown("---")
         st.subheader("📋 Registros de Bonificação")
         
+        lista_lojas_filtro_bonf = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+        idx_filtro_bonf = 0
+        if not is_admin and loja_atual_usuario in lista_lojas_filtro_bonf:
+            idx_filtro_bonf = lista_lojas_filtro_bonf.index(loja_atual_usuario)
+
         with st.expander("🔍 Filtros de Busca", expanded=True):
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
             with f_col1: f_nota = st.text_input("Filtrar por N° Nota", value="", key="f_nota_bonf")
-            with f_col2: f_loja = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], key="f_loja_bonf")
+            with f_col2: f_loja = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bonf, index=idx_filtro_bonf, key="f_loja_bonf")
             with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="f_status_bonf")
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", key="f_prod_bonf")
                 
@@ -1457,7 +1474,6 @@ else:
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Registro de Baixas das Avarias")
         
-        # Pega a loja atual em que o usuário logou para dinamizar o controle de baixa da loja dele
         loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
         
         conn_b_all, db_tb_all = get_db_connection()
@@ -1544,7 +1560,6 @@ else:
             with st.form("form_registro_baixa_modelo", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
-                    # Fixa ou sugere a loja ativa do login por padrão
                     lista_lojas_reg = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa)
@@ -1559,7 +1574,7 @@ else:
                 nf_baixa_file = st.file_uploader("NF da baixa (Comprovante / Anexo PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=None, format="DD/MM/YYYY")
+                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(), format="DD/MM/YYYY")
                 with col_dm2:
                     hora_baixa_aut = datetime.now().strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa (Automática)", value=hora_baixa_aut, disabled=True)
@@ -1623,9 +1638,14 @@ else:
         st.markdown("---")
         st.subheader("📋 Planilha de Registro de Baixas das Avarias")
         
+        lista_lojas_filtro_bx = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+        idx_filtro_bx = 0
+        if not is_admin and loja_atual_usuario in lista_lojas_filtro_bx:
+            idx_filtro_bx = lista_lojas_filtro_bx.index(loja_atual_usuario)
+
         with st.expander("🔍 Filtros da Planilha de Baixas", expanded=True):
             fb1, fb2, fb3 = st.columns(3)
-            with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", ["TODAS", "LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0)
+            with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bx, index=idx_filtro_bx)
             with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon. transferen", value="")
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="")
             
