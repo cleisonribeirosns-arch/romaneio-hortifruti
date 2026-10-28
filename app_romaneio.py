@@ -1207,8 +1207,10 @@ else:
                 status_atual_nota = row.get("status_nota", "Pendente")
                 if status_atual_nota == "Nota Emitida":
                     icone_status = "🟢 Nota Emitida"
-                elif status_atual_nota == "Trocado e Lançado":
-                    icone_status = "🔵 Trocado e Lançado"
+                elif status_atual_nota == "Trocado":
+                    icone_status = "🟠 Trocado"
+                elif status_atual_nota == "Lançado":
+                    icone_status = "🔵 Lançado"
                 else:
                     icone_status = "🔴 Pendente"
 
@@ -1217,16 +1219,15 @@ else:
                 with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
-                        # Adicionado o novo status "Trocado e Lançado" e renomeado o rótulo para Status do Romaneio
+                        # Opções de status separados: Pendente, Nota Emitida, Trocado, Lançado
+                        opcoes_status_rom = ["Pendente", "Nota Emitida", "Trocado", "Lançado"]
                         idx_status_padrao = 0
-                        if status_atual_nota == "Nota Emitida":
-                            idx_status_padrao = 1
-                        elif status_atual_nota == "Trocado e Lançado":
-                            idx_status_padrao = 2
+                        if status_atual_nota in opcoes_status_rom:
+                            idx_status_padrao = opcoes_status_rom.index(status_atual_nota)
 
                         novo_status_nota = st.selectbox(
                             "Status do Romaneio",
-                            ["Pendente", "Nota Emitida", "Trocado e Lançado"],
+                            opcoes_status_rom,
                             index=idx_status_padrao,
                             key=f"status_nota_{row['id']}"
                         )
