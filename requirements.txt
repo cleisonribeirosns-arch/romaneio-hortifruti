@@ -6,3 +6,4 @@ Pillow
 streamlit-drawable-canvas
 plotly
 supabase
+psycopg2-binary
