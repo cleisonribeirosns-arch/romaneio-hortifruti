@@ -60,8 +60,9 @@ def get_db_connection():
         try:
             conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
             return conn, "postgres"
-        except Exception:
-            pass
+        except Exception as e:
+            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {e}")
+            raise e
     
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
@@ -1437,12 +1438,10 @@ else:
             )
             st.markdown("")
             
-            # Tabela organizada por colunas para os Registros de Bonificação
             df_bonf_display = df_bonf.copy()
             df_bonf_display["Valor (R$)"] = df_bonf_display["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             df_bonf_display["Tipo"] = df_bonf_display["tipo_bonificacao"].fillna("Bonificação")
             
-            # Criamos colunas estruturadas para exibição em tabela limpa
             for _, r in df_bonf_display.iterrows():
                 col_n1, col_n2, col_n3, col_n4, col_n5, col_n6, col_n7 = st.columns([1, 1.4, 1.4, 1.8, 1.2, 1.4, 1.2])
                 with col_n1: st.write(f"**Nota:** {r['numero_nota']}")
@@ -1700,7 +1699,6 @@ else:
             df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total disponível"]]
             df_final_show.index = range(1, len(df_final_show) + 1)
             
-            # Exibido estruturado em tabela com colunas bem definidas
             st.dataframe(df_final_show, use_container_width=True)
         else:
             st.info("Nenhum registo de baixa encontrado com os filtros informados.")
@@ -1847,7 +1845,6 @@ else:
             else: st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
-            # Formulário de cadastro de fornecedores SEM o campo de telefone
             with st.form("cad_forn_form", clear_on_submit=True):
                 st.subheader("Cadastrar Novo Fornecedor")
                 col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
