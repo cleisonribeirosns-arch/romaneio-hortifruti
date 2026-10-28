@@ -99,7 +99,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO (ALTO CONTRASTE)
+# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO (CAMPOS COM MENOS BRILHO)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -211,15 +211,15 @@ st.markdown(
         text-shadow: 2px 3px 5px rgba(0, 0, 0, 0.9) !important;
     }}
     
-    /* INPUTS, SELECTS E DROPDOWNS COM ALTA VISIBILIDADE */
+    /* INPUTS, SELECTS E TEXTAREAS COM MENOS BRILHO (CINZA SUAVE / TRANSLÚCIDO) */
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
     div[data-testid="stDateInput"] input,
     div[data-baseweb="select"] input,
     textarea {{
-        color: #000000 !important;
-        -webkit-text-fill-color: #000000 !important;
-        background-color: #FFFFFF !important;
+        color: #111111 !important;
+        -webkit-text-fill-color: #111111 !important;
+        background-color: #E8ECEF !important;
         font-weight: bold !important;
         font-size: 15px !important;
         border-radius: 6px !important;
@@ -228,21 +228,21 @@ st.markdown(
     div[data-baseweb="input"], 
     div[data-baseweb="base-input"], 
     div[data-baseweb="select"] {{
-        background-color: #FFFFFF !important;
+        background-color: #E8ECEF !important;
         border-radius: 6px !important;
-        border: 2px solid #1B5E20 !important;
+        border: 2px solid #2E7D32 !important;
     }}
 
     div[data-baseweb="select"] span {{
-        color: #000000 !important;
+        color: #111111 !important;
         font-weight: bold !important;
     }}
 
-    /* REMOÇÃO DE BORDAS PONTILHADAS DO UPLOADER */
+    /* UPLOADER DE ARQUIVO COM MENOS BRILHO */
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background: rgba(0, 0, 0, 0.5) !important;
-        border: 2px solid rgba(255, 255, 255, 0.7) !important;
+        background: rgba(30, 30, 30, 0.75) !important;
+        border: 2px solid rgba(255, 255, 255, 0.6) !important;
         border-radius: 8px !important;
     }}
 
@@ -908,7 +908,6 @@ else:
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
-                # Geração automática do número do romaneio
                 if f"num_rom_auto_{k_suffix}" not in st.session_state:
                     data_hoje_str = datetime.now().strftime("%Y%m%d%H%M%S")
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
