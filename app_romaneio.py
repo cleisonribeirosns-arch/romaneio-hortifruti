@@ -215,7 +215,8 @@ st.markdown(
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
     div[data-testid="stDateInput"] input,
-    div[data-baseweb="select"] input {{
+    div[data-baseweb="select"] input,
+    textarea {{
         color: #000000 !important;
         -webkit-text-fill-color: #000000 !important;
         background-color: #FFFFFF !important;
@@ -237,10 +238,11 @@ st.markdown(
         font-weight: bold !important;
     }}
 
+    /* REMOÇÃO DE BORDAS PONTILHADAS DO UPLOADER */
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background: rgba(0, 0, 0, 0.4) !important;
-        border: 2px dashed #FFFFFF !important;
+        background: rgba(0, 0, 0, 0.5) !important;
+        border: 2px solid rgba(255, 255, 255, 0.7) !important;
         border-radius: 8px !important;
     }}
 
@@ -291,6 +293,16 @@ def init_db():
             )
         """)
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fornecedores (
+                id SERIAL PRIMARY KEY,
+                codigo_fornecedor VARCHAR(255) UNIQUE,
+                cnpj VARCHAR(255),
+                nome VARCHAR(255) UNIQUE NOT NULL,
+                telefone VARCHAR(50),
+                contato VARCHAR(255)
+            )
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneios (
                 id SERIAL PRIMARY KEY,
                 numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
@@ -306,7 +318,8 @@ def init_db():
                 assinatura_conferente TEXT,
                 assinatura_entregador TEXT,
                 status_nota VARCHAR(50) DEFAULT 'Pendente',
-                tipo_operacao VARCHAR(50) DEFAULT 'Compra'
+                tipo_operacao VARCHAR(50) DEFAULT 'Compra',
+                observacoes TEXT
             )
         """)
         cursor.execute("""
@@ -317,6 +330,9 @@ def init_db():
                 END IF;
                 IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='tipo_operacao') THEN
                     ALTER TABLE romaneios ADD COLUMN tipo_operacao VARCHAR(50) DEFAULT 'Compra';
+                END IF;
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='observacoes') THEN
+                    ALTER TABLE romaneios ADD COLUMN observacoes TEXT;
                 END IF;
             END $$;
         """)
@@ -395,6 +411,16 @@ def init_db():
             )
         """)
         cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fornecedores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                codigo_fornecedor TEXT UNIQUE,
+                cnpj TEXT,
+                nome TEXT UNIQUE NOT NULL,
+                telefone TEXT,
+                contato TEXT
+            )
+        """)
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 numero_romaneio TEXT UNIQUE NOT NULL,
@@ -410,7 +436,8 @@ def init_db():
                 assinatura_conferente TEXT,
                 assinatura_entregador TEXT,
                 status_nota TEXT DEFAULT 'Pendente',
-                tipo_operacao TEXT DEFAULT 'Compra'
+                tipo_operacao TEXT DEFAULT 'Compra',
+                observacoes TEXT
             )
         """)
         cursor.execute("PRAGMA table_info(romaneios)")
@@ -419,6 +446,9 @@ def init_db():
             cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
         if "tipo_operacao" not in colunas_rom:
             cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
+        if "observacoes" not in colunas_rom:
+            cursor.execute("ALTER TABLE romaneios ADD COLUMN observacoes TEXT")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -524,7 +554,7 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_imagem
 
 # ---------------------------------------------------------
-# GERADORES DE PDF (ROMANEIOS, PRODUTOS, BONIFICAÇÃO E BAIXAS)
+# GERADORES DE PDF (ROMANEIOS, PRODUTOS, FORNECEDORES, BONIFICAÇÃO E BAIXAS)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
     buffer = io.BytesIO()
@@ -577,6 +607,13 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     info_table = Table(info_data, colWidths=[270, 270])
     info_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke)]))
     story.append(info_table)
+    
+    if romaneio_data.get('observacoes'):
+        story.append(Spacer(1, 8))
+        obs_table = Table([[Paragraph(f"<b>Informações Adicionais / Observações:</b><br/>{romaneio_data.get('observacoes')}", styles["Normal"])]], colWidths=[540])
+        obs_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.whitesmoke), ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+        story.append(obs_table)
+
     story.append(Spacer(1, 15))
 
     table_content = [[Paragraph("Item", style_header_center), Paragraph("Descrição do Produto", style_header_left), Paragraph("Qtd / Peso", style_header_center), Paragraph("UND", style_header_center), Paragraph("Vl. Unit", style_header_left), Paragraph("Total", style_header_left)]]
@@ -852,6 +889,9 @@ else:
         cursor = conn.cursor()
         cursor.execute("SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM produtos ORDER BY nome")
         produtos_lista = cursor.fetchall()
+        
+        cursor.execute("SELECT nome, codigo_fornecedor, telefone FROM fornecedores ORDER BY nome")
+        fornecedores_lista = cursor.fetchall()
         conn.close()
         
         prod_dict = {}
@@ -862,15 +902,28 @@ else:
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
             
         prod_nomes_keys = list(prod_dict.keys())
+        
+        forn_nomes_keys = [f[0] for f in fornecedores_lista] if fornecedores_lista else []
+
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
-                num_romaneio = st.text_input("Número do Romaneio", value="", key=f"num_rom_{k_suffix}")
+                # Geração automática do número do romaneio
+                if f"num_rom_auto_{k_suffix}" not in st.session_state:
+                    data_hoje_str = datetime.now().strftime("%Y%m%d%H%M%S")
+                    st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
+                
+                num_romaneio = st.text_input("Número do Romaneio (Gerado Automaticamente)", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 loja = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_{k_suffix}")
             with col2:
-                data_rec_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
+                data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
-                fornecedor = st.text_input("Fornecedor / Entregador", value="", key=f"forn_{k_suffix}")
+                
+                if forn_nomes_keys:
+                    fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=0, key=f"forn_sel_{k_suffix}")
+                    fornecedor = fornecedor_sel if fornecedor_sel else st.text_input("Ou Digite o Fornecedor", value="", key=f"forn_{k_suffix}")
+                else:
+                    fornecedor = st.text_input("Fornecedor / Entregador", value="", key=f"forn_{k_suffix}")
             with col3:
                 cod_fornecedor = st.text_input("Código do Fornecedor", value="", key=f"cod_forn_{k_suffix}")
                 tel_key = f"tel_input_{k_suffix}"
@@ -888,7 +941,7 @@ else:
             
             col_op1, col_op2 = st.columns([2, 2])
             with col_op1:
-                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=None, placeholder="Selecione o tipo de operação", key=f"tipo_op_{k_suffix}")
+                tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=0, key=f"tipo_op_{k_suffix}")
             with col_op2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
             
@@ -949,10 +1002,13 @@ else:
                 st.session_state["itens_romaneio"] = []
                 st.rerun()
                 
-        st.subheader("3. Anexo de Fotos / Comprovantes")
-        fotos_upload = st.file_uploader("Fotos da Nota / Canhoto", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
+        st.subheader("3. Anexo de Foto da Mercadoria / Nota Fiscal")
+        fotos_upload = st.file_uploader("Foto da Mercadoria / Nota Fiscal", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
         
-        st.subheader("4. Assinatura Digital")
+        st.subheader("4. Informações Adicionais / Observações")
+        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", value="", key=f"obs_{k_suffix}")
+        
+        st.subheader("5. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
             st.write("**Assinatura do Conferente**")
@@ -962,10 +1018,11 @@ else:
             canvas_ent = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF", height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_ent_{k_suffix}")
             
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
-            if not num_romaneio.strip() or not fornecedor.strip(): st.error("Preencha o número do romaneio e o fornecedor.")
-            elif not data_rec_str: st.error("A Data do Recebimento é obrigatória! Selecione a data no calendário.")
-            elif not tipo_operacao: st.error("O Tipo de Operação é obrigatório! Selecione se é Compra, Bonificação ou Transferência.")
-            elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo! Selecione a data.")
+            num_rom_final = st.session_state[f"num_rom_auto_{k_suffix}"]
+            if not fornecedor.strip(): st.error("Preencha o fornecedor.")
+            elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
+            elif not tipo_operacao: st.error("O Tipo de Operação é obrigatório!")
+            elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
                 try:
@@ -973,13 +1030,13 @@ else:
                     path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
-                        path_ass_conf = os.path.join("uploads", f"ass_conf_{num_romaneio}.png")
+                        path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
                         img_c.save(path_ass_conf)
                     
                     path_ass_ent = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
-                        path_ass_ent = os.path.join("uploads", f"ass_ent_{num_romaneio}.png")
+                        path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
                         img_e.save(path_ass_ent)
                     
                     caminho_foto_salva = ""
@@ -992,10 +1049,10 @@ else:
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_rom_final, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
                         romaneio_id = cursor.fetchone()[0]
                     else:
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_romaneio, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_rom_final, loja, data_rec_str, fornecedor, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
                         romaneio_id = cursor.lastrowid
                         
                     itens_salvos_pdf = []
@@ -1008,14 +1065,14 @@ else:
                     conn.commit()
                     conn.close()
                     
-                    romaneio_dict_atual = {"numero_romaneio": num_romaneio, "data_recebimento": data_rec_str, "fornecedor": fornecedor, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao}
+                    romaneio_dict_atual = {"numero_romaneio": num_rom_final, "data_recebimento": data_rec_str, "fornecedor": fornecedor, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao, "observacoes": observacoes_romaneio}
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
-                    st.session_state["ultimo_num_romaneio"] = num_romaneio
+                    st.session_state["ultimo_num_romaneio"] = num_rom_final
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_romaneio} salvo com sucesso no banco permanente!")
+                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso!")
                     st.rerun()
                 except Exception as e: st.error(f"Erro ao salvar romaneio: {e}")
                     
@@ -1088,11 +1145,13 @@ else:
                     st.write(f"**Código do Fornecedor:** {row['codigo_fornecedor'] if row['codigo_fornecedor'] else 'N/A'} | **Telefone:** {row['telefone_fornecedor'] if row['telefone_fornecedor'] else 'N/A'}")
                     st.write(f"**Conferente:** {row['conferente']}")
                     st.write(f"**Pagamento à Vista:** {row['pagamento_a_vista']} | **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}")
+                    if row.get('observacoes'):
+                        st.write(f"**Informações Adicionais / Observações:** {row['observacoes']}")
                     
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
-                        st.image(row['caminho_foto'], width=280, caption="Foto Anexada (Miniatura)")
-                        if st.button("📄 Visualizar Nota", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
+                        st.image(row['caminho_foto'], width=280, caption="Foto da Mercadoria / Nota Anexada")
+                        if st.button("📄 Visualizar Anexo", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
                             
                     conn_i, db_t_i = get_db_connection()
                     df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
@@ -1597,59 +1656,118 @@ else:
                 st.download_button(label="📥 Baixar Relatório Consolidado (Excel / CSV)", data=df_export.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("🥦 Gerenciamento e Cadastro de Produtos")
-        with st.form("cad_prod_form", clear_on_submit=True):
-            st.subheader("Cadastrar Novo Produto")
-            col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-            with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
-            with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
-            with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)", value="")
-            with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
-            if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
-                if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
-                else:
-                    conn, db_type = get_db_connection()
-                    cursor = conn.cursor()
-                    try:
-                        cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
-                        conn.commit()
-                        st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
-                        st.rerun()
-                    except Exception as e: st.error(f"Erro ao cadastrar produto: {e}")
-                    finally: conn.close()
-                        
-        st.markdown("---")
-        conn, db_type = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
-        produtos_cadastrados = cursor.fetchall()
-        conn.close()
+        st.title("🥦 Gerenciamento e Cadastro (Produtos & Fornecedores)")
         
-        if produtos_cadastrados:
-            produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
-            df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
+        tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🚚 Cadastro de Fornecedores"])
+        
+        with tab_prod:
+            with st.form("cad_prod_form", clear_on_submit=True):
+                st.subheader("Cadastrar Novo Produto")
+                col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
+                with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
+                with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
+                with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)", value="")
+                with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
+                if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
+                    if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
+                    else:
+                        conn, db_type = get_db_connection()
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
+                            conn.commit()
+                            st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao cadastrar produto: {e}")
+                        finally: conn.close()
+                            
+            st.markdown("---")
+            conn, db_type = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
+            produtos_cadastrados = cursor.fetchall()
+            conn.close()
             
-            st.download_button(label="📥 Baixar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
-            st.markdown("")
-            st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
+            if produtos_cadastrados:
+                produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
+                df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
+                
+                st.download_button(label="📥 Baixar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
+                st.markdown("")
+                st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
+                
+                st.markdown("### 🗑️ Excluir Produto")
+                col_ex1, col_ex2 = st.columns([3, 1])
+                with col_ex1: prod_para_excluir = st.selectbox("Selecione o produto para excluir", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})")
+                with col_ex2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🗑️ Excluir Selecionado", type="secondary", key="btn_del_prod_sel"):
+                        try:
+                            conn_del, db_t_del = get_db_connection()
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("DELETE FROM produtos WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(prod_para_excluir[5]) if db_t_del == "postgres" else prod_para_excluir[5],))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"Produto '{prod_para_excluir[3]}' excluído!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao excluir: {e}")
+            else: st.info("Nenhum produto cadastrado.")
+
+        with tab_forn:
+            with st.form("cad_forn_form", clear_on_submit=True):
+                st.subheader("Cadastrar Novo Fornecedor")
+                col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
+                with col_fc1: f_cod_input = st.text_input("Código do Fornecedor", value="")
+                with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="")
+                with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="")
+                
+                col_fc4, col_fc5 = st.columns([2, 3])
+                with col_fc4: f_tel_input = st.text_input("Telefone de Contato", value="")
+                with col_fc5: f_cont_input = st.text_input("Nome do Representante / Contato", value="")
+                
+                if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
+                    if not f_nome_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
+                    else:
+                        conn, db_type = get_db_connection()
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, telefone, contato) VALUES (%s, %s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, telefone, contato) VALUES (?, ?, ?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper(), f_tel_input.strip() if f_tel_input else None, f_cont_input.strip() if f_cont_input else None))
+                            conn.commit()
+                            st.success(f"Fornecedor '{f_nome_input.strip().upper()}' cadastrado com sucesso!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao cadastrar fornecedor: {e}")
+                        finally: conn.close()
+                            
+            st.markdown("---")
+            conn, db_type = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome, telefone, contato FROM fornecedores ORDER BY nome")
+            fornecedores_cadastrados = cursor.fetchall()
+            conn.close()
             
-            st.markdown("### 🗑️ Excluir Produto")
-            col_ex1, col_ex2 = st.columns([3, 1])
-            with col_ex1: prod_para_excluir = st.selectbox("Selecione o produto para excluir", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})")
-            with col_ex2:
-                st.write("")
-                st.write("")
-                if st.button("🗑️ Excluir Selecionado", type="secondary", key="btn_del_prod_sel"):
-                    try:
-                        conn_del, db_t_del = get_db_connection()
-                        cursor_del = conn_del.cursor()
-                        cursor_del.execute("DELETE FROM produtos WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(prod_para_excluir[5]) if db_t_del == "postgres" else prod_para_excluir[5],))
-                        conn_del.commit()
-                        conn_del.close()
-                        st.success(f"Produto '{prod_para_excluir[3]}' excluído!")
-                        st.rerun()
-                    except Exception as e: st.error(f"Erro ao excluir: {e}")
-        else: st.info("Nenhum produto cadastrado.")
+            if fornecedores_cadastrados:
+                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[5], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
+                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Telefone", "Contato", "ID_Real"])
+                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Telefone", "Contato"]], use_container_width=True, hide_index=True)
+                
+                st.markdown("### 🗑️ Excluir Fornecedor")
+                col_exf1, col_exf2 = st.columns([3, 1])
+                with col_exf1: forn_para_excluir = st.selectbox("Selecione o fornecedor para excluir", options=forn_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[1] or 'S/N'})")
+                with col_exf2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🗑️ Excluir Fornecedor", type="secondary", key="btn_del_forn_sel"):
+                        try:
+                            conn_del, db_t_del = get_db_connection()
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("DELETE FROM fornecedores WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(forn_para_excluir[6]) if db_t_del == "postgres" else forn_para_excluir[6],))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"Fornecedor '{forn_para_excluir[3]}' excluído!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao excluir: {e}")
+            else: st.info("Nenhum fornecedor cadastrado.")
 
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
@@ -1681,4 +1799,47 @@ else:
         conn.close()
         
         if usuarios_cadastrados:
-            usuarios
+            usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
+            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
+            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            st.subheader("✏️ Editar Usuário")
+            with st.form("form_editar_usuario"):
+                usr_para_editar = st.selectbox("Selecione o usuário para editar", options=usuarios_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]})", key="sel_usr_edit")
+                novo_nome_edit = st.text_input("Novo Nome Completo", value=usr_para_editar[1] if usr_para_editar else "")
+                novo_login_edit = st.text_input("Novo Login", value=usr_para_editar[2] if usr_para_editar else "")
+                nova_senha_edit = st.text_input("Nova Senha", value=usr_para_editar[3] if usr_para_editar else "", type="password")
+                if st.form_submit_button("💾 Salvar Alterações", type="primary"):
+                    if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip(): st.error("Preencha todos os campos.")
+                    else:
+                        try:
+                            conn_ed, db_t_ed = get_db_connection()
+                            cursor_ed = conn_ed.cursor()
+                            cursor_ed.execute("UPDATE usuarios SET nome = %s, login = %s, senha = %s WHERE id = %s" if db_t_ed == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?", (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), int(usr_para_editar[5]) if db_t_ed == "postgres" else usr_para_editar[5]))
+                            conn_ed.commit()
+                            conn_ed.close()
+                            st.success("Usuário atualizado!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao atualizar: {e}")
+            
+            st.markdown("---")
+            st.subheader("🗑️ Excluir Usuário")
+            col_ux1, col_ux2 = st.columns([3, 1])
+            with col_ux1: usr_para_excluir = st.selectbox("Selecione o usuário para remover", options=usuarios_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]} - Perfil: {x[4]})", key="sel_usr_del")
+            with col_ux2:
+                st.write("")
+                st.write("")
+                if st.button("🗑️ Remover Usuário", type="secondary", key="btn_del_usr_sel"):
+                    if str(usr_para_excluir[2]) == "908": st.error("Não é permitido excluir o usuário Administrador principal (908)!")
+                    else:
+                        try:
+                            conn_del, db_t_del = get_db_connection()
+                            cursor_del = conn_del.cursor()
+                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_para_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
+                            conn_del.commit()
+                            conn_del.close()
+                            st.success(f"Usuário '{usr_para_excluir[1]}' removido!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao remover: {e}")
+        else: st.info("Nenhum usuário cadastrado.")
