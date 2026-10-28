@@ -972,10 +972,8 @@ else:
                     data_hoje_str = datetime.now().strftime("%Y%m%d%H%M%S")
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 
-                # Removido o texto "(Gerado Automaticamente)" conforme solicitado
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 
-                # Adicionada a opção "Troca por Troca" no Tipo de Operação
                 tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
 
             with col2:
@@ -994,7 +992,6 @@ else:
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, key=f"loja_{k_suffix}")
 
             with col3:
-                # Removida a informação "Digite o código e dê Enter" do placeholder do código do fornecedor
                 cod_fornecedor = st.text_input("Código do Fornecedor", value=st.session_state[f"val_cod_forn_{k_suffix}"], key=f"in_cod_forn_{k_suffix}", on_change=atualizar_por_codigo, placeholder="")
                 idx_sel = 0
                 atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
@@ -1173,7 +1170,6 @@ else:
         if not is_admin and loja_atual_usuario in lista_lojas_filtro:
             idx_loja_padrao_filtro = lista_lojas_filtro.index(loja_atual_usuario)
 
-        # Adicionado o filtro de Tipo de Operação na consulta de romaneios
         lista_tipos_op_filtro = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
 
         with st.expander("🔍 Filtrar Romaneios", expanded=True):
@@ -1209,22 +1205,35 @@ else:
                 if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip(): fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
                 
                 status_atual_nota = row.get("status_nota", "Pendente")
-                icone_status = "🟢 Nota Emitida" if status_atual_nota == "Nota Emitida" else "🔴 Pendente"
+                if status_atual_nota == "Nota Emitida":
+                    icone_status = "🟢 Nota Emitida"
+                elif status_atual_nota == "Trocado e Lançado":
+                    icone_status = "🔵 Trocado e Lançado"
+                else:
+                    icone_status = "🔴 Pendente"
+
                 tipo_op_reg = row.get("tipo_operacao", "Compra")
                 
                 with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
+                        # Adicionado o novo status "Trocado e Lançado" e renomeado o rótulo para Status do Romaneio
+                        idx_status_padrao = 0
+                        if status_atual_nota == "Nota Emitida":
+                            idx_status_padrao = 1
+                        elif status_atual_nota == "Trocado e Lançado":
+                            idx_status_padrao = 2
+
                         novo_status_nota = st.selectbox(
-                            "Status da Nota Fiscal",
-                            ["Pendente", "Nota Emitida"],
-                            index=0 if status_atual_nota == "Pendente" else 1,
+                            "Status do Romaneio",
+                            ["Pendente", "Nota Emitida", "Trocado e Lançado"],
+                            index=idx_status_padrao,
                             key=f"status_nota_{row['id']}"
                         )
                     with col_st2:
                         st.write("")
                         st.write("")
-                        if st.button("💾 Salvar Status da Nota", key=f"btn_salvar_status_{row['id']}"):
+                        if st.button("💾 Salvar Status do Romaneio", key=f"btn_salvar_status_{row['id']}"):
                             try:
                                 conn_st, db_t_st = get_db_connection()
                                 cur_st = conn_st.cursor()
