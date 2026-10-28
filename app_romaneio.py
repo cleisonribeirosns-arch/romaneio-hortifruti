@@ -1826,7 +1826,7 @@ else:
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
                 
-                # --- EDITAR PRODUTO COM DADOS INSTANTÂNEOS ---
+                # --- EDITAR PRODUTO (FORA DO FORM PARA SUPORTAR CALLBACK) ---
                 st.markdown("---")
                 st.subheader("✏️ Editar Produto Cadastrado")
                 
@@ -1854,16 +1854,16 @@ else:
                 if "val_ep_nome" not in st.session_state: st.session_state["val_ep_nome"] = str(initial_p_obj[3]) if initial_p_obj[3] else ""
                 if "val_ep_und" not in st.session_state: st.session_state["val_ep_und"] = str(initial_p_obj[4]) if initial_p_obj[4] else "KG"
 
+                st.selectbox(
+                    "Selecione o produto para editar", 
+                    options=prod_ids_list, 
+                    index=prod_ids_list.index(current_pid) if current_pid in prod_ids_list else 0,
+                    format_func=lambda pid: f"ID {prod_dict_map[pid][0]} - {prod_dict_map[pid][3]} (Cód: {prod_dict_map[pid][2] or 'S/N'} | Barras: {prod_dict_map[pid][1] or 'S/N'})",
+                    key="sel_prod_edit_box",
+                    on_change=ao_mudar_produto_sel
+                )
+
                 with st.form("form_editar_produto"):
-                    st.selectbox(
-                        "Selecione o produto para editar", 
-                        options=prod_ids_list, 
-                        index=prod_ids_list.index(current_pid) if current_pid in prod_ids_list else 0,
-                        format_func=lambda pid: f"ID {prod_dict_map[pid][0]} - {prod_dict_map[pid][3]} (Cód: {prod_dict_map[pid][2] or 'S/N'} | Barras: {prod_dict_map[pid][1] or 'S/N'})",
-                        key="sel_prod_edit_box",
-                        on_change=ao_mudar_produto_sel
-                    )
-                    
                     c_prod_e = st.text_input("Novo Código do Produto", value=st.session_state["val_ep_cod"])
                     c_bar_e = st.text_input("Novo Código de Barras", value=st.session_state["val_ep_bar"])
                     nome_p_e = st.text_input("Novo Nome do Produto", value=st.session_state["val_ep_nome"])
@@ -1946,7 +1946,7 @@ else:
                 df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
                 st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True)
                 
-                # --- EDITAR FORNECEDOR COM DADOS INSTANTÂNEOS ---
+                # --- EDITAR FORNECEDOR (FORA DO FORM PARA SUPORTAR CALLBACK) ---
                 st.markdown("---")
                 st.subheader("✏️ Editar Fornecedor Cadastrado")
                 
@@ -1974,16 +1974,16 @@ else:
                 if "val_ef_nome" not in st.session_state: st.session_state["val_ef_nome"] = str(initial_f_obj[3]) if initial_f_obj[3] else ""
                 if "val_ef_cont" not in st.session_state: st.session_state["val_ef_cont"] = str(initial_f_obj[4]) if initial_f_obj[4] else ""
 
+                st.selectbox(
+                    "Selecione o fornecedor para editar", 
+                    options=forn_ids_list, 
+                    index=forn_ids_list.index(current_fid) if current_fid in forn_ids_list else 0,
+                    format_func=lambda fid: f"ID {forn_dict_map[fid][0]} - {forn_dict_map[fid][3]} (Cód: {forn_dict_map[fid][1] or 'S/N'})",
+                    key="sel_forn_edit_box",
+                    on_change=ao_mudar_forn_sel
+                )
+
                 with st.form("form_editar_fornecedor"):
-                    st.selectbox(
-                        "Selecione o fornecedor para editar", 
-                        options=forn_ids_list, 
-                        index=forn_ids_list.index(current_fid) if current_fid in forn_ids_list else 0,
-                        format_func=lambda fid: f"ID {forn_dict_map[fid][0]} - {forn_dict_map[fid][3]} (Cód: {forn_dict_map[fid][1] or 'S/N'})",
-                        key="sel_forn_edit_box",
-                        on_change=ao_mudar_forn_sel
-                    )
-                    
                     f_cod_e = st.text_input("Novo Código do Fornecedor", value=st.session_state["val_ef_cod"])
                     f_cnpj_e = st.text_input("Novo CNPJ", value=st.session_state["val_ef_cnpj"])
                     f_nome_e = st.text_input("Novo Nome / Razão Social", value=st.session_state["val_ef_nome"])
