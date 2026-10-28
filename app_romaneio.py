@@ -1826,9 +1826,43 @@ else:
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
                 
-                st.markdown("### 🗑️ Excluir Produto")
+                # --- EDITAR PRODUTO ---
+                st.markdown("---")
+                st.subheader("✏️ Editar Produto Cadastrado")
+                with st.form("form_editar_produto"):
+                    prod_para_editar = st.selectbox("Selecione o produto para editar", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})", key="sel_prod_edit")
+                    
+                    c_prod_e = st.text_input("Novo Código do Produto", value=str(prod_para_editar[2]) if prod_para_editar and prod_para_editar[2] else "")
+                    c_bar_e = st.text_input("Novo Código de Barras", value=str(prod_para_editar[1]) if prod_para_editar and prod_para_editar[1] else "")
+                    nome_p_e = st.text_input("Novo Nome do Produto", value=str(prod_para_editar[3]) if prod_para_editar else "")
+                    
+                    unidades_disponiveis = ["KG", "UNID", "GRM", "CX"]
+                    idx_und_atual = unidades_disponiveis.index(prod_para_editar[4]) if prod_para_editar and prod_para_editar[4] in unidades_disponiveis else 0
+                    und_p_e = st.selectbox("Nova Unidade Padrão", unidades_disponiveis, index=idx_und_atual)
+                    
+                    if st.form_submit_button("💾 Salvar Alterações do Produto", type="primary"):
+                        if not nome_p_e.strip():
+                            st.error("O Nome do Produto é obrigatório.")
+                        else:
+                            try:
+                                conn_ep, db_t_ep = get_db_connection()
+                                cursor_ep = conn_ep.cursor()
+                                cursor_ep.execute(
+                                    "UPDATE produtos SET codigo_produto = %s, codigo_barras = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_t_ep == "postgres" else "UPDATE produtos SET codigo_produto = ?, codigo_barras = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
+                                    (c_prod_e.strip() if c_prod_e else None, c_bar_e.strip() if c_bar_e else None, nome_p_e.strip().upper(), und_p_e, int(prod_para_editar[5]) if db_t_ep == "postgres" else prod_para_editar[5])
+                                )
+                                conn_ep.commit()
+                                conn_ep.close()
+                                st.success(f"Produto '{nome_p_e.strip().upper()}' atualizado com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao atualizar produto: {e}")
+
+                # --- EXCLUIR PRODUTO ---
+                st.markdown("---")
+                st.subheader("🗑️ Excluir Produto")
                 col_ex1, col_ex2 = st.columns([3, 1])
-                with col_ex1: prod_para_excluir = st.selectbox("Selecione o produto para excluir", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})")
+                with col_ex1: prod_para_excluir = st.selectbox("Selecione o produto para excluir", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})", key="sel_prod_del")
                 with col_ex2:
                     st.write("")
                     st.write("")
@@ -1880,9 +1914,40 @@ else:
                 df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
                 st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True)
                 
-                st.markdown("### 🗑️ Excluir Fornecedor")
+                # --- EDITAR FORNECEDOR ---
+                st.markdown("---")
+                st.subheader("✏️ Editar Fornecedor Cadastrado")
+                with st.form("form_editar_fornecedor"):
+                    forn_para_editar = st.selectbox("Selecione o fornecedor para editar", options=forn_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[1] or 'S/N'})", key="sel_forn_edit")
+                    
+                    f_cod_e = st.text_input("Novo Código do Fornecedor", value=str(forn_para_editar[1]) if forn_para_editar and forn_para_editar[1] else "")
+                    f_cnpj_e = st.text_input("Novo CNPJ", value=str(forn_para_editar[2]) if forn_para_editar and forn_para_editar[2] else "")
+                    f_nome_e = st.text_input("Novo Nome / Razão Social", value=str(forn_para_editar[3]) if forn_para_editar else "")
+                    f_cont_e = st.text_input("Novo Representante / Contato", value=str(forn_para_editar[4]) if forn_para_editar and forn_para_editar[4] else "")
+                    
+                    if st.form_submit_button("💾 Salvar Alterações do Fornecedor", type="primary"):
+                        if not f_nome_e.strip():
+                            st.error("O Nome do Fornecedor é obrigatório.")
+                        else:
+                            try:
+                                conn_ef, db_t_ef = get_db_connection()
+                                cursor_ef = conn_ef.cursor()
+                                cursor_ef.execute(
+                                    "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s, contato = %s WHERE id = %s" if db_t_ef == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ?, contato = ? WHERE id = ?",
+                                    (f_cod_e.strip() if f_cod_e else None, f_cnpj_e.strip() if f_cnpj_e else None, f_nome_e.strip().upper(), f_cont_e.strip() if f_cont_e else None, int(forn_para_editar[5]) if db_t_ef == "postgres" else forn_para_editar[5])
+                                )
+                                conn_ef.commit()
+                                conn_ef.close()
+                                st.success(f"Fornecedor '{f_nome_e.strip().upper()}' atualizado com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Erro ao atualizar fornecedor: {e}")
+
+                # --- EXCLUIR FORNECEDOR ---
+                st.markdown("---")
+                st.subheader("🗑️ Excluir Fornecedor")
                 col_exf1, col_exf2 = st.columns([3, 1])
-                with col_exf1: forn_para_excluir = st.selectbox("Selecione o fornecedor para excluir", options=forn_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[1] or 'S/N'})")
+                with col_exf1: forn_para_excluir = st.selectbox("Selecione o fornecedor para excluir", options=forn_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[1] or 'S/N'})", key="sel_forn_del")
                 with col_exf2:
                     st.write("")
                     st.write("")
