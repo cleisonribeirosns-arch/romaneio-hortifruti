@@ -293,9 +293,16 @@ def init_db():
                 codigo_fornecedor VARCHAR(255) UNIQUE,
                 cnpj VARCHAR(255),
                 nome VARCHAR(255) UNIQUE NOT NULL,
-                telefone VARCHAR(50),
                 contato VARCHAR(255)
             )
+        """)
+        cursor.execute("""
+            DO $$ 
+            BEGIN 
+                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='fornecedores' and column_name='contato') THEN
+                    ALTER TABLE fornecedores ADD COLUMN contato VARCHAR(255);
+                END IF;
+            END $$;
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneios (
@@ -419,10 +426,14 @@ def init_db():
                 codigo_fornecedor TEXT UNIQUE,
                 cnpj TEXT,
                 nome TEXT UNIQUE NOT NULL,
-                telefone TEXT,
                 contato TEXT
             )
         """)
+        cursor.execute("PRAGMA table_info(fornecedores)")
+        colunas_forn = [col[1] for col in cursor.fetchall()]
+        if "contato" not in colunas_forn:
+            cursor.execute("ALTER TABLE fornecedores ADD COLUMN contato TEXT")
+
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -920,7 +931,7 @@ else:
         cursor.execute("SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM produtos ORDER BY nome")
         produtos_lista = cursor.fetchall()
         
-        cursor.execute("SELECT nome, codigo_fornecedor, telefone FROM fornecedores ORDER BY nome")
+        cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY nome")
         fornecedores_lista = cursor.fetchall()
         conn.close()
         
@@ -933,37 +944,22 @@ else:
             
         prod_nomes_keys = list(prod_dict.keys())
         
-        forn_por_codigo = {}
         forn_por_nome = {}
         forn_nomes_keys = []
         for f in fornecedores_lista:
             nome_f = f[0]
             cod_f = str(f[1]).strip() if f[1] else ""
-            tel_f = f[2] if f[2] else ""
             forn_nomes_keys.append(nome_f)
-            if cod_f:
-                forn_por_codigo[cod_f] = {"nome": nome_f, "telefone": tel_f}
-            forn_por_nome[nome_f] = {"codigo": cod_f, "telefone": tel_f}
+            forn_por_nome[nome_f] = cod_f
 
         if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
         if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
-        if f"val_tel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_tel_forn_{k_suffix}"] = ""
-
-        def atualizar_por_codigo():
-            c_digitado = st.session_state.get(f"in_cod_forn_{k_suffix}", "").strip()
-            st.session_state[f"val_cod_forn_{k_suffix}"] = c_digitado
-            if c_digitado in forn_por_codigo:
-                info = forn_por_codigo[c_digitado]
-                st.session_state[f"val_sel_forn_{k_suffix}"] = info["nome"]
-                st.session_state[f"val_tel_forn_{k_suffix}"] = info["telefone"]
 
         def atualizar_por_select():
             s_selecionado = st.session_state.get(f"sel_forn_{k_suffix}", "")
             st.session_state[f"val_sel_forn_{k_suffix}"] = s_selecionado
             if s_selecionado in forn_por_nome:
-                info = forn_por_nome[s_selecionado]
-                st.session_state[f"val_cod_forn_{k_suffix}"] = info["codigo"]
-                st.session_state[f"val_tel_forn_{k_suffix}"] = info["telefone"]
+                st.session_state[f"val_cod_forn_{k_suffix}"] = forn_por_nome[s_selecionado]
 
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns([1, 1, 1])
@@ -992,19 +988,20 @@ else:
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, key=f"loja_{k_suffix}")
 
             with col3:
-                cod_fornecedor = st.text_input("Código do Fornecedor", value=st.session_state[f"val_cod_forn_{k_suffix}"], key=f"in_cod_forn_{k_suffix}", on_change=atualizar_por_codigo, placeholder="")
                 idx_sel = 0
                 atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
                 if atual_sel in forn_nomes_keys:
                     idx_sel = forn_nomes_keys.index(atual_sel) + 1
 
                 fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=idx_sel, key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
+                
+                cod_fornecedor = st.text_input("Código do Fornecedor (Automático)", value=st.session_state[f"val_cod_forn_{k_suffix}"], disabled=True, key=f"in_cod_forn_{k_suffix}")
 
             col_tel1, col_tel2 = st.columns([2, 2])
             with col_tel1:
                 tel_key = f"tel_input_{k_suffix}"
                 if tel_key not in st.session_state: 
-                    st.session_state[tel_key] = st.session_state[f"val_tel_forn_{k_suffix}"]
+                    st.session_state[tel_key] = ""
                 
                 def formatar_tel():
                     val = st.session_state.get(tel_key, "")
@@ -1016,7 +1013,7 @@ else:
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
 
-                tel_fornecedor = st.text_input("Telefone do Fornecedor", value=st.session_state[f"val_tel_forn_{k_suffix}"], key=tel_key, on_change=formatar_tel)
+                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", value="", key=tel_key, on_change=formatar_tel)
 
             with col_tel2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
@@ -1099,6 +1096,7 @@ else:
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             num_rom_final = st.session_state[f"num_rom_auto_{k_suffix}"]
             forn_final = fornecedor if isinstance(fornecedor, str) else ""
+            cod_forn_val = st.session_state[f"val_cod_forn_{k_suffix}"]
             if not forn_final.strip(): st.error("Selecione o fornecedor na lista cadastrada.")
             elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
             elif tipo_operacao in ["Transferência", "Transferência/Bonificação"] and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino para a operação!")
@@ -1130,10 +1128,10 @@ else:
                     conn, db_type = get_db_connection()
                     cursor = conn.cursor()
                     if db_type == "postgres":
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id", (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
                         romaneio_id = cursor.fetchone()[0]
                     else:
-                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_fornecedor, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
+                        cursor.execute("INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio))
                         romaneio_id = cursor.lastrowid
                         
                     itens_salvos_pdf = []
@@ -1146,7 +1144,7 @@ else:
                     conn.commit()
                     conn.close()
                     
-                    romaneio_dict_atual = {"numero_romaneio": num_rom_final, "data_recebimento": data_rec_str, "fornecedor": forn_final, "codigo_fornecedor": cod_fornecedor, "telefone_fornecedor": tel_fornecedor, "loja": loja, "loja_origem": loja_origem, "loja_destino": loja_destino, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao, "observacoes": observacoes_romaneio}
+                    romaneio_dict_atual = {"numero_romaneio": num_rom_final, "data_recebimento": data_rec_str, "fornecedor": forn_final, "codigo_fornecedor": cod_forn_val, "telefone_fornecedor": tel_fornecedor, "loja": loja, "loja_origem": loja_origem, "loja_destino": loja_destino, "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista, "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao, "observacoes": observacoes_romaneio}
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_rom_final
@@ -1219,7 +1217,6 @@ else:
                 with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
-                        # Opções de status separados: Pendente, Nota Emitida, Trocado, Lançado
                         opcoes_status_rom = ["Pendente", "Nota Emitida", "Trocado", "Lançado"]
                         idx_status_padrao = 0
                         if status_atual_nota in opcoes_status_rom:
@@ -1440,23 +1437,28 @@ else:
             )
             st.markdown("")
             
-            for _, r in df_bonf.iterrows():
-                with st.container():
-                    col_t1, col_t2, col_t3, col_t4, col_t5, col_t6, col_t7 = st.columns([1, 1.2, 1.5, 1.8, 1.2, 1.5, 1.5])
-                    with col_t1: st.write(f"**Nota:** {r['numero_nota']}")
-                    with col_t2: st.write(f"**Tipo:** {r.get('tipo_bonificacao', 'Bonificação')}")
-                    with col_t3: st.write(f"**Loja:** {r['loja']}")
-                    with col_t4: st.write(f"**Data:** {r['data_entrada']}")
-                    with col_t5: st.write(f"**R$:** {fmt_ptbr(r['valor_bonificacao'], 2)}")
-                    with col_t6: st.write(f"**Status:** {r['status']}")
-                    with col_t7:
-                        caminho_anexo_reg = r.get("caminho_anexo", "")
-                        if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
-                            if st.button("📄 Visualizar Nota", key=f"btn_ver_anexo_{r['id']}"):
-                                exibir_foto_modal(caminho_anexo_reg)
-                        else:
-                            st.write("Sem Anexo")
-                    st.markdown("---")
+            # Tabela organizada por colunas para os Registros de Bonificação
+            df_bonf_display = df_bonf.copy()
+            df_bonf_display["Valor (R$)"] = df_bonf_display["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_bonf_display["Tipo"] = df_bonf_display["tipo_bonificacao"].fillna("Bonificação")
+            
+            # Criamos colunas estruturadas para exibição em tabela limpa
+            for _, r in df_bonf_display.iterrows():
+                col_n1, col_n2, col_n3, col_n4, col_n5, col_n6, col_n7 = st.columns([1, 1.4, 1.4, 1.8, 1.2, 1.4, 1.2])
+                with col_n1: st.write(f"**Nota:** {r['numero_nota']}")
+                with col_n2: st.write(f"**Tipo:** {r['Tipo']}")
+                with col_n3: st.write(f"**Loja:** {r['loja']}")
+                with col_n4: st.write(f"**Data:** {r['data_entrada']}")
+                with col_n5: st.write(f"**{r['Valor (R$)']}**")
+                with col_n6: st.write(f"**Status:** {r['status']}")
+                with col_n7:
+                    caminho_anexo_reg = r.get("caminho_anexo", "")
+                    if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
+                        if st.button("📄 Ver Nota", key=f"btn_ver_anexo_{r['id']}"):
+                            exibir_foto_modal(caminho_anexo_reg)
+                    else:
+                        st.write("Sem Anexo")
+                st.markdown("---")
             
             st.markdown("### ✏️ Alterar Status da Bonificação")
             col_alt_b1, col_alt_b2, col_alt_b3 = st.columns([2.5, 2, 1.5])
@@ -1698,6 +1700,7 @@ else:
             df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total disponível"]]
             df_final_show.index = range(1, len(df_final_show) + 1)
             
+            # Exibido estruturado em tabela com colunas bem definidas
             st.dataframe(df_final_show, use_container_width=True)
         else:
             st.info("Nenhum registo de baixa encontrado com os filtros informados.")
@@ -1844,6 +1847,7 @@ else:
             else: st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
+            # Formulário de cadastro de fornecedores SEM o campo de telefone
             with st.form("cad_forn_form", clear_on_submit=True):
                 st.subheader("Cadastrar Novo Fornecedor")
                 col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
@@ -1851,9 +1855,8 @@ else:
                 with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="")
                 with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="")
                 
-                col_fc4, col_fc5 = st.columns([2, 3])
-                with col_fc4: f_tel_input = st.text_input("Telefone de Contato", value="")
-                with col_fc5: f_cont_input = st.text_input("Nome do Representante / Contato", value="")
+                col_fc4 = st.columns([1])[0]
+                with col_fc4: f_cont_input = st.text_input("Nome do Representante / Contato", value="")
                 
                 if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
                     if not f_nome_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
@@ -1861,7 +1864,7 @@ else:
                         conn, db_type = get_db_connection()
                         cursor = conn.cursor()
                         try:
-                            cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, telefone, contato) VALUES (%s, %s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, telefone, contato) VALUES (?, ?, ?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper(), f_tel_input.strip() if f_tel_input else None, f_cont_input.strip() if f_cont_input else None))
+                            cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (?, ?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper(), f_cont_input.strip() if f_cont_input else None))
                             conn.commit()
                             st.success(f"Fornecedor '{f_nome_input.strip().upper()}' cadastrado com sucesso!")
                             st.rerun()
@@ -1871,14 +1874,14 @@ else:
             st.markdown("---")
             conn, db_type = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome, telefone, contato FROM fornecedores ORDER BY nome")
+            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome, contato FROM fornecedores ORDER BY nome")
             fornecedores_cadastrados = cursor.fetchall()
             conn.close()
             
             if fornecedores_cadastrados:
-                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[5], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
-                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Telefone", "Contato", "ID_Real"])
-                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Telefone", "Contato"]], use_container_width=True, hide_index=True)
+                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
+                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
+                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True)
                 
                 st.markdown("### 🗑️ Excluir Fornecedor")
                 col_exf1, col_exf2 = st.columns([3, 1])
@@ -1890,7 +1893,7 @@ else:
                         try:
                             conn_del, db_t_del = get_db_connection()
                             cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM fornecedores WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(forn_para_excluir[6]) if db_t_del == "postgres" else forn_para_excluir[6],))
+                            cursor_del.execute("DELETE FROM fornecedores WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(forn_para_excluir[5]) if db_t_del == "postgres" else forn_para_excluir[5],))
                             conn_del.commit()
                             conn_del.close()
                             st.success(f"Fornecedor '{forn_para_excluir[3]}' excluído!")
