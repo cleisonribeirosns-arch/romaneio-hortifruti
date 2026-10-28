@@ -860,24 +860,42 @@ if st.session_state["usuario_logado"] is None:
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login ou Nome Completo", value="")
             senha_input = st.text_input("Senha", type="password", value="")
+            
+            # Campo de seleção de loja na tela de login
+            loja_login_sel = st.selectbox(
+                "Selecione a Loja de Atuação", 
+                ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], 
+                index=0
+            )
+            
             btn_entrar = st.form_submit_button("Entrar no Sistema", type="primary")
             if btn_entrar:
-                usuario = fazer_login(login_input, senha_input)
-                if usuario:
-                    st.session_state["usuario_logado"] = {"id": usuario[0], "nome": usuario[1], "perfil": usuario[2], "login": usuario[3]}
-                    st.success(f"Bem-vindo(a), {usuario[1]}!")
-                    st.rerun()
+                if not loja_login_sel:
+                    st.error("Por favor, selecione a loja em que você está atuando antes de entrar.")
                 else:
-                    st.error("Usuário ou senha incorretos.")
+                    usuario = fazer_login(login_input, senha_input)
+                    if usuario:
+                        st.session_state["usuario_logado"] = {
+                            "id": usuario[0], 
+                            "nome": usuario[1], 
+                            "perfil": usuario[2], 
+                            "login": usuario[3],
+                            "loja_atual": loja_login_sel
+                        }
+                        st.success(f"Bem-vindo(a), {usuario[1]} na {loja_login_sel}!")
+                        st.rerun()
+                    else:
+                        st.error("Usuário ou senha incorretos.")
 else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db)
+    loja_atual_usuario = user_info.get("loja_atual", "Não definida")
     
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
     with col_info_usr:
-        tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else "👤 Conferente"
+        tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else f"👤 Conferente ({loja_atual_usuario})"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_logout:
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
@@ -916,7 +934,6 @@ else:
             
         prod_nomes_keys = list(prod_dict.keys())
         
-        # Mapeamentos para preenchimento cruzado de fornecedores
         forn_por_codigo = {}
         forn_por_nome = {}
         forn_nomes_keys = []
@@ -929,13 +946,11 @@ else:
                 forn_por_codigo[cod_f] = {"nome": nome_f, "telefone": tel_f}
             forn_por_nome[nome_f] = {"codigo": cod_f, "telefone": tel_f}
 
-        # Inicialização do estado dos campos de fornecedor (vazios por padrão)
         if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
         if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
         if f"val_txt_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_txt_forn_{k_suffix}"] = ""
         if f"val_tel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_tel_forn_{k_suffix}"] = ""
 
-        # Callbacks para sincronização bidirecional do fornecedor
         def atualizar_por_codigo():
             c_digitado = st.session_state.get(f"in_cod_forn_{k_suffix}", "").strip()
             st.session_state[f"val_cod_forn_{k_suffix}"] = c_digitado
@@ -961,15 +976,13 @@ else:
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 
                 num_romaneio = st.text_input("Número do Romaneio (Gerado Automaticamente)", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
-                
-                # Tipo de Operação posicionado logo acima para definir o comportamento das lojas
                 tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
 
             with col2:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 
-                # Se for Transferência, abre os campos de Loja de Origem e Loja de Destino
+                # Se for Transferência, exibe origens e destinos. Se for Compra/Bonificação, assume a loja escolhida no login automaticamente (mas permite alteração se necessário ou fixa).
                 if tipo_operacao == "Transferência":
                     loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_orig_{k_suffix}")
                     loja_destino = st.selectbox("Loja de Destino (Entrou)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_dest_{k_suffix}")
@@ -977,13 +990,13 @@ else:
                 else:
                     loja_origem = ""
                     loja_destino = ""
-                    loja = st.selectbox("Loja", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_{k_suffix}")
+                    # Pré-seleciona a loja escolhida no login
+                    lista_lojas_opc = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    idx_loja_login = lista_lojas_opc.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_opc else 0
+                    loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, key=f"loja_{k_suffix}")
 
             with col3:
-                # Código do fornecedor com on_change para dar Enter e preencher automático
                 cod_fornecedor = st.text_input("Código do Fornecedor", value=st.session_state[f"val_cod_forn_{k_suffix}"], key=f"in_cod_forn_{k_suffix}", on_change=atualizar_por_codigo, placeholder="Digite o código e dê Enter")
-                
-                # Fornecedor Cadastrado com on_change para preencher o código automático
                 idx_sel = 0
                 atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
                 if atual_sel in forn_nomes_keys:
@@ -1444,11 +1457,15 @@ else:
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Registro de Baixas das Avarias")
         
+        # Pega a loja atual em que o usuário logou para dinamizar o controle de baixa da loja dele
+        loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
+        
         conn_b_all, db_tb_all = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
         conn_b_all.close()
         
-        df_bonf_loja2 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
+        # Filtra as notas com base na loja em que o conferente está logado
+        df_bonf_loja = df_todas_bonf[df_todas_bonf["loja"].str.contains(loja_ativa_sessao.replace("LOJA ", ""), case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
         
         conn_bx_chk, db_tbx_chk = get_db_connection()
         df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
@@ -1460,36 +1477,36 @@ else:
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
                 
-        notas_com_saldo_loja2 = []
-        saldo_total_disp_loja2 = 0.0
+        notas_com_saldo_loja = []
+        saldo_total_disp_loja = 0.0
         
-        if not df_bonf_loja2.empty:
-            for _, r_bonf in df_bonf_loja2.iterrows():
+        if not df_bonf_loja.empty:
+            for _, r_bonf in df_bonf_loja.iterrows():
                 num_nf_ent = str(r_bonf["numero_nota"])
                 val_original = float(r_bonf["valor_bonificacao"])
                 ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
                 saldo_restante_nota = max(0.0, val_original - ja_baixado)
                 
                 if saldo_restante_nota > 0:
-                    saldo_total_disp_loja2 += saldo_restante_nota
-                    notas_com_saldo_loja2.append({
+                    saldo_total_disp_loja += saldo_restante_nota
+                    notas_com_saldo_loja.append({
                         "nf_entrada": num_nf_ent,
                         "produto": r_bonf["produto_hortifruti"],
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
                     })
 
-        st.info(f"💡 **Saldo Total Disponível para a Loja 02: R$ {fmt_ptbr(saldo_total_disp_loja2, 2)}**")
+        st.info(f"💡 **Saldo Total Disponível para a {loja_ativa_sessao}: R$ {fmt_ptbr(saldo_total_disp_loja, 2)}**")
         
-        if notas_com_saldo_loja2:
-            with st.expander("📌 Notas e Produtos com Saldo Disponível para Uso (Loja 02)", expanded=True):
-                df_ns_show = pd.DataFrame(notas_com_saldo_loja2)
+        if notas_com_saldo_loja:
+            with st.expander(f"📌 Notas e Produtos com Saldo Disponível para Uso ({loja_ativa_sessao})", expanded=True):
+                df_ns_show = pd.DataFrame(notas_com_saldo_loja)
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True)
         else:
-            st.warning("⚠️ Não há notas com saldo disponível para a Loja 02 no momento.")
+            st.warning(f"⚠️ Não há notas com saldo disponível para a {loja_ativa_sessao} no momento.")
 
         conn_prod_v, db_pv = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
@@ -1527,10 +1544,13 @@ else:
             with st.form("form_registro_baixa_modelo", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
-                    lojas_baixa_sel = st.selectbox("LOJAS", ["", "LOJA 02 NOVA CIDADE", "LOJA 01 CD", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=None, placeholder="Selecione a loja")
+                    # Fixa ou sugere a loja ativa do login por padrão
+                    lista_lojas_reg = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
+                    lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa)
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="")
                 with col_m2:
-                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja2] if notas_com_saldo_loja2 else ["Nenhuma Nota Disponível"])
+                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja] if notas_com_saldo_loja else ["Nenhuma Nota Disponível"])
                     prod_hort_sel = st.selectbox("Produto Hortifrúti (Cód | Barras | Nome)", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0, placeholder="Selecione o produto")
                 with col_m3:
                     qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="")
@@ -1557,7 +1577,7 @@ else:
                         except ValueError:
                             qtd_val_f, val_avaria_f = 0.0, 0.0
                             
-                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja2 if item["nf_entrada"] == nf_b_entrada_sel), None)
+                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada selecionada inválida.")
                         elif val_avaria_f > nota_selecionada_dict["saldo_restante"]:
@@ -1569,7 +1589,7 @@ else:
                                 with open(path_nf_baixa, "wb") as f_out: f_out.write(nf_baixa_file.getbuffer())
                                 
                             novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
-                            novo_saldo_total_disp = saldo_total_disp_loja2 - val_avaria_f
+                            novo_saldo_total_disp = saldo_total_disp_loja - val_avaria_f
                             
                             try:
                                 conn_ins, db_tins = get_db_connection()
