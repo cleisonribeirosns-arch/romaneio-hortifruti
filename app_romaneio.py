@@ -1826,18 +1826,50 @@ else:
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
                 
-                # --- EDITAR PRODUTO ---
+                # --- EDITAR PRODUTO COM DADOS INSTANTÂNEOS ---
                 st.markdown("---")
                 st.subheader("✏️ Editar Produto Cadastrado")
+                
+                prod_dict_map = {item[5]: item for item in produtos_com_id_ajustado}
+                prod_ids_list = [item[5] for item in produtos_com_id_ajustado]
+                
+                if "edit_prod_id_sel" not in st.session_state or st.session_state["edit_prod_id_sel"] not in prod_ids_list:
+                    st.session_state["edit_prod_id_sel"] = prod_ids_list[0] if prod_ids_list else None
+
+                def ao_mudar_produto_sel():
+                    pid = st.session_state.get("sel_prod_edit_box")
+                    if pid in prod_dict_map:
+                        p_obj = prod_dict_map[pid]
+                        st.session_state["edit_prod_id_sel"] = pid
+                        st.session_state["val_ep_cod"] = str(p_obj[2]) if p_obj[2] else ""
+                        st.session_state["val_ep_bar"] = str(p_obj[1]) if p_obj[1] else ""
+                        st.session_state["val_ep_nome"] = str(p_obj[3]) if p_obj[3] else ""
+                        st.session_state["val_ep_und"] = str(p_obj[4]) if p_obj[4] else "KG"
+
+                current_pid = st.session_state["edit_prod_id_sel"]
+                initial_p_obj = prod_dict_map.get(current_pid, produtos_com_id_ajustado[0])
+
+                if "val_ep_cod" not in st.session_state: st.session_state["val_ep_cod"] = str(initial_p_obj[2]) if initial_p_obj[2] else ""
+                if "val_ep_bar" not in st.session_state: st.session_state["val_ep_bar"] = str(initial_p_obj[1]) if initial_p_obj[1] else ""
+                if "val_ep_nome" not in st.session_state: st.session_state["val_ep_nome"] = str(initial_p_obj[3]) if initial_p_obj[3] else ""
+                if "val_ep_und" not in st.session_state: st.session_state["val_ep_und"] = str(initial_p_obj[4]) if initial_p_obj[4] else "KG"
+
                 with st.form("form_editar_produto"):
-                    prod_para_editar = st.selectbox("Selecione o produto para editar", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})", key="sel_prod_edit")
+                    st.selectbox(
+                        "Selecione o produto para editar", 
+                        options=prod_ids_list, 
+                        index=prod_ids_list.index(current_pid) if current_pid in prod_ids_list else 0,
+                        format_func=lambda pid: f"ID {prod_dict_map[pid][0]} - {prod_dict_map[pid][3]} (Cód: {prod_dict_map[pid][2] or 'S/N'} | Barras: {prod_dict_map[pid][1] or 'S/N'})",
+                        key="sel_prod_edit_box",
+                        on_change=ao_mudar_produto_sel
+                    )
                     
-                    c_prod_e = st.text_input("Novo Código do Produto", value=str(prod_para_editar[2]) if prod_para_editar and prod_para_editar[2] else "")
-                    c_bar_e = st.text_input("Novo Código de Barras", value=str(prod_para_editar[1]) if prod_para_editar and prod_para_editar[1] else "")
-                    nome_p_e = st.text_input("Novo Nome do Produto", value=str(prod_para_editar[3]) if prod_para_editar else "")
+                    c_prod_e = st.text_input("Novo Código do Produto", value=st.session_state["val_ep_cod"])
+                    c_bar_e = st.text_input("Novo Código de Barras", value=st.session_state["val_ep_bar"])
+                    nome_p_e = st.text_input("Novo Nome do Produto", value=st.session_state["val_ep_nome"])
                     
                     unidades_disponiveis = ["KG", "UNID", "GRM", "CX"]
-                    idx_und_atual = unidades_disponiveis.index(prod_para_editar[4]) if prod_para_editar and prod_para_editar[4] in unidades_disponiveis else 0
+                    idx_und_atual = unidades_disponiveis.index(st.session_state["val_ep_und"]) if st.session_state["val_ep_und"] in unidades_disponiveis else 0
                     und_p_e = st.selectbox("Nova Unidade Padrão", unidades_disponiveis, index=idx_und_atual)
                     
                     if st.form_submit_button("💾 Salvar Alterações do Produto", type="primary"):
@@ -1849,7 +1881,7 @@ else:
                                 cursor_ep = conn_ep.cursor()
                                 cursor_ep.execute(
                                     "UPDATE produtos SET codigo_produto = %s, codigo_barras = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_t_ep == "postgres" else "UPDATE produtos SET codigo_produto = ?, codigo_barras = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
-                                    (c_prod_e.strip() if c_prod_e else None, c_bar_e.strip() if c_bar_e else None, nome_p_e.strip().upper(), und_p_e, int(prod_para_editar[5]) if db_t_ep == "postgres" else prod_para_editar[5])
+                                    (c_prod_e.strip() if c_prod_e else None, c_bar_e.strip() if c_bar_e else None, nome_p_e.strip().upper(), und_p_e, int(current_pid) if db_t_ep == "postgres" else current_pid)
                                 )
                                 conn_ep.commit()
                                 conn_ep.close()
@@ -1914,16 +1946,48 @@ else:
                 df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
                 st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True)
                 
-                # --- EDITAR FORNECEDOR ---
+                # --- EDITAR FORNECEDOR COM DADOS INSTANTÂNEOS ---
                 st.markdown("---")
                 st.subheader("✏️ Editar Fornecedor Cadastrado")
+                
+                forn_dict_map = {item[5]: item for item in forn_com_id_ajustado}
+                forn_ids_list = [item[5] for item in forn_com_id_ajustado]
+                
+                if "edit_forn_id_sel" not in st.session_state or st.session_state["edit_forn_id_sel"] not in forn_ids_list:
+                    st.session_state["edit_forn_id_sel"] = forn_ids_list[0] if forn_ids_list else None
+
+                def ao_mudar_forn_sel():
+                    fid = st.session_state.get("sel_forn_edit_box")
+                    if fid in forn_dict_map:
+                        f_obj = forn_dict_map[fid]
+                        st.session_state["edit_forn_id_sel"] = fid
+                        st.session_state["val_ef_cod"] = str(f_obj[1]) if f_obj[1] else ""
+                        st.session_state["val_ef_cnpj"] = str(f_obj[2]) if f_obj[2] else ""
+                        st.session_state["val_ef_nome"] = str(f_obj[3]) if f_obj[3] else ""
+                        st.session_state["val_ef_cont"] = str(f_obj[4]) if f_obj[4] else ""
+
+                current_fid = st.session_state["edit_forn_id_sel"]
+                initial_f_obj = forn_dict_map.get(current_fid, forn_com_id_ajustado[0])
+
+                if "val_ef_cod" not in st.session_state: st.session_state["val_ef_cod"] = str(initial_f_obj[1]) if initial_f_obj[1] else ""
+                if "val_ef_cnpj" not in st.session_state: st.session_state["val_ef_cnpj"] = str(initial_f_obj[2]) if initial_f_obj[2] else ""
+                if "val_ef_nome" not in st.session_state: st.session_state["val_ef_nome"] = str(initial_f_obj[3]) if initial_f_obj[3] else ""
+                if "val_ef_cont" not in st.session_state: st.session_state["val_ef_cont"] = str(initial_f_obj[4]) if initial_f_obj[4] else ""
+
                 with st.form("form_editar_fornecedor"):
-                    forn_para_editar = st.selectbox("Selecione o fornecedor para editar", options=forn_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[1] or 'S/N'})", key="sel_forn_edit")
+                    st.selectbox(
+                        "Selecione o fornecedor para editar", 
+                        options=forn_ids_list, 
+                        index=forn_ids_list.index(current_fid) if current_fid in forn_ids_list else 0,
+                        format_func=lambda fid: f"ID {forn_dict_map[fid][0]} - {forn_dict_map[fid][3]} (Cód: {forn_dict_map[fid][1] or 'S/N'})",
+                        key="sel_forn_edit_box",
+                        on_change=ao_mudar_forn_sel
+                    )
                     
-                    f_cod_e = st.text_input("Novo Código do Fornecedor", value=str(forn_para_editar[1]) if forn_para_editar and forn_para_editar[1] else "")
-                    f_cnpj_e = st.text_input("Novo CNPJ", value=str(forn_para_editar[2]) if forn_para_editar and forn_para_editar[2] else "")
-                    f_nome_e = st.text_input("Novo Nome / Razão Social", value=str(forn_para_editar[3]) if forn_para_editar else "")
-                    f_cont_e = st.text_input("Novo Representante / Contato", value=str(forn_para_editar[4]) if forn_para_editar and forn_para_editar[4] else "")
+                    f_cod_e = st.text_input("Novo Código do Fornecedor", value=st.session_state["val_ef_cod"])
+                    f_cnpj_e = st.text_input("Novo CNPJ", value=st.session_state["val_ef_cnpj"])
+                    f_nome_e = st.text_input("Novo Nome / Razão Social", value=st.session_state["val_ef_nome"])
+                    f_cont_e = st.text_input("Novo Representante / Contato", value=st.session_state["val_ef_cont"])
                     
                     if st.form_submit_button("💾 Salvar Alterações do Fornecedor", type="primary"):
                         if not f_nome_e.strip():
@@ -1934,7 +1998,7 @@ else:
                                 cursor_ef = conn_ef.cursor()
                                 cursor_ef.execute(
                                     "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s, contato = %s WHERE id = %s" if db_t_ef == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ?, contato = ? WHERE id = ?",
-                                    (f_cod_e.strip() if f_cod_e else None, f_cnpj_e.strip() if f_cnpj_e else None, f_nome_e.strip().upper(), f_cont_e.strip() if f_cont_e else None, int(forn_para_editar[5]) if db_t_ef == "postgres" else forn_para_editar[5])
+                                    (f_cod_e.strip() if f_cod_e else None, f_cnpj_e.strip() if f_cnpj_e else None, f_nome_e.strip().upper(), f_cont_e.strip() if f_cont_e else None, int(current_fid) if db_t_ef == "postgres" else current_fid)
                                 )
                                 conn_ef.commit()
                                 conn_ef.close()
