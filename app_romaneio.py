@@ -67,7 +67,7 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO (LIMPO)
+# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
@@ -99,7 +99,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO
+# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO (ALTO CONTRASTE)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -121,7 +121,7 @@ if bg_login_path:
 if b64_img:
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(27,94,32,0.85), rgba(198,40,40,0.85)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -146,6 +146,28 @@ st.markdown(
     header[data-testid="stHeader"] {{
         background-color: transparent !important;
     }}
+    
+    /* TITULOS E TEXTOS GERAIS EM ALTO CONTRASTE */
+    h1, h2, h3, h4, h5, h6, p, span, div, label {{
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
+    }}
+    
+    /* LABELS DE INPUTS E FORMULÁRIOS */
+    .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p {{
+        font-size: 15px !important;
+        font-weight: 800 !important;
+        color: #FFFFFF !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
+    }}
+
+    /* MENU RADIO / NAVEGAÇÃO */
+    div[data-testid="stRadio"] label, div[data-testid="stRadio"] label p {{
+        color: #FFFFFF !important;
+        font-size: 16px !important;
+        font-weight: bold !important;
+    }}
+
     img[data-testid="stImage"] {{
         background: transparent !important;
         mix-blend-mode: multiply !important;
@@ -156,6 +178,7 @@ st.markdown(
         margin: 0 auto !important;
         display: block !important;
     }}
+    
     .titulo-logo {{
         font-size: 2.2rem !important;
         font-weight: 900 !important;
@@ -164,75 +187,63 @@ st.markdown(
         font-family: 'Arial Black', Gadget, sans-serif !important;
     }}
     .palavra-sup-mercado {{
-        color: #2E7D32 !important;
-        font-size: 1.2rem !important;
+        color: #4CAF50 !important;
+        font-size: 1.3rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
     .palavra-super {{
-        color: #2E7D32 !important;
+        color: #81C784 !important;
         font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #134617, 1.5px -1.5px 0 #134617, -1.5px 1.5px 0 #134617, 1.5px 1.5px 0 #134617,
-            2px 2px 3px rgba(0, 0, 0, 0.5) !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
     .palavra-nova {{
-        color: #FF3D00 !important;
+        color: #FF5252 !important;
         font-style: italic !important;
-        text-shadow: 
-            -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B, -1.5px -1.5px 0 #FFEB3B, 1.5px -1.5px 0 #FFEB3B,
-            -3px -3px 0 #B71C1C, 3px -3px 0 #B71C1C, -3px 3px 0 #B71C1C, 3px 3px 0 #B71C1C,
-            3px 3px 5px rgba(0, 0, 0, 0.6) !important;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
     }}
     .palavra-cidade {{
-        color: #111111 !important;
+        color: #FFFFFF !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
         font-size: 2.8rem !important;
-        text-shadow: 2px 3px 4px rgba(0, 0, 0, 0.8), -1.5px -1.5px 0 #FFF, 1.5px -1.5px 0 #FFF, -1.5px 1.5px 0 #FFF, 1.5px 1.5px 0 #FFF !important;
+        text-shadow: 2px 3px 5px rgba(0, 0, 0, 0.9) !important;
     }}
-    .stApp label {{
-        font-size: 15px !important;
-        font-weight: bold !important;
-    }}
-    div[data-baseweb="input"], 
-    div[data-baseweb="base-input"], 
-    div[data-baseweb="select"], 
-    div[data-testid="stDateInput"],
-    div[data-testid="stDateInput"] > div,
-    div[data-baseweb="calendar"],
-    input, 
-    select, 
-    textarea,
+    
+    /* INPUTS, SELECTS E DROPDOWNS COM ALTA VISIBILIDADE */
     div[data-baseweb="input"] input, 
     div[data-baseweb="base-input"] input, 
     div[data-testid="stDateInput"] input,
-    div[data-baseweb="select"] span {{
-        background: transparent !important;
-        background-color: transparent !important;
-    }}
-    input, 
-    select, 
-    textarea,
-    div[data-baseweb="input"] input, 
-    div[data-baseweb="base-input"] input, 
-    div[data-testid="stDateInput"] input {{
-        color: #FFFFFF !important;
-        -webkit-text-fill-color: #FFFFFF !important;
-        border: 1px solid rgba(255, 255, 255, 0.4) !important;
-        border-radius: 6px !important;
+    div[data-baseweb="select"] input {{
+        color: #000000 !important;
+        -webkit-text-fill-color: #000000 !important;
+        background-color: #FFFFFF !important;
+        font-weight: bold !important;
         font-size: 15px !important;
+        border-radius: 6px !important;
     }}
+
+    div[data-baseweb="input"], 
+    div[data-baseweb="base-input"], 
+    div[data-baseweb="select"] {{
+        background-color: #FFFFFF !important;
+        border-radius: 6px !important;
+        border: 2px solid #1B5E20 !important;
+    }}
+
+    div[data-baseweb="select"] span {{
+        color: #000000 !important;
+        font-weight: bold !important;
+    }}
+
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background: transparent !important;
-        background-color: transparent !important;
-        border: 1px dashed rgba(255, 255, 255, 0.5) !important;
+        background: rgba(0, 0, 0, 0.4) !important;
+        border: 2px dashed #FFFFFF !important;
         border-radius: 8px !important;
     }}
+
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #1B5E20 !important;
         color: #FFFFFF !important;
@@ -241,7 +252,7 @@ st.markdown(
         font-size: 16px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 8px rgba(0,0,0,0.4) !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.6) !important;
     }}
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
         background-color: #2E7D32 !important;
@@ -1670,47 +1681,4 @@ else:
         conn.close()
         
         if usuarios_cadastrados:
-            usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
-            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
-            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True)
-            
-            st.markdown("---")
-            st.subheader("✏️ Editar Usuário")
-            with st.form("form_editar_usuario"):
-                usr_para_editar = st.selectbox("Selecione o usuário para editar", options=usuarios_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]})", key="sel_usr_edit")
-                novo_nome_edit = st.text_input("Novo Nome Completo", value=usr_para_editar[1] if usr_para_editar else "")
-                novo_login_edit = st.text_input("Novo Login", value=usr_para_editar[2] if usr_para_editar else "")
-                nova_senha_edit = st.text_input("Nova Senha", value=usr_para_editar[3] if usr_para_editar else "", type="password")
-                if st.form_submit_button("💾 Salvar Alterações", type="primary"):
-                    if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip(): st.error("Preencha todos os campos.")
-                    else:
-                        try:
-                            conn_ed, db_t_ed = get_db_connection()
-                            cursor_ed = conn_ed.cursor()
-                            cursor_ed.execute("UPDATE usuarios SET nome = %s, login = %s, senha = %s WHERE id = %s" if db_t_ed == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?", (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), int(usr_para_editar[5]) if db_t_ed == "postgres" else usr_para_editar[5]))
-                            conn_ed.commit()
-                            conn_ed.close()
-                            st.success("Usuário atualizado!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao atualizar: {e}")
-            
-            st.markdown("---")
-            st.subheader("🗑️ Excluir Usuário")
-            col_ux1, col_ux2 = st.columns([3, 1])
-            with col_ux1: usr_para_excluir = st.selectbox("Selecione o usuário para remover", options=usuarios_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]} - Perfil: {x[4]})", key="sel_usr_del")
-            with col_ux2:
-                st.write("")
-                st.write("")
-                if st.button("🗑️ Remover Usuário", type="secondary", key="btn_del_usr_sel"):
-                    if str(usr_para_excluir[2]) == "908": st.error("Não é permitido excluir o usuário Administrador principal (908)!")
-                    else:
-                        try:
-                            conn_del, db_t_del = get_db_connection()
-                            cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_para_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
-                            conn_del.commit()
-                            conn_del.close()
-                            st.success(f"Usuário '{usr_para_excluir[1]}' removido!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao remover: {e}")
-        else: st.info("Nenhum usuário cadastrado.")
+            usuarios
