@@ -78,7 +78,7 @@ def exibir_foto_modal(caminho_foto):
             with open(caminho_foto, "rb") as f_pdf:
                 pdf_bytes = f_pdf.read()
             st.download_button(
-                label=f"📥 Baixar e Abrir Arquivo PDF ({nome_arquivo})",
+                label=f"📥 Baixar e Abrir Ficheiro PDF ({nome_arquivo})",
                 data=pdf_bytes,
                 file_name=nome_arquivo,
                 mime="application/pdf",
@@ -96,7 +96,7 @@ def exibir_foto_modal(caminho_foto):
                 type="primary"
             )
     else:
-        st.error("Arquivo de anexo não encontrado no servidor.")
+        st.error("Ficheiro de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
 # 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO
@@ -947,7 +947,6 @@ else:
 
         if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
         if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
-        if f"val_txt_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_txt_forn_{k_suffix}"] = ""
         if f"val_tel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_tel_forn_{k_suffix}"] = ""
 
         def atualizar_por_codigo():
@@ -957,7 +956,6 @@ else:
                 info = forn_por_codigo[c_digitado]
                 st.session_state[f"val_sel_forn_{k_suffix}"] = info["nome"]
                 st.session_state[f"val_tel_forn_{k_suffix}"] = info["telefone"]
-                st.session_state[f"val_txt_forn_{k_suffix}"] = ""
 
         def atualizar_por_select():
             s_selecionado = st.session_state.get(f"sel_forn_{k_suffix}", "")
@@ -976,14 +974,12 @@ else:
                 
                 num_romaneio = st.text_input("Número do Romaneio (Gerado Automaticamente)", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 
-                # Adicionada a nova opção "Transferência/Bonificação"
                 tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
 
             with col2:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 
-                # Se for Transferência ou Transferência/Bonificação, abre os campos de Origem e Destino
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
                     loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_orig_{k_suffix}")
                     loja_destino = st.selectbox("Loja de Destino (Entrou)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, key=f"loja_dest_{k_suffix}")
@@ -1025,10 +1021,8 @@ else:
             with col_tel2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
 
-            if not fornecedor_sel:
-                fornecedor = st.text_input("Ou Digite o Fornecedor (Caso não esteja na lista)", value=st.session_state[f"val_txt_forn_{k_suffix}"], key=f"forn_manual_{k_suffix}")
-            else:
-                fornecedor = fornecedor_sel
+            # Campo manual removido conforme solicitado. Apenas a lista cadastrada é utilizada.
+            fornecedor = fornecedor_sel
 
             data_pag_str = ""
             if pag_a_vista == "NÃO":
@@ -1106,7 +1100,7 @@ else:
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             num_rom_final = st.session_state[f"num_rom_auto_{k_suffix}"]
             forn_final = fornecedor if isinstance(fornecedor, str) else ""
-            if not forn_final.strip(): st.error("Preencha ou selecione o fornecedor.")
+            if not forn_final.strip(): st.error("Selecione o fornecedor na lista cadastrada.")
             elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
             elif tipo_operacao in ["Transferência", "Transferência/Bonificação"] and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino para a operação!")
             elif tipo_operacao not in ["Transferência", "Transferência/Bonificação"] and not loja: st.error("Selecione a loja!")
@@ -1172,7 +1166,6 @@ else:
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
         
-        # Filtro por Loja incluído na consulta para cada conferente/gestor
         lista_lojas_filtro = ["TODAS AS LOJAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
         idx_loja_padrao_filtro = 0
         if not is_admin and loja_atual_usuario in lista_lojas_filtro:
@@ -1480,7 +1473,6 @@ else:
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
         conn_b_all.close()
         
-        # Filtra as notas com base na loja em que o conferente está logado
         df_bonf_loja = df_todas_bonf[df_todas_bonf["loja"].str.contains(loja_ativa_sessao.replace("LOJA ", ""), case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
         
         conn_bx_chk, db_tbx_chk = get_db_connection()
@@ -1690,7 +1682,7 @@ else:
             
             st.dataframe(df_final_show, use_container_width=True)
         else:
-            st.info("Nenhum registro de baixa encontrado com os filtros informados.")
+            st.info("Nenhum registo de baixa encontrado com os filtros informados.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
@@ -1722,7 +1714,7 @@ else:
             if prod_sel != "TODOS OS PRODUTOS": df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
             if dt_inicio and dt_fim: df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
                 
-            if df_filtrado.empty: st.info("Nenhum registro encontrado para os filtros selecionados.")
+            if df_filtrado.empty: st.info("Nenhum registo encontrado para os filtros selecionados.")
             else:
                 st.markdown("---")
                 st.subheader("📈 Indicadores Principais (KPIs)")
