@@ -60,7 +60,7 @@ if not os.path.exists("uploads"):
     os.makedirs("uploads")
 
 # ---------------------------------------------------------
-# CONEXÃO SEGURA COM BANCO DE DADOS (POSTGRESQL COM FALLBACK PARA SQLITE)
+# CONEXÃO SEGURA COM BANCO DE DADOS
 # ---------------------------------------------------------
 def get_db_connection():
     if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
@@ -75,7 +75,7 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DIRETA DA NOTA FISCAL / ANEXO (RENDERIZADO COMO IMAGEM)
+# MODAL PARA VISUALIZAÇÃO DIRETA DA NOTA FISCAL / ANEXO
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização Direta da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
@@ -94,7 +94,7 @@ def exibir_foto_modal(caminho_foto):
                 except Exception as e:
                     st.error(f"Erro ao renderizar PDF como imagem: {e}")
             else:
-                st.warning("Biblioteca de renderização de PDF não instalada. Exibindo opção de download direto.")
+                st.warning("Biblioteca de renderização de PDF não instalada.")
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
@@ -120,7 +120,7 @@ def exibir_foto_modal(caminho_foto):
         st.error("Ficheiro de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO (UI MODERNA CORPORATIVA)
+# 2. ESTILOS E PADRÃO VISUAL (UI MODERNA CORPORATIVA COM ÍCONES)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -142,7 +142,7 @@ if bg_login_path:
 if b64_img:
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(0,0,0,0.78), rgba(0,0,0,0.78)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -182,12 +182,12 @@ st.markdown(
 
     /* Estilização Moderna para o Menu Radio Superior */
     div[data-testid="stRadio"] > div {{
-        background: rgba(20, 30, 20, 0.85) !important;
-        padding: 12px 18px !important;
-        border-radius: 12px !important;
-        border: 2px solid rgba(76, 175, 80, 0.6) !important;
-        box-shadow: 0px 6px 15px rgba(0,0,0,0.6) !important;
-        gap: 15px !important;
+        background: linear-gradient(135deg, rgba(15, 25, 18, 0.95), rgba(25, 45, 28, 0.95)) !important;
+        padding: 14px 20px !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        box-shadow: 0px 8px 20px rgba(0,0,0,0.7) !important;
+        gap: 18px !important;
     }}
     div[data-testid="stRadio"] label, div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
@@ -197,8 +197,8 @@ st.markdown(
 
     /* Estilização para Expanders e Cards Corporativos */
     div[data-testid="stExpander"] {{
-        background: rgba(15, 25, 18, 0.85) !important;
-        border: 1px solid rgba(76, 175, 80, 0.5) !important;
+        background: rgba(15, 25, 18, 0.88) !important;
+        border: 1px solid rgba(76, 175, 80, 0.4) !important;
         border-radius: 10px !important;
         box-shadow: 0px 4px 10px rgba(0,0,0,0.5) !important;
     }}
@@ -300,7 +300,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. INICIALIZAÇÃO E MANUTENÇÃO DAS TABELAS NO BANCO DE DADOS
+# 3. BANCO DE DADOS
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -892,15 +892,31 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    opcoes_menu = ["Romaneio de Recebimento - Hortifrúti", "Consultar Romaneios", "Controle de Bonificação", "Controle de Baixa de Avarias"]
+    # MENU COM ÍCONES PROFISSIONAIS PARA CADA OPÇÃO
+    opcoes_menu_map = {
+        "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+        "🔍 Consultar Romaneios": "Consultar Romaneios",
+        "🎁 Controle de Bonificação": "Controle de Bonificação",
+        "📉 Baixa de Avarias": "Controle de Baixa de Avarias"
+    }
     if is_admin:
-        opcoes_menu.extend(["Relatórios & Gráficos", "Gerenciar Cadastros (Produtos)", "Gerenciar Usuários & Permissões"])
+        opcoes_menu_map.update({
+            "📊 Relatórios & BI": "Relatórios & Gráficos",
+            "🥦 Cadastros": "Gerenciar Cadastros (Produtos)",
+            "👥 Usuários": "Gerenciar Usuários & Permissões"
+        })
     
-    menu = st.radio("Menu de Navegação Principal", opcoes_menu, horizontal=True, label_visibility="collapsed")
+    menu_selecionado_label = st.radio(
+        "Menu de Navegação Principal", 
+        list(opcoes_menu_map.keys()), 
+        horizontal=True, 
+        label_visibility="collapsed"
+    )
+    menu = opcoes_menu_map[menu_selecionado_label]
     st.markdown("---")
     
     if menu == "Romaneio de Recebimento - Hortifrúti":
-        st.title("Romaneio de Recebimento - Hortifrúti")
+        st.title("📋 Romaneio de Recebimento - Hortifrúti")
         if "form_key_suffix" not in st.session_state: st.session_state["form_key_suffix"] = 0
         if "item_key_suffix" not in st.session_state: st.session_state["item_key_suffix"] = 0
         k_suffix = st.session_state["form_key_suffix"]
@@ -949,7 +965,6 @@ else:
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
-                
                 tipo_operacao = st.selectbox("Tipo de Operação", ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", on_change=lambda: st.rerun())
 
             with col2:
@@ -974,14 +989,12 @@ else:
                     idx_sel = forn_nomes_keys.index(atual_sel) + 1
 
                 fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=idx_sel, key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
-                
                 cod_fornecedor = st.text_input("Código do Fornecedor (Automático)", value=st.session_state[f"val_cod_forn_{k_suffix}"], disabled=True, key=f"in_cod_forn_{k_suffix}")
 
             col_tel1, col_tel2 = st.columns([2, 2])
             with col_tel1:
                 tel_key = f"tel_input_{k_suffix}"
-                if tel_key not in st.session_state: 
-                    st.session_state[tel_key] = ""
+                if tel_key not in st.session_state: st.session_state[tel_key] = ""
                 
                 def formatar_tel():
                     val = st.session_state.get(tel_key, "")
@@ -999,7 +1012,6 @@ else:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
 
             fornecedor = fornecedor_sel
-
             data_pag_str = ""
             if pag_a_vista == "NÃO":
                 data_pag_val = st.date_input("Data para Pagamento", value=None, format="DD/MM/YYYY", key=f"data_pag_{k_suffix}")
@@ -1079,7 +1091,7 @@ else:
             cod_forn_val = st.session_state[f"val_cod_forn_{k_suffix}"]
             if not forn_final.strip(): st.error("Selecione o fornecedor na lista cadastrada.")
             elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
-            elif tipo_operacao in ["Transferência", "Transferência/Bonificação"] and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino para a operação!")
+            elif tipo_operacao in ["Transferência", "Transferência/Bonificação"] and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino!")
             elif tipo_operacao not in ["Transferência", "Transferência/Bonificação"] and not loja: st.error("Selecione a loja!")
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
@@ -1211,20 +1223,12 @@ else:
                     col_st1, col_st2 = st.columns([2, 3])
                     with col_st1:
                         opcoes_status_rom = ["Pendente", "Nota Emitida", "Trocado", "Lançado"]
-                        idx_status_padrao = 0
-                        if status_atual_nota in opcoes_status_rom:
-                            idx_status_padrao = opcoes_status_rom.index(status_atual_nota)
-
-                        novo_status_nota = st.selectbox(
-                            "Status do Romaneio",
-                            opcoes_status_rom,
-                            index=idx_status_padrao,
-                            key=f"status_nota_{row['id']}"
-                        )
+                        idx_status_padrao = opcoes_status_rom.index(status_atual_nota) if status_atual_nota in opcoes_status_rom else 0
+                        novo_status_nota = st.selectbox("Status do Romaneio", opcoes_status_rom, index=idx_status_padrao, key=f"status_nota_{row['id']}")
                     with col_st2:
                         st.write("")
                         st.write("")
-                        if st.button("💾 Salvar Status do Romaneio", key=f"btn_salvar_status_{row['id']}"):
+                        if st.button("💾 Salvar Status", key=f"btn_salvar_status_{row['id']}"):
                             try:
                                 conn_st, db_t_st = get_db_connection()
                                 cur_st = conn_st.cursor()
@@ -1234,22 +1238,18 @@ else:
                                 )
                                 conn_st.commit()
                                 conn_st.close()
-                                st.success(f"Status do romaneio {row['numero_romaneio']} atualizado para: {novo_status_nota}!")
+                                st.success("Status atualizado!")
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao atualizar status: {e}")
+                            except Exception as e: st.error(f"Erro: {e}")
                     
                     st.markdown("---")
                     loja_exibicao = row['loja']
                     if tipo_op_reg.lower() in ['transferência', 'transferência/bonificação'] and row.get('loja_origem'):
                         loja_exibicao = f"Origem: {row['loja_origem']} -> Destino: {row['loja_destino']}"
                     
-                    st.write(f"**Tipo de Operação:** {tipo_op_reg} &nbsp;|&nbsp; **Loja / Rota:** {loja_exibicao}")
-                    st.write(f"**Código do Fornecedor:** {row['codigo_fornecedor'] if row['codigo_fornecedor'] else 'N/A'} | **Telefone:** {row['telefone_fornecedor'] if row['telefone_fornecedor'] else 'N/A'}")
-                    st.write(f"**Conferente:** {row['conferente']}")
-                    st.write(f"**Pagamento à Vista:** {row['pagamento_a_vista']} | **Data Pagamento:** {row['data_pagamento'] if row['data_pagamento'] else 'N/A'}")
-                    if row.get('observacoes'):
-                        st.write(f"**Informações Adicionais / Observações:** {row['observacoes']}")
+                    st.write(f"**Tipo:** {tipo_op_reg} | **Loja:** {loja_exibicao}")
+                    st.write(f"**Conferente:** {row['conferente']} | **Pagamento à Vista:** {row['pagamento_a_vista']}")
+                    if row.get('observacoes'): st.write(f"**Observações:** {row['observacoes']}")
                     
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
@@ -1272,7 +1272,7 @@ else:
                     col_dl, col_del = st.columns([4, 1])
                     with col_dl: st.download_button(label=f"📥 Baixar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
                     with col_del:
-                        if st.button("🗑️ Excluir Romaneio", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
+                        if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
                             try:
                                 conn_del, db_t_del = get_db_connection()
                                 cursor_del = conn_del.cursor()
@@ -1280,13 +1280,13 @@ else:
                                 cursor_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
                                 conn_del.commit()
                                 conn_del.close()
-                                st.success("Romaneio excluído!")
+                                st.success("Excluído com sucesso!")
                                 st.rerun()
-                            except Exception as e: st.error(f"Erro ao excluir: {e}")
+                            except Exception as e: st.error(f"Erro: {e}")
         else: st.info("Nenhum romaneio encontrado.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO (TABELA COM ROLAGEM, ORDENADO POR DATA E HORÁRIO)
+    # 6. CONTROLE DE BONIFICAÇÃO (COM BOTÃO DE ABERTURA DE ANEXO E EDIÇÃO DIRETA NA TABELA)
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -1303,31 +1303,6 @@ else:
             c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
             lista_opcoes_prod.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
         
-        with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
-            with st.form("form_cad_prod_rapido_bonf", clear_on_submit=True):
-                col_rp1, col_rp2, col_rp3, col_rp4 = st.columns([1.5, 1.5, 2.5, 1])
-                with col_rp1: r_cod = st.text_input("Cód. Produto", value="")
-                with col_rp2: r_bar = st.text_input("Cód. Barras", value="")
-                with col_rp3: r_nome = st.text_input("Nome do Produto *", value="")
-                with col_rp4: r_und = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=0)
-                if st.form_submit_button("Salvar Produto", type="primary"):
-                    if not r_nome.strip():
-                        st.error("Informe o nome do produto.")
-                    else:
-                        try:
-                            conn_rp, db_trp = get_db_connection()
-                            cursor_rp = conn_rp.cursor()
-                            cursor_rp.execute(
-                                "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_trp == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)",
-                                (r_cod.strip() if r_cod else None, r_bar.strip() if r_bar else None, r_nome.strip().upper(), r_und)
-                            )
-                            conn_rp.commit()
-                            conn_rp.close()
-                            st.success(f"Produto '{r_nome.strip().upper()}' cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(f"Erro ao cadastrar produto: {e}")
-
         with st.expander("➕ Cadastrar Nova Bonificação", expanded=False):
             with st.form("form_cad_bonificacao", clear_on_submit=True):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
@@ -1340,24 +1315,21 @@ else:
                     valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="")
                     tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["Bonificação", "Transferência de Bonificação"], index=0, key="tipo_bonf_input_sel")
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti (Cód | Barras | Nome)", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0, placeholder="Selecione o produto")
-                    anexo_bonf = st.file_uploader("Anexar NF de Bonificação (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod, index=None if lista_opcoes_prod else 0, placeholder="Selecione o produto")
+                    anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
-                with col_dt1:
-                    status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status")
-                with col_dt2:
-                    data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione")
+                with col_dt2: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
                 with col_dt3:
                     hora_auto = datetime.now().strftime('%H:%M:%S')
-                    st.text_input("Hora de Entrada (Automática)", value=hora_auto, disabled=True)
+                    st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
                 
                 dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
                 
-                btn_salvar_bonf = st.form_submit_button("✅ Salvar Bonificação", type="primary")
-                if btn_salvar_bonf:
-                    if not num_nota_bonf.strip() or not loja_bonf or not tipo_bonf_sel or not prod_bonf or not status_bonf or not data_entrada_manual:
-                        st.error("Preencha todos os campos obrigatórios em branco (N° Nota, Loja, Tipo, Produto, Status e Data de Entrada).")
+                if st.form_submit_button("✅ Salvar Bonificação", type="primary"):
+                    if not num_nota_bonf.strip() or not loja_bonf or not prod_bonf or not status_bonf:
+                        st.error("Preencha todos os campos obrigatórios.")
                     else:
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
                         except ValueError: valor_bonf_val = 0.0
@@ -1376,12 +1348,12 @@ else:
                             )
                             conn_b.commit()
                             conn_b.close()
-                            st.success(f"Bonificação Nota N° {num_nota_bonf} gravada com sucesso!")
+                            st.success("Salvo com sucesso!")
                             st.rerun()
-                        except Exception as e: st.error(f"Erro ao salvar: {e}")
+                        except Exception as e: st.error(f"Erro: {e}")
                             
         st.markdown("---")
-        st.subheader("📋 Registros de Bonificação")
+        st.subheader("📋 Registros de Bonificação e Consulta de Notas")
         
         lista_lojas_filtro_bonf = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
         idx_filtro_bonf = 0
@@ -1396,7 +1368,6 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", key="f_prod_bonf")
                 
         conn_b_sel, db_tb_sel = get_db_connection()
-        # Ordenado por id DESC para garantir ordem da mais recente (data e horário) para mais antiga
         df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
         conn_b_sel.close()
         
@@ -1431,12 +1402,10 @@ else:
             )
             st.markdown("")
             
-            # --- TABELA COM ROLAGEM E BOTÃO DE VISUALIZAÇÃO EM CADA LINHA ---
-            st.markdown("### 📄 Registros e Visualização de Notas Fiscais")
-            
+            # Tabela de listagem limpa e organizada com scroll
             df_bonf_tabela = df_bonf.copy()
             df_bonf_tabela["Valor (R$)"] = df_bonf_tabela["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_bonf_tabela["Ação Anexo"] = df_bonf_tabela["caminho_anexo"].apply(lambda p: "Ver Nota" if p and os.path.exists(p) else "Sem Anexo")
+            df_bonf_tabela["Anexo"] = df_bonf_tabela["caminho_anexo"].apply(lambda p: "📄 Disponível" if p and os.path.exists(p) else "Sem Anexo")
             
             df_bonf_tabela = df_bonf_tabela.rename(columns={
                 "numero_nota": "N° Nota",
@@ -1447,46 +1416,64 @@ else:
                 "produto_hortifruti": "Produto Hortifrúti"
             })
             
-            cols_exibidas = df_bonf_tabela[["N° Nota", "Tipo", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Ação Anexo"]]
+            cols_exibidas = df_bonf_tabela[["N° Nota", "Tipo", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
             cols_exibidas.index = range(1, len(cols_exibidas) + 1)
             
             st.dataframe(cols_exibidas, use_container_width=True, height=350)
             
-            # Atalho interativo para abrir notas diretamente pelo número da nota
-            st.markdown("#### 🔍 Visualizar Nota Fiscal / Anexo do Registro")
-            opcoes_notas_anexo = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} ({row['data_entrada']})") for _, row in df_bonf.iterrows() if row.get("caminho_anexo") and os.path.exists(row.get("caminho_anexo", ""))]
-            if opcoes_notas_anexo:
-                col_sel_n, col_btn_n = st.columns([3, 1])
-                with col_sel_n:
-                    nota_escolhida_modal = st.selectbox("Selecione a Nota para Visualizar o Anexo", options=opcoes_notas_anexo, format_func=lambda x: x[1], key="sel_nota_modal_direto")
-                with col_btn_n:
-                    st.write("")
-                    st.write("")
-                    if st.button("👁️ Abrir Nota Selecionada", type="primary", key="btn_abrir_nota_direta"):
-                        caminho_alvo = next((r["caminho_anexo"] for _, r in df_bonf.iterrows() if r["id"] == nota_escolhida_modal[0]), "")
-                        if caminho_alvo:
-                            exibir_foto_modal(caminho_alvo)
-            else:
-                st.info("Nenhum anexo disponível nas notas listadas.")
-
+            # --- SEÇÃO DE ABERTURA DE ANEXO E EDIÇÃO DIRETA NA TABELA ---
             st.markdown("---")
-            st.subheader("✏️ Alterar Status da Bonificação")
-            col_alt_b1, col_alt_b2, col_alt_b3 = st.columns([2.5, 2, 1.5])
-            opcoes_bonf_alterar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} - {row['produto_hortifruti']} (R$ {fmt_ptbr(row['valor_bonificacao'], 2)}) | Status: {row['status']}") for _, row in df_bonf.iterrows()]
+            st.subheader("🔍 Abertura de Anexo & Edição de Registro")
             
-            with col_alt_b1: bonf_selecionada = st.selectbox("Selecione a Nota de Bonificação", options=opcoes_bonf_alterar, format_func=lambda x: x[1], key="sel_bonf_alt_status")
-            with col_alt_b2: novo_status_sel = st.selectbox("Novo Status", ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="sel_novo_status_b")
-            with col_alt_b3:
+            opcoes_notas_editar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} | Status: {row['status']} ({row['data_entrada']})") for _, row in df_bonf.iterrows()]
+            
+            col_ed1, col_ed2 = st.columns(2)
+            with col_ed1:
+                nota_selecionada_edicao = st.selectbox("Selecione o Registro para Gerenciar / Abrir Anexo", options=opcoes_notas_editar, format_func=lambda x: x[1], key="sel_registro_bonf_gerenciar")
+            with col_ed2:
                 st.write("")
                 st.write("")
-                if st.button("💾 Atualizar Status", type="primary", key="btn_upd_status_bonf"):
+                id_reg_atual = nota_selecionada_edicao[0]
+                reg_obj_atual = df_bonf[df_bonf["id"] == id_reg_atual].iloc[0]
+                
+                caminho_nota_alvo = reg_obj_atual.get("caminho_anexo", "")
+                if caminho_nota_alvo and os.path.exists(caminho_nota_alvo):
+                    if st.button("👁️ Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
+                        exibir_foto_modal(caminho_nota_alvo)
+                else:
+                    st.warning("Este registro não possui arquivo de nota anexado.")
+
+            with st.form("form_edicao_direta_bonificacao"):
+                st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
+                col_e1, col_e2, col_e3 = st.columns(3)
+                with col_e1:
+                    novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","))
+                with col_e2:
+                    status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
+                    idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
+                    novo_st_nota = st.selectbox("Status", status_atuais_lst, index=idx_st_atual)
+                with col_e3:
+                    novo_prod_nota = st.text_input("Produto Hortifrúti", value=reg_obj_atual["produto_hortifruti"])
+                
+                novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
+                
+                if st.form_submit_button("💾 Salvar Alterações do Registro", type="primary"):
                     try:
-                        conn_up_b, db_t_up = get_db_connection()
-                        cursor_up = conn_up_b.cursor()
-                        cursor_up.execute("UPDATE bonificacoes SET status = %s WHERE id = %s" if db_t_up == "postgres" else "UPDATE bonificacoes SET status = ? WHERE id = ?", (novo_status_sel, int(bonf_selecionada[0]) if db_t_up == "postgres" else bonf_selecionada[0]))
-                        conn_up_b.commit()
-                        conn_up_b.close()
-                        st.success("Status atualizado!")
+                        val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else reg_obj_atual["valor_bonificacao"]
+                        path_novo_arq = reg_obj_atual["caminho_anexo"]
+                        if novo_anexo_up:
+                            path_novo_arq = os.path.join("uploads", f"NF_EDIT_{reg_obj_atual['numero_nota']}_{novo_anexo_up.name}")
+                            with open(path_novo_arq, "wb") as f_out: f_out.write(novo_anexo_up.getbuffer())
+                            
+                        conn_up_dir, db_t_upd = get_db_connection()
+                        cursor_upd = conn_up_dir.cursor()
+                        cursor_upd.execute(
+                            "UPDATE bonificacoes SET valor_bonificacao = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ? WHERE id = ?",
+                            (val_f_edit, novo_st_nota, novo_prod_nota, path_novo_arq, int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual)
+                        )
+                        conn_up_dir.commit()
+                        conn_up_dir.close()
+                        st.success("Registro atualizado com sucesso!")
                         st.rerun()
                     except Exception as e: st.error(f"Erro ao atualizar: {e}")
         else: st.info("Nenhuma bonificação encontrada.")
@@ -1496,7 +1483,6 @@ else:
     # ---------------------------------------------------------
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Registro de Baixas das Avarias")
-        
         loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
         
         conn_b_all, db_tb_all = get_db_connection()
@@ -1537,14 +1523,12 @@ else:
         st.info(f"💡 **Saldo Total Disponível para a {loja_ativa_sessao}: R$ {fmt_ptbr(saldo_total_disp_loja, 2)}**")
         
         if notas_com_saldo_loja:
-            with st.expander(f"📌 Notas e Produtos com Saldo Disponível para Uso ({loja_ativa_sessao})", expanded=True):
+            with st.expander(f"📌 Notas com Saldo Disponível ({loja_ativa_sessao})", expanded=True):
                 df_ns_show = pd.DataFrame(notas_com_saldo_loja)
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=200)
-        else:
-            st.warning(f"⚠️ Não há notas com saldo disponível para a {loja_ativa_sessao} no momento.")
 
         conn_prod_v, db_pv = get_db_connection()
         cursor_pv = conn_prod_v.cursor()
@@ -1558,27 +1542,7 @@ else:
             c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
             lista_opcoes_prod_v.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
-        with st.expander("➕ Cadastrar Novo Produto Rapidamente (Hortifrúti)", expanded=False):
-            with st.form("form_cad_prod_rapido_reg_baixa", clear_on_submit=True):
-                col_rp1, col_rp2, col_rp3, col_rp4 = st.columns([1.5, 1.5, 2.5, 1])
-                with col_rp1: r_cod_v = st.text_input("Cód. Produto", value="")
-                with col_rp2: r_bar_v = st.text_input("Cód. Barras", value="")
-                with col_rp3: r_nome_v = st.text_input("Nome do Produto *", value="")
-                with col_rp4: r_und_v = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=0)
-                if st.form_submit_button("Salvar Produto", type="primary"):
-                    if not r_nome_v.strip(): st.error("Informe o nome.")
-                    else:
-                        try:
-                            conn_rp, db_trp = get_db_connection()
-                            cursor_rp = conn_rp.cursor()
-                            cursor_rp.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_trp == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (r_cod_v.strip() if r_cod_v else None, r_bar_v.strip() if r_bar_v else None, r_nome_v.strip().upper(), r_und_v))
-                            conn_rp.commit()
-                            conn_rp.close()
-                            st.success(f"Produto '{r_nome_v.strip().upper()}' cadastrado!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao cadastrar: {e}")
-
-        with st.expander("➕ Registrar Nova Baixa de Avaria (Seguindo o Modelo da Planilha)", expanded=False):
+        with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=False):
             with st.form("form_registro_baixa_modelo", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
@@ -1587,26 +1551,25 @@ else:
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa)
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="")
                 with col_m2:
-                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA (Nota com Saldo)", options=[item["nf_entrada"] for item in notas_com_saldo_loja] if notas_com_saldo_loja else ["Nenhuma Nota Disponível"])
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti (Cód | Barras | Nome)", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0, placeholder="Selecione o produto")
+                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=[item["nf_entrada"] for item in notas_com_saldo_loja] if notas_com_saldo_loja else ["Nenhuma Nota Disponível"])
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=lista_opcoes_prod_v, index=None if lista_opcoes_prod_v else 0)
                 with col_m3:
                     qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="")
                     valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="")
                     
-                nf_baixa_file = st.file_uploader("NF da baixa (Comprovante / Anexo PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dm1, col_dm2 = st.columns(2)
                 with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(), format="DD/MM/YYYY")
                 with col_dm2:
                     hora_baixa_aut = datetime.now().strftime('%H:%M:%S')
-                    st.text_input("Hora da Baixa (Automática)", value=hora_baixa_aut, disabled=True)
+                    st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True)
                     
                 data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}" if data_baixa_man else ""
                 
-                btn_gravar_baixa_mod = st.form_submit_button("✅ Registrar Baixa na Planilha", type="primary")
-                if btn_gravar_baixa_mod:
-                    if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel or not data_baixa_man:
-                        st.error("Preencha todos os campos obrigatórios em branco.")
+                if st.form_submit_button("✅ Registrar Baixa", type="primary"):
+                    if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
+                        st.error("Preencha todos os campos obrigatórios.")
                     else:
                         try:
                             qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
@@ -1616,9 +1579,9 @@ else:
                             
                         nota_selecionada_dict = next((item for item in notas_com_saldo_loja if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
-                            st.error("Nota de entrada selecionada inválida.")
+                            st.error("Nota de entrada inválida.")
                         elif val_avaria_f > nota_selecionada_dict["saldo_restante"]:
-                            st.error(f"❌ O valor da avaria (R$ {fmt_ptbr(val_avaria_f, 2)}) ultrapassa o saldo restante da nota {nf_b_entrada_sel} (R$ {fmt_ptbr(nota_selecionada_dict['saldo_restante'], 2)})!")
+                            st.error(f"❌ O valor da avaria ultrapassa o saldo restante da nota!")
                         else:
                             path_nf_baixa = ""
                             if nf_baixa_file:
@@ -1652,10 +1615,9 @@ else:
                                 )
                                 conn_ins.commit()
                                 conn_ins.close()
-                                st.success("Baixa registrada com sucesso e saldo atualizado em tempo real!")
+                                st.success("Baixa registrada com sucesso!")
                                 st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao salvar baixa: {e}")
+                            except Exception as e: st.error(f"Erro: {e}")
                                 
         st.markdown("---")
         st.subheader("📋 Planilha de Registro de Baixas das Avarias")
@@ -1668,7 +1630,7 @@ else:
         with st.expander("🔍 Filtros da Planilha de Baixas", expanded=True):
             fb1, fb2, fb3 = st.columns(3)
             with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bx, index=idx_filtro_bx)
-            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon. transferen", value="")
+            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon.", value="")
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="")
             
         conn_bx_view, db_tbx_v = get_db_connection()
@@ -1712,7 +1674,7 @@ else:
             
             st.dataframe(df_final_show, use_container_width=True, height=400)
         else:
-            st.info("Nenhum registo de baixa encontrado com os filtros informados.")
+            st.info("Nenhum registo de baixa encontrado.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios e Análise Gerencial de Recebimento")
@@ -1724,7 +1686,7 @@ else:
         conn.close()
         
         if df_roms.empty or df_itens.empty:
-            st.warning("Ainda não existem dados de recebimento cadastrados para gerar relatórios e gráficos.")
+            st.warning("Ainda não existem dados de recebimento cadastrados.")
         else:
             df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
             df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
@@ -1744,7 +1706,7 @@ else:
             if prod_sel != "TODOS OS PRODUTOS": df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
             if dt_inicio and dt_fim: df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
                 
-            if df_filtrado.empty: st.info("Nenhum registo encontrado para os filtros selecionados.")
+            if df_filtrado.empty: st.info("Nenhum registo encontrado.")
             else:
                 st.markdown("---")
                 st.subheader("📈 Indicadores Principais (KPIs)")
@@ -1754,7 +1716,6 @@ else:
                 kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(df_filtrado['quantidade'].sum(), 3)}")
                 kpi4.metric("Principal Fornecedor", str(df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() if not df_filtrado.empty else "N/A"))
                 st.markdown("---")
-                st.subheader("📊 Visualizações Gráficas Profissionais (BI)")
                 
                 col_g1, col_g2 = st.columns(2)
                 with col_g1:
@@ -1767,38 +1728,11 @@ else:
                     fig_qtd = px.bar(top_prods_qtd, x="produto", y="quantidade", text_auto=".2f", color="quantidade", color_continuous_scale="Reds")
                     fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_qtd, use_container_width=True)
-                    
-                if not df_bonf_rel.empty:
-                    st.markdown("---")
-                    st.subheader("🎁 Análise Gerencial de Bonificações e Transferências")
-                    col_bg1, col_bg2 = st.columns(2)
-                    with col_bg1:
-                        fig_bonf_loja = px.bar(df_bonf_rel.groupby("loja")["valor_bonificacao"].sum().reset_index(), x="loja", y="valor_bonificacao", text_auto=".2f", color="valor_bonificacao", color_continuous_scale="Oranges")
-                        fig_bonf_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor Bonificado / Transferido (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                        st.plotly_chart(fig_bonf_loja, use_container_width=True)
-                    with col_bg2:
-                        fig_bonf_pie = px.pie(df_bonf_rel.groupby("status")["valor_bonificacao"].sum().reset_index(), names="status", values="valor_bonificacao", color="status", color_discrete_map={"Disponível": "#2E7D32", "Parcialmente Utilizada": "#FFB300", "Totalmente Utilizada": "#C62828"})
-                        fig_bonf_pie.update_layout(paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                        st.plotly_chart(fig_bonf_pie, use_container_width=True)
-                if not df_baixas_rel.empty:
-                    st.markdown("---")
-                    st.subheader("📉 Análise Gerencial de Baixas e Avarias")
-                    fig_baixas_loja = px.bar(df_baixas_rel.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index(), x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Reds")
-                    fig_baixas_loja.update_layout(xaxis_title="Loja", yaxis_title="Valor da Avaria (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_baixas_loja, use_container_width=True)
-                st.markdown("---")
-                df_export = df_filtrado[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "produto", "quantidade", "unidade", "valor_unitario", "valor_total", "conferente"]].copy()
-                df_export['quantidade'] = df_export['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
-                df_export['valor_unitario'] = df_export['valor_unitario'].apply(lambda x: fmt_ptbr(x, 2))
-                df_export['valor_total'] = df_export['valor_total'].apply(lambda x: fmt_ptbr(x, 2))
-                df_export = df_export.rename(columns={"numero_romaneio": "Romaneio", "loja": "Loja", "data_recebimento": "Data Rec.", "fornecedor": "Fornecedor", "produto": "Produto", "quantidade": "Qtd/Peso", "unidade": "UND", "valor_unitario": "Vl. Unit (R$)", "valor_total": "Vl. Total (R$)", "conferente": "Conferente"})
-                st.dataframe(df_export, use_container_width=True, hide_index=True, height=300)
                 
-                st.download_button(label="📥 Baixar Relatório Consolidado (Excel / CSV)", data=df_export.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
+                st.download_button(label="📥 Baixar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("🥦 Gerenciamento e Cadastro (Produtos & Fornecedores)")
-        
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🚚 Cadastro de Fornecedores"])
         
         with tab_prod:
@@ -1807,19 +1741,19 @@ else:
                     col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
                     with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
                     with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
-                    with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)", value="")
+                    with col_cp3: nome_p = st.text_input("Nome do Produto *", value="")
                     with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
                     if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
-                        if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
+                        if not nome_p.strip(): st.error("O Nome é obrigatório.")
                         else:
                             conn, db_type = get_db_connection()
                             cursor = conn.cursor()
                             try:
                                 cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
                                 conn.commit()
-                                st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
+                                st.success("Cadastrado com sucesso!")
                                 st.rerun()
-                            except Exception as e: st.error(f"Erro ao cadastrar produto: {e}")
+                            except Exception as e: st.error(f"Erro: {e}")
                             finally: conn.close()
                             
             st.markdown("---")
@@ -1832,117 +1766,30 @@ else:
             if produtos_cadastrados:
                 produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
                 df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
-                
                 st.download_button(label="📥 Baixar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=300)
-                
-                # --- EDITAR PRODUTO ---
-                st.markdown("---")
-                st.subheader("✏️ Editar Produto Cadastrado")
-                
-                prod_dict_map = {item[5]: item for item in produtos_com_id_ajustado}
-                prod_ids_list = [item[5] for item in produtos_com_id_ajustado]
-                
-                if "edit_prod_id_sel" not in st.session_state or st.session_state["edit_prod_id_sel"] not in prod_ids_list:
-                    st.session_state["edit_prod_id_sel"] = prod_ids_list[0] if prod_ids_list else None
-
-                def ao_mudar_produto_sel():
-                    pid = st.session_state.get("sel_prod_edit_box")
-                    if pid in prod_dict_map:
-                        p_obj = prod_dict_map[pid]
-                        st.session_state["edit_prod_id_sel"] = pid
-                        st.session_state["val_ep_cod"] = str(p_obj[2]) if p_obj[2] else ""
-                        st.session_state["val_ep_bar"] = str(p_obj[1]) if p_obj[1] else ""
-                        st.session_state["val_ep_nome"] = str(p_obj[3]) if p_obj[3] else ""
-                        st.session_state["val_ep_und"] = str(p_obj[4]) if p_obj[4] else "KG"
-
-                current_pid = st.session_state["edit_prod_id_sel"]
-                initial_p_obj = prod_dict_map.get(current_pid, produtos_com_id_ajustado[0])
-
-                if "val_ep_cod" not in st.session_state: st.session_state["val_ep_cod"] = str(initial_p_obj[2]) if initial_p_obj[2] else ""
-                if "val_ep_bar" not in st.session_state: st.session_state["val_ep_bar"] = str(initial_p_obj[1]) if initial_p_obj[1] else ""
-                if "val_ep_nome" not in st.session_state: st.session_state["val_ep_nome"] = str(initial_p_obj[3]) if initial_p_obj[3] else ""
-                if "val_ep_und" not in st.session_state: st.session_state["val_ep_und"] = str(initial_p_obj[4]) if initial_p_obj[4] else "KG"
-
-                st.selectbox(
-                    "Selecione o produto para editar", 
-                    options=prod_ids_list, 
-                    index=prod_ids_list.index(current_pid) if current_pid in prod_ids_list else 0,
-                    format_func=lambda pid: f"ID {prod_dict_map[pid][0]} - {prod_dict_map[pid][3]} (Cód: {prod_dict_map[pid][2] or 'S/N'} | Barras: {prod_dict_map[pid][1] or 'S/N'})",
-                    key="sel_prod_edit_box",
-                    on_change=ao_mudar_produto_sel
-                )
-
-                with st.form("form_editar_produto"):
-                    c_prod_e = st.text_input("Novo Código do Produto", value=st.session_state["val_ep_cod"])
-                    c_bar_e = st.text_input("Novo Código de Barras", value=st.session_state["val_ep_bar"])
-                    nome_p_e = st.text_input("Novo Nome do Produto", value=st.session_state["val_ep_nome"])
-                    
-                    unidades_disponiveis = ["KG", "UNID", "GRM", "CX"]
-                    idx_und_atual = unidades_disponiveis.index(st.session_state["val_ep_und"]) if st.session_state["val_ep_und"] in unidades_disponiveis else 0
-                    und_p_e = st.selectbox("Nova Unidade Padrão", unidades_disponiveis, index=idx_und_atual)
-                    
-                    if st.form_submit_button("💾 Salvar Alterações do Produto", type="primary"):
-                        if not nome_p_e.strip():
-                            st.error("O Nome do Produto é obrigatório.")
-                        else:
-                            try:
-                                conn_ep, db_t_ep = get_db_connection()
-                                cursor_ep = conn_ep.cursor()
-                                cursor_ep.execute(
-                                    "UPDATE produtos SET codigo_produto = %s, codigo_barras = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_t_ep == "postgres" else "UPDATE produtos SET codigo_produto = ?, codigo_barras = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
-                                    (c_prod_e.strip() if c_prod_e else None, c_bar_e.strip() if c_bar_e else None, nome_p_e.strip().upper(), und_p_e, int(current_pid) if db_t_ep == "postgres" else current_pid)
-                                )
-                                conn_ep.commit()
-                                conn_ep.close()
-                                st.success(f"Produto '{nome_p_e.strip().upper()}' atualizado com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao atualizar produto: {e}")
-
-                # --- EXCLUIR PRODUTO ---
-                st.markdown("---")
-                st.subheader("🗑️ Excluir Produto")
-                col_ex1, col_ex2 = st.columns([3, 1])
-                with col_ex1: prod_para_excluir = st.selectbox("Selecione o produto para excluir", options=produtos_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[2] or 'S/N'} | Barras: {x[1] or 'S/N'})", key="sel_prod_del")
-                with col_ex2:
-                    st.write("")
-                    st.write("")
-                    if st.button("🗑️ Excluir Selecionado", type="secondary", key="btn_del_prod_sel"):
-                        try:
-                            conn_del, db_t_del = get_db_connection()
-                            cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM produtos WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(prod_para_excluir[5]) if db_t_del == "postgres" else prod_para_excluir[5],))
-                            conn_del.commit()
-                            conn_del.close()
-                            st.success(f"Produto '{prod_para_excluir[3]}' excluído!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao excluir: {e}")
             else: st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
             with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
                 with st.form("cad_forn_form", clear_on_submit=True):
                     col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                    with col_fc1: f_cod_input = st.text_input("Código do Fornecedor", value="")
+                    with col_fc1: f_cod_input = st.text_input("Código", value="")
                     with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="")
                     with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="")
                     
-                    col_fc4 = st.columns([1])[0]
-                    with col_fc4: f_cont_input = st.text_input("Nome do Representante / Contato", value="")
-                    
                     if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
-                        if not f_nome_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
+                        if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
                         else:
                             conn, db_type = get_db_connection()
                             cursor = conn.cursor()
                             try:
-                                cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (?, ?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper(), f_cont_input.strip() if f_cont_input else None))
+                                cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper()))
                                 conn.commit()
-                                st.success(f"Fornecedor '{f_nome_input.strip().upper()}' cadastrado com sucesso!")
+                                st.success("Cadastrado com sucesso!")
                                 st.rerun()
-                            except Exception as e: st.error(f"Erro ao cadastrar fornecedor: {e}")
+                            except Exception as e: st.error(f"Erro: {e}")
                             finally: conn.close()
                             
             st.markdown("---")
@@ -1956,98 +1803,18 @@ else:
                 forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
                 df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
                 st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True, height=300)
-                
-                # --- EDITAR FORNECEDOR ---
-                st.markdown("---")
-                st.subheader("✏️ Editar Fornecedor Cadastrado")
-                
-                forn_dict_map = {item[5]: item for item in forn_com_id_ajustado}
-                forn_ids_list = [item[5] for item in forn_com_id_ajustado]
-                
-                if "edit_forn_id_sel" not in st.session_state or st.session_state["edit_forn_id_sel"] not in forn_ids_list:
-                    st.session_state["edit_forn_id_sel"] = forn_ids_list[0] if forn_ids_list else None
-
-                def ao_mudar_forn_sel():
-                    fid = st.session_state.get("sel_forn_edit_box")
-                    if fid in forn_dict_map:
-                        f_obj = forn_dict_map[fid]
-                        st.session_state["edit_forn_id_sel"] = fid
-                        st.session_state["val_ef_cod"] = str(f_obj[1]) if f_obj[1] else ""
-                        st.session_state["val_ef_cnpj"] = str(f_obj[2]) if f_obj[2] else ""
-                        st.session_state["val_ef_nome"] = str(f_obj[3]) if f_obj[3] else ""
-                        st.session_state["val_ef_cont"] = str(f_obj[4]) if f_obj[4] else ""
-
-                current_fid = st.session_state["edit_forn_id_sel"]
-                initial_f_obj = forn_dict_map.get(current_fid, forn_com_id_ajustado[0])
-
-                if "val_ef_cod" not in st.session_state: st.session_state["val_ef_cod"] = str(initial_f_obj[1]) if initial_f_obj[1] else ""
-                if "val_ef_cnpj" not in st.session_state: st.session_state["val_ef_cnpj"] = str(initial_f_obj[2]) if initial_f_obj[2] else ""
-                if "val_ef_nome" not in st.session_state: st.session_state["val_ef_nome"] = str(initial_f_obj[3]) if initial_f_obj[3] else ""
-                if "val_ef_cont" not in st.session_state: st.session_state["val_ef_cont"] = str(initial_f_obj[4]) if initial_f_obj[4] else ""
-
-                st.selectbox(
-                    "Selecione o fornecedor para editar", 
-                    options=forn_ids_list, 
-                    index=forn_ids_list.index(current_fid) if current_fid in forn_ids_list else 0,
-                    format_func=lambda fid: f"ID {forn_dict_map[fid][0]} - {forn_dict_map[fid][3]} (Cód: {forn_dict_map[fid][1] or 'S/N'})",
-                    key="sel_forn_edit_box",
-                    on_change=ao_mudar_forn_sel
-                )
-
-                with st.form("form_editar_fornecedor"):
-                    f_cod_e = st.text_input("Novo Código do Fornecedor", value=st.session_state["val_ef_cod"])
-                    f_cnpj_e = st.text_input("Novo CNPJ", value=st.session_state["val_ef_cnpj"])
-                    f_nome_e = st.text_input("Novo Nome / Razão Social", value=st.session_state["val_ef_nome"])
-                    f_cont_e = st.text_input("Novo Representante / Contato", value=st.session_state["val_ef_cont"])
-                    
-                    if st.form_submit_button("💾 Salvar Alterações do Fornecedor", type="primary"):
-                        if not f_nome_e.strip():
-                            st.error("O Nome do Fornecedor é obrigatório.")
-                        else:
-                            try:
-                                conn_ef, db_t_ef = get_db_connection()
-                                cursor_ef = conn_ef.cursor()
-                                cursor_ef.execute(
-                                    "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s, contato = %s WHERE id = %s" if db_t_ef == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ?, contato = ? WHERE id = ?",
-                                    (f_cod_e.strip() if f_cod_e else None, f_cnpj_e.strip() if f_cnpj_e else None, f_nome_e.strip().upper(), f_cont_e.strip() if f_cont_e else None, int(current_fid) if db_t_ef == "postgres" else current_fid)
-                                )
-                                conn_ef.commit()
-                                conn_ef.close()
-                                st.success(f"Fornecedor '{f_nome_e.strip().upper()}' atualizado com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Erro ao atualizar fornecedor: {e}")
-
-                # --- EXCLUIR FORNECEDOR ---
-                st.markdown("---")
-                st.subheader("🗑️ Excluir Fornecedor")
-                col_exf1, col_exf2 = st.columns([3, 1])
-                with col_exf1: forn_para_excluir = st.selectbox("Selecione o fornecedor para excluir", options=forn_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[3]} (Cód: {x[1] or 'S/N'})", key="sel_forn_del")
-                with col_exf2:
-                    st.write("")
-                    st.write("")
-                    if st.button("🗑️ Excluir Fornecedor", type="secondary", key="btn_del_forn_sel"):
-                        try:
-                            conn_del, db_t_del = get_db_connection()
-                            cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM fornecedores WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(forn_para_excluir[5]) if db_t_del == "postgres" else forn_para_excluir[5],))
-                            conn_del.commit()
-                            conn_del.close()
-                            st.success(f"Fornecedor '{forn_para_excluir[3]}' excluído!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao excluir: {e}")
             else: st.info("Nenhum fornecedor cadastrado.")
 
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
-        with st.expander("➕ Cadastrar Novo Usuário / Conferente", expanded=False):
+        with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
             with st.form("cad_usuario_form", clear_on_submit=True):
                 col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
-                with col_u1: novo_nome = st.text_input("Nome Completo do Usuário", value="")
-                with col_u2: novo_login = st.text_input("Login de Acesso", value="")
+                with col_u1: novo_nome = st.text_input("Nome Completo", value="")
+                with col_u2: novo_login = st.text_input("Login", value="")
                 with col_u3: nova_senha = st.text_input("Senha", type="password", value="")
                 with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0)
-                if st.form_submit_button("➕ Cadastrar Usuário", type="primary"):
+                if st.form_submit_button("➕ Cadastrar", type="primary"):
                     if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
                     else:
                         conn, db_type = get_db_connection()
@@ -2055,9 +1822,9 @@ else:
                         try:
                             cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
                             conn.commit()
-                            st.success(f"Usuário '{novo_nome.strip()}' cadastrado!")
+                            st.success("Cadastrado com sucesso!")
                             st.rerun()
-                        except Exception as e: st.error(f"Erro ao cadastrar: {e}")
+                        except Exception as e: st.error(f"Erro: {e}")
                         finally: conn.close()
                         
         st.markdown("---")
@@ -2071,44 +1838,4 @@ else:
             usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
             df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
             st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True, height=250)
-            
-            st.markdown("---")
-            st.subheader("✏️ Editar Usuário")
-            with st.form("form_editar_usuario"):
-                usr_para_editar = st.selectbox("Selecione o usuário para editar", options=usuarios_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]})", key="sel_usr_edit")
-                novo_nome_edit = st.text_input("Novo Nome Completo", value=usr_para_editar[1] if usr_para_editar else "")
-                novo_login_edit = st.text_input("Novo Login", value=usr_para_editar[2] if usr_para_editar else "")
-                nova_senha_edit = st.text_input("Nova Senha", value=usr_para_editar[3] if usr_para_editar else "", type="password")
-                if st.form_submit_button("💾 Salvar Alterações", type="primary"):
-                    if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip(): st.error("Prrencha todos os campos.")
-                    else:
-                        try:
-                            conn_ed, db_t_ed = get_db_connection()
-                            cursor_ed = conn_ed.cursor()
-                            cursor_ed.execute("UPDATE usuarios SET nome = %s, login = %s, senha = %s WHERE id = %s" if db_t_ed == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ? WHERE id = ?", (novo_nome_edit.strip(), novo_login_edit.strip(), nova_senha_edit.strip(), int(usr_para_editar[5]) if db_t_ed == "postgres" else usr_para_editar[5]))
-                            conn_ed.commit()
-                            conn_ed.close()
-                            st.success("Usuário atualizado!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao atualizar: {e}")
-            
-            st.markdown("---")
-            st.subheader("🗑️ Excluir Usuário")
-            col_ux1, col_ux2 = st.columns([3, 1])
-            with col_ux1: usr_para_excluir = st.selectbox("Selecione o usuário para remover", options=usuarios_com_id_ajustado, format_func=lambda x: f"ID {x[0]} - {x[1]} (Login: {x[2]} - Perfil: {x[4]})", key="sel_usr_del")
-            with col_ux2:
-                st.write("")
-                st.write("")
-                if st.button("🗑️ Remover Usuário", type="secondary", key="btn_del_usr_sel"):
-                    if str(usr_para_excluir[2]) == "908": st.error("Não é permitido excluir o usuário Administrador principal (908)!")
-                    else:
-                        try:
-                            conn_del, db_t_del = get_db_connection()
-                            cursor_del = conn_del.cursor()
-                            cursor_del.execute("DELETE FROM usuarios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(usr_para_excluir[5]) if db_t_del == "postgres" else usr_para_excluir[5],))
-                            conn_del.commit()
-                            conn_del.close()
-                            st.success(f"Usuário '{usr_para_excluir[1]}' removido!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao remover: {e}")
         else: st.info("Nenhum usuário cadastrado.")
