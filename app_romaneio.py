@@ -68,23 +68,29 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DA NOTA FISCAL / ANEXO
+# MODAL PARA VISUALIZAÇÃO DIRETA DA NOTA FISCAL / ANEXO (SEM OBRIGAR DOWNLOAD)
 # ---------------------------------------------------------
-@st.dialog("📄 Visualização da Nota Fiscal / Anexo", width="large")
+@st.dialog("📄 Visualização Direta da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
     if os.path.exists(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
-            st.info(f"📄 Arquivo PDF disponível: **{nome_arquivo}**")
+            st.info(f"📄 Visualizando documento PDF: **{nome_arquivo}**")
+            # Exibe o PDF diretamente na tela embutido no navegador sem precisar baixar
             with open(caminho_foto, "rb") as f_pdf:
-                pdf_bytes = f_pdf.read()
-            st.download_button(
-                label=f"📥 Baixar e Abrir Ficheiro PDF ({nome_arquivo})",
-                data=pdf_bytes,
-                file_name=nome_arquivo,
-                mime="application/pdf",
-                type="primary"
-            )
+                base64_pdf = base64.b64encode(f_pdf.read()).decode('utf-8')
+            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+            st.markdown(pdf_display, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            with open(caminho_foto, "rb") as f_pdf:
+                st.download_button(
+                    label=f"📥 Baixar Ficheiro PDF ({nome_arquivo})",
+                    data=f_pdf.read(),
+                    file_name=nome_arquivo,
+                    mime="application/pdf",
+                    type="secondary"
+                )
         else:
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
             with open(caminho_foto, "rb") as f_img:
@@ -94,7 +100,7 @@ def exibir_foto_modal(caminho_foto):
                 data=img_bytes,
                 file_name=nome_arquivo,
                 mime="application/jpeg",
-                type="primary"
+                type="secondary"
             )
     else:
         st.error("Ficheiro de anexo não encontrado no servidor.")
@@ -1200,7 +1206,6 @@ else:
             st.markdown(f"**Total de romaneios encontrados:** {len(df_rom)}")
             st.markdown("---")
             
-            # --- TABELA DE RESUMO DE ROMANEIOS COM ROLAGEM ---
             df_rom_resumo = df_rom[["numero_romaneio", "tipo_operacao", "loja", "data_recebimento", "fornecedor", "conferente", "status_nota"]].rename(columns={
                 "numero_romaneio": "N° Romaneio",
                 "tipo_operacao": "Tipo",
@@ -1275,8 +1280,8 @@ else:
                     
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
-                        st.image(row['caminho_foto'], width=280, caption="Foto da Mercadoria / Nota Anexada")
-                        if st.button("📄 Visualizar Anexo", key=f"btn_ampliar_foto_{row['id']}"): exibir_foto_modal(row['caminho_foto'])
+                        if st.button("👁️ Visualizar Nota / Anexo Instantaneamente", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                            exibir_foto_modal(row['caminho_foto'])
                             
                     conn_i, db_t_i = get_db_connection()
                     df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
@@ -1308,7 +1313,7 @@ else:
         else: st.info("Nenhum romaneio encontrado.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO
+    # 6. CONTROLE DE BONIFICAÇÃO (COM BOTÕES DE VISUALIZAÇÃO AO LADO DE CADA REGISTRO)
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -1452,37 +1457,25 @@ else:
             )
             st.markdown("")
             
-            # --- TABELA DE BONIFICAÇÃO OTIMIZADA COM SCROLL ---
-            df_bonf_display = df_bonf.copy()
-            df_bonf_display["Valor (R$)"] = df_bonf_display["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_bonf_display["Tipo"] = df_bonf_display["tipo_bonificacao"].fillna("Bonificação")
-            
-            df_tabela_final = df_bonf_display[["numero_nota", "Tipo", "loja", "data_entrada", "Valor (R$)", "status", "produto_hortifruti"]].rename(columns={
-                "numero_nota": "N° Nota",
-                "loja": "Loja",
-                "data_entrada": "Data de Entrada",
-                "status": "Status",
-                "produto_hortifruti": "Produto Hortifrúti"
-            })
-            st.dataframe(df_tabela_final, use_container_width=True, hide_index=True, height=400)
-            
-            st.markdown("---")
-            st.subheader("📄 Visualizar Anexo de Nota Fiscal")
-            opcoes_anexos = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} ({row['status']})") for _, row in df_bonf.iterrows() if row.get("caminho_anexo") and os.path.exists(row.get("caminho_anexo", ""))]
-            
-            if opcoes_anexos:
-                col_anx1, col_anx2 = st.columns([3, 1])
-                with col_anx1:
-                    nota_anexo_sel = st.selectbox("Selecione a nota para ver o comprovante/anexo", options=opcoes_anexos, format_func=lambda x: x[1], key="sel_anexo_bonf_modal")
-                with col_anx2:
-                    st.write("")
-                    st.write("")
-                    if st.button("🔍 Abrir Anexo", type="primary", key="btn_abrir_anexo_bonf"):
-                        anexo_path_alvo = next((r["caminho_anexo"] for _, r in df_bonf.iterrows() if r["id"] == nota_anexo_sel[0]), None)
-                        if anexo_path_alvo:
-                            exibir_foto_modal(anexo_path_alvo)
-            else:
-                st.info("Nenhuma nota com arquivo anexo disponível para visualização rápida no momento.")
+            # --- TABELA DE REGISTROS COM BOTÃO DE VISUALIZAÇÃO AO LADO DE CADA LINHA ---
+            st.markdown("### 📄 Registros e Visualização de Notas Fiscais")
+            for _, r in df_bonf.iterrows():
+                with st.container():
+                    col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7 = st.columns([1.1, 1.5, 1.5, 2, 1.2, 1.5, 1.2])
+                    with col_r1: st.markdown(f"**Nota:** {r['numero_nota']}")
+                    with col_r2: st.markdown(f"**Tipo:** {r.get('tipo_bonificacao', 'Bonificação')}")
+                    with col_r3: st.markdown(f"**Loja:** {r['loja']}")
+                    with col_r4: st.markdown(f"**Data:** {r['data_entrada']}")
+                    with col_r5: st.markdown(f"**R$ {fmt_ptbr(r['valor_bonificacao'], 2)}**")
+                    with col_r6: st.markdown(f"**{r['status']}**")
+                    with col_r7:
+                        anexo_p = r.get("caminho_anexo", "")
+                        if anexo_p and os.path.exists(anexo_p):
+                            if st.button("👁️ Ver Nota", key=f"btn_ver_nota_linha_{r['id']}", type="primary"):
+                                exibir_foto_modal(anexo_p)
+                        else:
+                            st.markdown("<span style='color: gray; font-size: 13px;'>Sem Anexo</span>", unsafe_allow_html=True)
+                    st.markdown("---")
 
             st.markdown("---")
             st.subheader("✏️ Alterar Status da Bonificação")
@@ -1725,7 +1718,6 @@ else:
             df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total disponível"]]
             df_final_show.index = range(1, len(df_final_show) + 1)
             
-            # Tabela de baixas compactada com scroll
             st.dataframe(df_final_show, use_container_width=True, height=400)
         else:
             st.info("Nenhum registo de baixa encontrado com os filtros informados.")
@@ -2096,7 +2088,7 @@ else:
                 novo_login_edit = st.text_input("Novo Login", value=usr_para_editar[2] if usr_para_editar else "")
                 nova_senha_edit = st.text_input("Nova Senha", value=usr_para_editar[3] if usr_para_editar else "", type="password")
                 if st.form_submit_button("💾 Salvar Alterações", type="primary"):
-                    if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip(): st.error("Preencha todos os campos.")
+                    if not novo_nome_edit.strip() or not novo_login_edit.strip() or not nova_senha_edit.strip(): st.error("Prrencha todos os campos.")
                     else:
                         try:
                             conn_ed, db_t_ed = get_db_connection()
