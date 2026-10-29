@@ -122,7 +122,7 @@ if bg_login_path:
 if b64_img:
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -154,15 +154,15 @@ st.markdown(
     }}
     
     .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p {{
-        font-size: 15px !important;
-        font-weight: 800 !important;
+        font-size: 14px !important;
+        font-weight: 700 !important;
         color: #FFFFFF !important;
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
     }}
 
     div[data-testid="stRadio"] label, div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
-        font-size: 16px !important;
+        font-size: 15px !important;
         font-weight: bold !important;
     }}
 
@@ -170,7 +170,7 @@ st.markdown(
         background: transparent !important;
         mix-blend-mode: multiply !important;
         filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 95px !important;
+        max-width: 85px !important;
         width: 100% !important;
         height: auto !important;
         margin: 0 auto !important;
@@ -178,7 +178,7 @@ st.markdown(
     }}
     
     .titulo-logo {{
-        font-size: 2.2rem !important;
+        font-size: 2rem !important;
         font-weight: 900 !important;
         line-height: 1.1 !important;
         margin-bottom: 0px !important;
@@ -186,7 +186,7 @@ st.markdown(
     }}
     .palavra-sup-mercado {{
         color: #4CAF50 !important;
-        font-size: 1.3rem !important;
+        font-size: 1.2rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
         text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.9) !important;
@@ -205,7 +205,7 @@ st.markdown(
         color: #FFFFFF !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.8rem !important;
+        font-size: 2.5rem !important;
         text-shadow: 2px 3px 5px rgba(0, 0, 0, 0.9) !important;
     }}
     
@@ -216,16 +216,16 @@ st.markdown(
     textarea {{
         color: #111111 !important;
         -webkit-text-fill-color: #111111 !important;
-        background-color: #E8ECEF !important;
+        background-color: #F8F9FA !important;
         font-weight: bold !important;
-        font-size: 15px !important;
+        font-size: 14px !important;
         border-radius: 6px !important;
     }}
 
     div[data-baseweb="input"], 
     div[data-baseweb="base-input"], 
     div[data-baseweb="select"] {{
-        background-color: #E8ECEF !important;
+        background-color: #F8F9FA !important;
         border-radius: 6px !important;
         border: 2px solid #2E7D32 !important;
     }}
@@ -237,7 +237,7 @@ st.markdown(
 
     div[data-testid="stFileUploader"], 
     div[data-testid="stFileUploader"] section {{
-        background: rgba(30, 30, 30, 0.75) !important;
+        background: rgba(20, 20, 20, 0.8) !important;
         border: 2px solid rgba(255, 255, 255, 0.6) !important;
         border-radius: 8px !important;
     }}
@@ -247,7 +247,7 @@ st.markdown(
         color: #FFFFFF !important;
         border: 2px solid #FFFFFF !important;
         font-weight: bold !important;
-        font-size: 16px !important;
+        font-size: 15px !important;
         border-radius: 8px !important;
         width: 100% !important;
         box-shadow: 0px 4px 8px rgba(0,0,0,0.6) !important;
@@ -1199,6 +1199,20 @@ else:
         if not df_rom.empty:
             st.markdown(f"**Total de romaneios encontrados:** {len(df_rom)}")
             st.markdown("---")
+            
+            # --- TABELA DE RESUMO DE ROMANEIOS COM ROLAGEM ---
+            df_rom_resumo = df_rom[["numero_romaneio", "tipo_operacao", "loja", "data_recebimento", "fornecedor", "conferente", "status_nota"]].rename(columns={
+                "numero_romaneio": "N° Romaneio",
+                "tipo_operacao": "Tipo",
+                "loja": "Loja",
+                "data_recebimento": "Data",
+                "fornecedor": "Fornecedor",
+                "conferente": "Conferente",
+                "status_nota": "Status"
+            })
+            st.dataframe(df_rom_resumo, use_container_width=True, hide_index=True, height=250)
+            st.markdown("---")
+
             for idx, row in df_rom.iterrows():
                 fornecedor_txt = row['fornecedor'] if row['fornecedor'] else 'N/A'
                 if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip(): fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
@@ -1272,7 +1286,7 @@ else:
                     df_itens_ex['Qtd / Peso'] = df_itens_ex['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
                     df_itens_ex['Vl. Unit'] = df_itens_ex['valor_unitario'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                     df_itens_ex['Total'] = df_itens_ex['valor_total'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                    st.dataframe(df_itens_ex[['produto', 'Qtd / Peso', 'unidade', 'Vl. Unit', 'Total']], use_container_width=True)
+                    st.dataframe(df_itens_ex[['produto', 'Qtd / Peso', 'unidade', 'Vl. Unit', 'Total']], use_container_width=True, height=200)
                     
                     st.markdown(f"**Total do Romaneio: R$ {fmt_ptbr(df_itens['valor_total'].sum(), 2)}**")
                     pdf_buffer = gerar_pdf_romaneio(row.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens.iterrows()], row.get("assinatura_conferente"), row.get("assinatura_entregador"))
@@ -1336,7 +1350,7 @@ else:
                         except Exception as e:
                             st.error(f"Erro ao cadastrar produto: {e}")
 
-        with st.expander("➕ Cadastrar Nova Bonificação", expanded=True):
+        with st.expander("➕ Cadastrar Nova Bonificação", expanded=False):
             with st.form("form_cad_bonificacao", clear_on_submit=True):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
@@ -1438,28 +1452,40 @@ else:
             )
             st.markdown("")
             
+            # --- TABELA DE BONIFICAÇÃO OTIMIZADA COM SCROLL ---
             df_bonf_display = df_bonf.copy()
             df_bonf_display["Valor (R$)"] = df_bonf_display["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             df_bonf_display["Tipo"] = df_bonf_display["tipo_bonificacao"].fillna("Bonificação")
             
-            for _, r in df_bonf_display.iterrows():
-                col_n1, col_n2, col_n3, col_n4, col_n5, col_n6, col_n7 = st.columns([1, 1.4, 1.4, 1.8, 1.2, 1.4, 1.2])
-                with col_n1: st.write(f"**Nota:** {r['numero_nota']}")
-                with col_n2: st.write(f"**Tipo:** {r['Tipo']}")
-                with col_n3: st.write(f"**Loja:** {r['loja']}")
-                with col_n4: st.write(f"**Data:** {r['data_entrada']}")
-                with col_n5: st.write(f"**{r['Valor (R$)']}**")
-                with col_n6: st.write(f"**Status:** {r['status']}")
-                with col_n7:
-                    caminho_anexo_reg = r.get("caminho_anexo", "")
-                    if caminho_anexo_reg and os.path.exists(caminho_anexo_reg):
-                        if st.button("📄 Ver Nota", key=f"btn_ver_anexo_{r['id']}"):
-                            exibir_foto_modal(caminho_anexo_reg)
-                    else:
-                        st.write("Sem Anexo")
-                st.markdown("---")
+            df_tabela_final = df_bonf_display[["numero_nota", "Tipo", "loja", "data_entrada", "Valor (R$)", "status", "produto_hortifruti"]].rename(columns={
+                "numero_nota": "N° Nota",
+                "loja": "Loja",
+                "data_entrada": "Data de Entrada",
+                "status": "Status",
+                "produto_hortifruti": "Produto Hortifrúti"
+            })
+            st.dataframe(df_tabela_final, use_container_width=True, hide_index=True, height=400)
             
-            st.markdown("### ✏️ Alterar Status da Bonificação")
+            st.markdown("---")
+            st.subheader("📄 Visualizar Anexo de Nota Fiscal")
+            opcoes_anexos = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} ({row['status']})") for _, row in df_bonf.iterrows() if row.get("caminho_anexo") and os.path.exists(row.get("caminho_anexo", ""))]
+            
+            if opcoes_anexos:
+                col_anx1, col_anx2 = st.columns([3, 1])
+                with col_anx1:
+                    nota_anexo_sel = st.selectbox("Selecione a nota para ver o comprovante/anexo", options=opcoes_anexos, format_func=lambda x: x[1], key="sel_anexo_bonf_modal")
+                with col_anx2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🔍 Abrir Anexo", type="primary", key="btn_abrir_anexo_bonf"):
+                        anexo_path_alvo = next((r["caminho_anexo"] for _, r in df_bonf.iterrows() if r["id"] == nota_anexo_sel[0]), None)
+                        if anexo_path_alvo:
+                            exibir_foto_modal(anexo_path_alvo)
+            else:
+                st.info("Nenhuma nota com arquivo anexo disponível para visualização rápida no momento.")
+
+            st.markdown("---")
+            st.subheader("✏️ Alterar Status da Bonificação")
             col_alt_b1, col_alt_b2, col_alt_b3 = st.columns([2.5, 2, 1.5])
             opcoes_bonf_alterar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} - {row['produto_hortifruti']} (R$ {fmt_ptbr(row['valor_bonificacao'], 2)}) | Status: {row['status']}") for _, row in df_bonf.iterrows()]
             
@@ -1531,7 +1557,7 @@ else:
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
-                st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True)
+                st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=200)
         else:
             st.warning(f"⚠️ Não há notas com saldo disponível para a {loja_ativa_sessao} no momento.")
 
@@ -1567,7 +1593,7 @@ else:
                             st.rerun()
                         except Exception as e: st.error(f"Erro ao cadastrar: {e}")
 
-        with st.expander("➕ Registrar Nova Baixa de Avaria (Seguindo o Modelo da Planilha)", expanded=True):
+        with st.expander("➕ Registrar Nova Baixa de Avaria (Seguindo o Modelo da Planilha)", expanded=False):
             with st.form("form_registro_baixa_modelo", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
@@ -1699,7 +1725,8 @@ else:
             df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total disponível"]]
             df_final_show.index = range(1, len(df_final_show) + 1)
             
-            st.dataframe(df_final_show, use_container_width=True)
+            # Tabela de baixas compactada com scroll
+            st.dataframe(df_final_show, use_container_width=True, height=400)
         else:
             st.info("Nenhum registo de baixa encontrado com os filtros informados.")
 
@@ -1781,7 +1808,7 @@ else:
                 df_export['valor_unitario'] = df_export['valor_unitario'].apply(lambda x: fmt_ptbr(x, 2))
                 df_export['valor_total'] = df_export['valor_total'].apply(lambda x: fmt_ptbr(x, 2))
                 df_export = df_export.rename(columns={"numero_romaneio": "Romaneio", "loja": "Loja", "data_recebimento": "Data Rec.", "fornecedor": "Fornecedor", "produto": "Produto", "quantidade": "Qtd/Peso", "unidade": "UND", "valor_unitario": "Vl. Unit (R$)", "valor_total": "Vl. Total (R$)", "conferente": "Conferente"})
-                st.dataframe(df_export, use_container_width=True, hide_index=True)
+                st.dataframe(df_export, use_container_width=True, hide_index=True, height=300)
                 
                 st.download_button(label="📥 Baixar Relatório Consolidado (Excel / CSV)", data=df_export.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_Supernova_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
@@ -1791,25 +1818,25 @@ else:
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🚚 Cadastro de Fornecedores"])
         
         with tab_prod:
-            with st.form("cad_prod_form", clear_on_submit=True):
-                st.subheader("Cadastrar Novo Produto")
-                col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-                with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
-                with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
-                with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)", value="")
-                with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
-                if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
-                    if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
-                    else:
-                        conn, db_type = get_db_connection()
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
-                            conn.commit()
-                            st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao cadastrar produto: {e}")
-                        finally: conn.close()
+            with st.expander("➕ Cadastrar Novo Produto", expanded=False):
+                with st.form("cad_prod_form", clear_on_submit=True):
+                    col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
+                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
+                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
+                    with col_cp3: nome_p = st.text_input("Nome do Produto (Obrigatório)", value="")
+                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
+                    if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
+                        if not nome_p.strip(): st.error("O Nome do Produto é obrigatório.")
+                        else:
+                            conn, db_type = get_db_connection()
+                            cursor = conn.cursor()
+                            try:
+                                cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
+                                conn.commit()
+                                st.success(f"Produto '{nome_p.strip().upper()}' cadastrado com sucesso!")
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro ao cadastrar produto: {e}")
+                            finally: conn.close()
                             
             st.markdown("---")
             conn, db_type = get_db_connection()
@@ -1824,9 +1851,9 @@ else:
                 
                 st.download_button(label="📥 Baixar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_Supernova_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
                 st.markdown("")
-                st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True)
+                st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=300)
                 
-                # --- EDITAR PRODUTO (FORA DO FORM PARA SUPORTAR CALLBACK) ---
+                # --- EDITAR PRODUTO ---
                 st.markdown("---")
                 st.subheader("✏️ Editar Produto Cadastrado")
                 
@@ -1911,28 +1938,28 @@ else:
             else: st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
-            with st.form("cad_forn_form", clear_on_submit=True):
-                st.subheader("Cadastrar Novo Fornecedor")
-                col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                with col_fc1: f_cod_input = st.text_input("Código do Fornecedor", value="")
-                with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="")
-                with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="")
-                
-                col_fc4 = st.columns([1])[0]
-                with col_fc4: f_cont_input = st.text_input("Nome do Representante / Contato", value="")
-                
-                if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
-                    if not f_nome_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
-                    else:
-                        conn, db_type = get_db_connection()
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (?, ?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper(), f_cont_input.strip() if f_cont_input else None))
-                            conn.commit()
-                            st.success(f"Fornecedor '{f_nome_input.strip().upper()}' cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro ao cadastrar fornecedor: {e}")
-                        finally: conn.close()
+            with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
+                with st.form("cad_forn_form", clear_on_submit=True):
+                    col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
+                    with col_fc1: f_cod_input = st.text_input("Código do Fornecedor", value="")
+                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="")
+                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="")
+                    
+                    col_fc4 = st.columns([1])[0]
+                    with col_fc4: f_cont_input = st.text_input("Nome do Representante / Contato", value="")
+                    
+                    if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
+                        if not f_nome_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
+                        else:
+                            conn, db_type = get_db_connection()
+                            cursor = conn.cursor()
+                            try:
+                                cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome, contato) VALUES (?, ?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper(), f_cont_input.strip() if f_cont_input else None))
+                                conn.commit()
+                                st.success(f"Fornecedor '{f_nome_input.strip().upper()}' cadastrado com sucesso!")
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro ao cadastrar fornecedor: {e}")
+                            finally: conn.close()
                             
             st.markdown("---")
             conn, db_type = get_db_connection()
@@ -1944,9 +1971,9 @@ else:
             if fornecedores_cadastrados:
                 forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
                 df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
-                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True)
+                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True, height=300)
                 
-                # --- EDITAR FORNECEDOR (FORA DO FORM PARA SUPORTAR CALLBACK) ---
+                # --- EDITAR FORNECEDOR ---
                 st.markdown("---")
                 st.subheader("✏️ Editar Fornecedor Cadastrado")
                 
@@ -2029,25 +2056,25 @@ else:
 
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
-        with st.form("cad_usuario_form", clear_on_submit=True):
-            st.subheader("Cadastrar Novo Usuário / Conferente")
-            col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
-            with col_u1: novo_nome = st.text_input("Nome Completo do Usuário", value="")
-            with col_u2: novo_login = st.text_input("Login de Acesso", value="")
-            with col_u3: nova_senha = st.text_input("Senha", type="password", value="")
-            with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0)
-            if st.form_submit_button("➕ Cadastrar Usuário", type="primary"):
-                if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
-                else:
-                    conn, db_type = get_db_connection()
-                    cursor = conn.cursor()
-                    try:
-                        cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
-                        conn.commit()
-                        st.success(f"Usuário '{novo_nome.strip()}' cadastrado!")
-                        st.rerun()
-                    except Exception as e: st.error(f"Erro ao cadastrar: {e}")
-                    finally: conn.close()
+        with st.expander("➕ Cadastrar Novo Usuário / Conferente", expanded=False):
+            with st.form("cad_usuario_form", clear_on_submit=True):
+                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
+                with col_u1: novo_nome = st.text_input("Nome Completo do Usuário", value="")
+                with col_u2: novo_login = st.text_input("Login de Acesso", value="")
+                with col_u3: nova_senha = st.text_input("Senha", type="password", value="")
+                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0)
+                if st.form_submit_button("➕ Cadastrar Usuário", type="primary"):
+                    if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
+                    else:
+                        conn, db_type = get_db_connection()
+                        cursor = conn.cursor()
+                        try:
+                            cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
+                            conn.commit()
+                            st.success(f"Usuário '{novo_nome.strip()}' cadastrado!")
+                            st.rerun()
+                        except Exception as e: st.error(f"Erro ao cadastrar: {e}")
+                        finally: conn.close()
                         
         st.markdown("---")
         conn, db_type = get_db_connection()
@@ -2059,7 +2086,7 @@ else:
         if usuarios_cadastrados:
             usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
             df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
-            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True)
+            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True, height=250)
             
             st.markdown("---")
             st.subheader("✏️ Editar Usuário")
