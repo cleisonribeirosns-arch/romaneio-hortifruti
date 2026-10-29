@@ -20,6 +20,13 @@ import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
+# Tenta importar fitz (PyMuPDF) para renderizar PDFs como imagens sem bloqueio do navegador
+try:
+    import fitz  # PyMuPDF
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
+
 # Tenta importar psycopg2 para suporte ao PostgreSQL permanente
 try:
     import psycopg2
@@ -68,7 +75,7 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DIRETA DA NOTA FISCAL / ANEXO (SEM OBRIGAR DOWNLOAD)
+# MODAL PARA VISUALIZAÇÃO DIRETA DA NOTA FISCAL / ANEXO (RENDERIZADO COMO IMAGEM)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualização Direta da Nota Fiscal / Anexo", width="large")
 def exibir_foto_modal(caminho_foto):
@@ -76,11 +83,18 @@ def exibir_foto_modal(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
         if caminho_foto.lower().endswith(".pdf"):
             st.info(f"📄 Visualizando documento PDF: **{nome_arquivo}**")
-            # Exibe o PDF diretamente na tela embutido no navegador sem precisar baixar
-            with open(caminho_foto, "rb") as f_pdf:
-                base64_pdf = base64.b64encode(f_pdf.read()).decode('utf-8')
-            pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
-            st.markdown(pdf_display, unsafe_allow_html=True)
+            if HAS_PYMUPDF:
+                try:
+                    doc_pdf = fitz.open(caminho_foto)
+                    for page_index in range(len(doc_pdf)):
+                        page = doc_pdf[page_index]
+                        pix = page.get_pixmap(dpi=150)
+                        img_bytes = pix.tobytes("png")
+                        st.image(img_bytes, caption=f"Página {page_index + 1} de {len(doc_pdf)}", use_container_width=True)
+                except Exception as e:
+                    st.error(f"Erro ao renderizar PDF como imagem: {e}")
+            else:
+                st.warning("Biblioteca de renderização de PDF não instalada. Exibindo opção de download direto.")
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
@@ -89,7 +103,7 @@ def exibir_foto_modal(caminho_foto):
                     data=f_pdf.read(),
                     file_name=nome_arquivo,
                     mime="application/pdf",
-                    type="secondary"
+                    type="primary"
                 )
         else:
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
@@ -100,13 +114,13 @@ def exibir_foto_modal(caminho_foto):
                 data=img_bytes,
                 file_name=nome_arquivo,
                 mime="application/jpeg",
-                type="secondary"
+                type="primary"
             )
     else:
         st.error("Ficheiro de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO
+# 2. ESTILOS E PADRÃO VISUAL DO APLICATIVO (UI MODERNA CORPORATIVA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -128,7 +142,7 @@ if bg_login_path:
 if b64_img:
     css_fundo = f"""
         .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/jpeg;base64,{b64_img}") !important;
+            background-image: linear-gradient(rgba(0,0,0,0.75), rgba(0,0,0,0.75)), url("data:image/jpeg;base64,{b64_img}") !important;
             background-size: cover !important;
             background-position: center !important;
             background-repeat: no-repeat !important;
@@ -166,10 +180,27 @@ st.markdown(
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
     }}
 
+    /* Estilização Moderna para o Menu Radio Superior */
+    div[data-testid="stRadio"] > div {{
+        background: rgba(20, 30, 20, 0.85) !important;
+        padding: 12px 18px !important;
+        border-radius: 12px !important;
+        border: 2px solid rgba(76, 175, 80, 0.6) !important;
+        box-shadow: 0px 6px 15px rgba(0,0,0,0.6) !important;
+        gap: 15px !important;
+    }}
     div[data-testid="stRadio"] label, div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
-        font-size: 15px !important;
-        font-weight: bold !important;
+        font-size: 14px !important;
+        font-weight: 800 !important;
+    }}
+
+    /* Estilização para Expanders e Cards Corporativos */
+    div[data-testid="stExpander"] {{
+        background: rgba(15, 25, 18, 0.85) !important;
+        border: 1px solid rgba(76, 175, 80, 0.5) !important;
+        border-radius: 10px !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.5) !important;
     }}
 
     img[data-testid="stImage"] {{
@@ -304,14 +335,6 @@ def init_db():
             )
         """)
         cursor.execute("""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='fornecedores' and column_name='contato') THEN
-                    ALTER TABLE fornecedores ADD COLUMN contato VARCHAR(255);
-                END IF;
-            END $$;
-        """)
-        cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneios (
                 id SERIAL PRIMARY KEY,
                 numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
@@ -332,26 +355,6 @@ def init_db():
                 tipo_operacao VARCHAR(50) DEFAULT 'Compra',
                 observacoes TEXT
             )
-        """)
-        cursor.execute("""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='status_nota') THEN
-                    ALTER TABLE romaneios ADD COLUMN status_nota VARCHAR(50) DEFAULT 'Pendente';
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='tipo_operacao') THEN
-                    ALTER TABLE romaneios ADD COLUMN tipo_operacao VARCHAR(50) DEFAULT 'Compra';
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='observacoes') THEN
-                    ALTER TABLE romaneios ADD COLUMN observacoes TEXT;
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='loja_origem') THEN
-                    ALTER TABLE romaneios ADD COLUMN loja_origem VARCHAR(255);
-                END IF;
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='romaneios' and column_name='loja_destino') THEN
-                    ALTER TABLE romaneios ADD COLUMN loja_destino VARCHAR(255);
-                END IF;
-            END $$;
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
@@ -376,14 +379,6 @@ def init_db():
                 caminho_anexo TEXT,
                 tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação'
             )
-        """)
-        cursor.execute("""
-            DO $$ 
-            BEGIN 
-                IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='bonificacoes' and column_name='tipo_bonificacao') THEN
-                    ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação';
-                END IF;
-            END $$;
         """)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
@@ -436,11 +431,6 @@ def init_db():
                 contato TEXT
             )
         """)
-        cursor.execute("PRAGMA table_info(fornecedores)")
-        colunas_forn = [col[1] for col in cursor.fetchall()]
-        if "contato" not in colunas_forn:
-            cursor.execute("ALTER TABLE fornecedores ADD COLUMN contato TEXT")
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -463,19 +453,6 @@ def init_db():
                 observacoes TEXT
             )
         """)
-        cursor.execute("PRAGMA table_info(romaneios)")
-        colunas_rom = [col[1] for col in cursor.fetchall()]
-        if "status_nota" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN status_nota TEXT DEFAULT 'Pendente'")
-        if "tipo_operacao" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN tipo_operacao TEXT DEFAULT 'Compra'")
-        if "observacoes" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN observacoes TEXT")
-        if "loja_origem" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN loja_origem TEXT")
-        if "loja_destino" not in colunas_rom:
-            cursor.execute("ALTER TABLE romaneios ADD COLUMN loja_destino TEXT")
-
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS romaneio_itens (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -501,10 +478,6 @@ def init_db():
                 tipo_bonificacao TEXT DEFAULT 'Bonificação'
             )
         """)
-        cursor.execute("PRAGMA table_info(bonificacoes)")
-        colunas_bonf = [col[1] for col in cursor.fetchall()]
-        if "tipo_bonificacao" not in colunas_bonf:
-            cursor.execute("ALTER TABLE bonificacoes ADD COLUMN tipo_bonificacao TEXT DEFAULT 'Bonificação'")
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS baixas_avarias (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1280,7 +1253,7 @@ else:
                     
                     if row['caminho_foto'] and os.path.exists(row['caminho_foto']):
                         st.write("")
-                        if st.button("👁️ Visualizar Nota / Anexo Instantaneamente", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                        if st.button("👁️ Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
                             exibir_foto_modal(row['caminho_foto'])
                             
                     conn_i, db_t_i = get_db_connection()
@@ -1313,7 +1286,7 @@ else:
         else: st.info("Nenhum romaneio encontrado.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO (COM BOTÕES DE VISUALIZAÇÃO AO LADO DE CADA REGISTRO)
+    # 6. CONTROLE DE BONIFICAÇÃO (TABELA COM ROLAGEM, ORDENADO POR DATA E HORÁRIO)
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -1423,6 +1396,7 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", key="f_prod_bonf")
                 
         conn_b_sel, db_tb_sel = get_db_connection()
+        # Ordenado por id DESC para garantir ordem da mais recente (data e horário) para mais antiga
         df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
         conn_b_sel.close()
         
@@ -1457,25 +1431,43 @@ else:
             )
             st.markdown("")
             
-            # --- TABELA DE REGISTROS COM BOTÃO DE VISUALIZAÇÃO AO LADO DE CADA LINHA ---
+            # --- TABELA COM ROLAGEM E BOTÃO DE VISUALIZAÇÃO EM CADA LINHA ---
             st.markdown("### 📄 Registros e Visualização de Notas Fiscais")
-            for _, r in df_bonf.iterrows():
-                with st.container():
-                    col_r1, col_r2, col_r3, col_r4, col_r5, col_r6, col_r7 = st.columns([1.1, 1.5, 1.5, 2, 1.2, 1.5, 1.2])
-                    with col_r1: st.markdown(f"**Nota:** {r['numero_nota']}")
-                    with col_r2: st.markdown(f"**Tipo:** {r.get('tipo_bonificacao', 'Bonificação')}")
-                    with col_r3: st.markdown(f"**Loja:** {r['loja']}")
-                    with col_r4: st.markdown(f"**Data:** {r['data_entrada']}")
-                    with col_r5: st.markdown(f"**R$ {fmt_ptbr(r['valor_bonificacao'], 2)}**")
-                    with col_r6: st.markdown(f"**{r['status']}**")
-                    with col_r7:
-                        anexo_p = r.get("caminho_anexo", "")
-                        if anexo_p and os.path.exists(anexo_p):
-                            if st.button("👁️ Ver Nota", key=f"btn_ver_nota_linha_{r['id']}", type="primary"):
-                                exibir_foto_modal(anexo_p)
-                        else:
-                            st.markdown("<span style='color: gray; font-size: 13px;'>Sem Anexo</span>", unsafe_allow_html=True)
-                    st.markdown("---")
+            
+            df_bonf_tabela = df_bonf.copy()
+            df_bonf_tabela["Valor (R$)"] = df_bonf_tabela["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            df_bonf_tabela["Ação Anexo"] = df_bonf_tabela["caminho_anexo"].apply(lambda p: "Ver Nota" if p and os.path.exists(p) else "Sem Anexo")
+            
+            df_bonf_tabela = df_bonf_tabela.rename(columns={
+                "numero_nota": "N° Nota",
+                "tipo_bonificacao": "Tipo",
+                "loja": "Loja",
+                "data_entrada": "Data e Hora",
+                "status": "Status",
+                "produto_hortifruti": "Produto Hortifrúti"
+            })
+            
+            cols_exibidas = df_bonf_tabela[["N° Nota", "Tipo", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Ação Anexo"]]
+            cols_exibidas.index = range(1, len(cols_exibidas) + 1)
+            
+            st.dataframe(cols_exibidas, use_container_width=True, height=350)
+            
+            # Atalho interativo para abrir notas diretamente pelo número da nota
+            st.markdown("#### 🔍 Visualizar Nota Fiscal / Anexo do Registro")
+            opcoes_notas_anexo = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} ({row['data_entrada']})") for _, row in df_bonf.iterrows() if row.get("caminho_anexo") and os.path.exists(row.get("caminho_anexo", ""))]
+            if opcoes_notas_anexo:
+                col_sel_n, col_btn_n = st.columns([3, 1])
+                with col_sel_n:
+                    nota_escolhida_modal = st.selectbox("Selecione a Nota para Visualizar o Anexo", options=opcoes_notas_anexo, format_func=lambda x: x[1], key="sel_nota_modal_direto")
+                with col_btn_n:
+                    st.write("")
+                    st.write("")
+                    if st.button("👁️ Abrir Nota Selecionada", type="primary", key="btn_abrir_nota_direta"):
+                        caminho_alvo = next((r["caminho_anexo"] for _, r in df_bonf.iterrows() if r["id"] == nota_escolhida_modal[0]), "")
+                        if caminho_alvo:
+                            exibir_foto_modal(caminho_alvo)
+            else:
+                st.info("Nenhum anexo disponível nas notas listadas.")
 
             st.markdown("---")
             st.subheader("✏️ Alterar Status da Bonificação")
@@ -1705,7 +1697,7 @@ else:
             df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             df_display_plan["Saldo"] = df_display_plan["saldo_restante_nota"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             df_display_plan["Saldo Total disponível"] = df_display_plan["saldo_total_disponivel"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_plan["NF da baixa"] = df_display_plan["nf_baixa"].apply(lambda x: "📄 Ver Anexo" if x and os.path.exists(str(x)) else "S/Anexo")
+            df_display_plan["NF da baixa"] = df_display_plan["nf_baixa"].apply(lambda x: "Ver Anexo" if x and os.path.exists(str(x)) else "S/Anexo")
             
             df_display_plan = df_display_plan.rename(columns={
                 "loja_baixa": "LOJAS",
