@@ -91,7 +91,7 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
         pass
 
 # ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS (COM CONVERSÃO PÁGINA A PÁGINA OU PDF)
+# MODAL DE VISUALIZAÇÃO DE ANEXOS (SEGURO CONTRA BLOQUEIO DO CHROME)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualizador de Documentos", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
@@ -134,20 +134,16 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                         """, unsafe_allow_html=True)
                         st.image(img_bytes, use_container_width=True)
                     pdf_renderizado = True
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.warning(f"Erro ao processar páginas do PDF: {e}")
             
             if not pdf_renderizado:
-                try:
-                    with open(caminho_foto, "rb") as f_pdf_embed:
-                        b64_pdf = base64.b64encode(f_pdf_embed.read()).decode("utf-8")
-                    st.markdown(f"""
-                        <div style="text-align: center; margin-bottom: 15px; background-color: #FFFFFF; padding: 6px; border-radius: 8px;">
-                            <iframe src="data:application/pdf;base64,{b64_pdf}#view=FitH" width="100%" height="500px" style="border: none;"></iframe>
-                        </div>
-                    """, unsafe_allow_html=True)
-                except Exception as e:
-                    st.warning(f"Não foi possível renderizar o PDF: {e}")
+                st.markdown("""
+                <div style="background-color: #2d2e30; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #3c4043; margin-bottom: 15px;">
+                    <p style="color: #ffffff; font-size: 15px; font-weight: bold; margin-bottom: 8px;">Visualização direta de PDF restrita pelo navegador</p>
+                    <p style="color: #9aa0a6; font-size: 13px; margin: 0;">Para visualizar o documento diretamente na tela, adicione <b>PyMuPDF</b> ao seu ficheiro <code>requirements.txt</code>.</p>
+                </div>
+                """, unsafe_allow_html=True)
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
@@ -1959,7 +1955,11 @@ else:
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
-            with st.form("cad_usuario_form", clear_on_submit=True):
+            <ElicitationsGroup message="Deseja detalhar mais alguma alteração neste bloco ou prefere que revise alguma outra parte específica do painel administrativo?">
+  <Elicitation label="Sim, revisar logins" query="Pode revisar a lógica de autenticação e perfis de utilizador?"/>
+  <Elicitation label="Não, está ótimo" query="O código está perfeito, muito obrigado!"/>
+</ElicitationsGroup>
+with st.form("cad_usuario_form", clear_on_submit=True):
                 col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
                 with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
                 with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
