@@ -1955,11 +1955,7 @@ else:
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
-            <ElicitationsGroup message="Deseja detalhar mais alguma alteração neste bloco ou prefere que revise alguma outra parte específica do painel administrativo?">
-  <Elicitation label="Sim, revisar logins" query="Pode revisar a lógica de autenticação e perfis de utilizador?"/>
-  <Elicitation label="Não, está ótimo" query="O código está perfeito, muito obrigado!"/>
-</ElicitationsGroup>
-with st.form("cad_usuario_form", clear_on_submit=True):
+            with st.form("cad_usuario_form", clear_on_submit=True):
                 col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
                 with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
                 with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
