@@ -139,7 +139,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         st.error("Ficheiro de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL (MENUS MAIORES E CAMPOS LIMPOS)
+# 2. ESTILOS E PADRÃO VISUAL (OPÇÃO A: CARDS INDIVIDUAIS CORPORATIVOS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -199,25 +199,56 @@ st.markdown(
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
     }}
 
-    /* Estilização Aumentada e Moderna para o Menu Radio Superior */
+    /* Estilização OPÇÃO A: Menu Radio transformado em Cards Corporativos com Borda Elegante */
     div[data-testid="stRadio"] > div {{
-        background: linear-gradient(135deg, rgba(15, 25, 18, 0.98), rgba(25, 45, 28, 0.98)) !important;
-        padding: 18px 26px !important;
-        border-radius: 16px !important;
-        border: 2px solid rgba(76, 175, 80, 0.6) !important;
-        box-shadow: 0px 10px 25px rgba(0,0,0,0.8) !important;
-        gap: 24px !important;
+        background: transparent !important;
+        padding: 0px !important;
+        border: none !important;
+        box-shadow: none !important;
+        gap: 14px !important;
+        flex-wrap: wrap !important;
+        display: flex !important;
     }}
-    div[data-testid="stRadio"] label, div[data-testid="stRadio"] label p {{
+    
+    /* Transformando cada opção do radio em um Card Individual Corporativo */
+    div[data-testid="stRadio"] label {{
+        background: linear-gradient(135deg, rgba(25, 35, 28, 0.92), rgba(15, 22, 17, 0.95)) !important;
+        padding: 14px 22px !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(255, 255, 255, 0.18) !important;
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.5) !important;
+        margin-bottom: 8px !important;
+        transition: all 0.2s ease-in-out !important;
+        cursor: pointer !important;
+        flex: 1 1 auto !important;
+        min-width: 200px !important;
+        justify-content: center !important;
+    }}
+
+    div[data-testid="stRadio"] label:hover {{
+        background: linear-gradient(135deg, rgba(35, 50, 40, 0.95), rgba(20, 30, 22, 0.98)) !important;
+        border-color: rgba(255, 255, 255, 0.4) !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.7) !important;
+    }}
+
+    /* Card selecionado */
+    div[data-testid="stRadio"] label[data-checked="true"] {{
+        background: linear-gradient(135deg, #1B5E20, #2E7D32) !important;
+        border: 1px solid #FFFFFF !important;
+        box-shadow: 0px 6px 18px rgba(0, 0, 0, 0.8) !important;
+    }}
+
+    div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
-        font-size: 16px !important;
-        font-weight: 900 !important;
+        font-size: 15px !important;
+        font-weight: 800 !important;
     }}
 
     /* Estilização para Expanders e Cards Corporativos */
     div[data-testid="stExpander"] {{
         background: rgba(15, 25, 18, 0.88) !important;
-        border: 1px solid rgba(76, 175, 80, 0.4) !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
         border-radius: 10px !important;
         box-shadow: 0px 4px 10px rgba(0,0,0,0.5) !important;
     }}
@@ -319,7 +350,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS (COM SUPORTE A PERSISTÊNCIA DE ANEXOS)
+# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA DE ANEXOS)
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -878,8 +909,8 @@ if st.session_state["usuario_logado"] is None:
             st.markdown("<h3>HortiControl - Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
         with st.form("form_login"):
-            login_input = st.text_input("Usuário / Login ou Nome Completo", value="", placeholder="")
-            senha_input = st.text_input("Senha", type="password", value="", placeholder="")
+            login_input = st.text_input("Usuário / Login ou Nome Completo", value="")
+            senha_input = st.text_input("Senha", type="password", value="")
             
             loja_login_sel = st.selectbox(
                 "Selecione a Loja de Atuação", 
@@ -921,7 +952,7 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    # MENU COM ÍCONES PROFISSIONAIS E TAMANHO AMPLIADO
+    # OPÇÃO A: MENU EM CARDS INDIVIDUAIS CORPORATIVOS
     opcoes_menu_map = {
         "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
         "🔍 Consultar Romaneios": "Consultar Romaneios",
@@ -1035,7 +1066,7 @@ else:
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
 
-                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", value="", placeholder="", key=tel_key, on_change=formatar_tel)
+                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", value="", key=tel_key, on_change=formatar_tel)
 
             with col_tel2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, key=f"pag_vista_{k_suffix}")
@@ -1053,15 +1084,15 @@ else:
             
         col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns([2.5, 1.2, 1.2, 1.2, 1])
         with col_p1:
-            prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + prod_nomes_keys, index=0, placeholder="", key=f"prod_sel_{k_suffix}_{i_suffix}")
+            prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + prod_nomes_keys, index=0, key=f"prod_sel_{k_suffix}_{i_suffix}")
             prod_nome_real = prod_dict[prod_label_sel][0] if prod_label_sel and prod_label_sel != "" and prod_dict else ""
         with col_p2:
             und_padrao = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
             und_sel = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=(["KG", "UNID", "GRM", "CX"].index(und_padrao) if und_padrao in ["KG", "UNID", "GRM", "CX"] else 0), key=f"und_sel_{k_suffix}_{i_suffix}")
         with col_p3:
-            qtd_str_input = st.text_input("Qtd / Peso", value="", placeholder="", key=f"qtd_{k_suffix}_{i_suffix}")
+            qtd_str_input = st.text_input("Qtd / Peso", value="", key=f"qtd_{k_suffix}_{i_suffix}")
         with col_p4:
-            val_unit_str_input = st.text_input("Valor Unit. (R$)", value="", placeholder="", key=f"vunit_{k_suffix}_{i_suffix}")
+            val_unit_str_input = st.text_input("Valor Unit. (R$)", value="", key=f"vunit_{k_suffix}_{i_suffix}")
         with col_p5:
             st.write("")
             st.write("")
@@ -1103,7 +1134,7 @@ else:
         fotos_upload = st.file_uploader("Foto da Mercadoria / Nota Fiscal", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
         
         st.subheader("4. Informações Adicionais / Observações")
-        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", value="", placeholder="", key=f"obs_{k_suffix}")
+        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", value="", key=f"obs_{k_suffix}")
         
         st.subheader("5. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
@@ -1210,9 +1241,9 @@ else:
             col_f0, col_f_op, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1.2, 1, 1, 1, 1])
             with col_f0: filtro_loja_sel = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro, index=idx_loja_padrao_filtro)
             with col_f_op: filtro_tipo_op_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_filtro, index=0)
-            with col_f1: filtro_num = st.text_input("Número do Romaneio", value="", placeholder="")
-            with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="", placeholder="")
-            with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="", placeholder="")
+            with col_f1: filtro_num = st.text_input("Número do Romaneio", value="")
+            with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="")
+            with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="")
             with col_f4:
                 filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
                 filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
@@ -1297,7 +1328,7 @@ else:
                     
                     if row.get('caminho_foto') or row.get('foto_b64'):
                         st.write("")
-                        if st.button(" Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                        if st.button("👁️ Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
                             exibir_foto_modal(row['caminho_foto'], row.get('foto_b64'))
                             
                     conn_i, db_t_i = get_db_connection()
@@ -1330,7 +1361,7 @@ else:
         else: st.info("Nenhum romaneio encontrado.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO (COM ANEXOS PERSISTENTES)
+    # 6. CONTROLE DE BONIFICAÇÃO (CAMPOS TOTALMENTE LIMPOS)
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -1351,15 +1382,15 @@ else:
             with st.form("form_cad_bonificacao", clear_on_submit=True):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
-                    num_nota_bonf = st.text_input("N° Nota Fiscal", value="", placeholder="")
+                    num_nota_bonf = st.text_input("N° Nota Fiscal", value="")
                     lista_lojas_cad_b = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_cad_b = lista_lojas_cad_b.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_cad_b else 0
                     loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, key="loja_bonf_sel")
                 with col_b2:
-                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="", placeholder="")
+                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="")
                     tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["", "Bonificação", "Transferência de Bonificação"], index=0, key="tipo_bonf_input_sel")
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0, placeholder="")
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0)
                     anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
@@ -1409,10 +1440,10 @@ else:
 
         with st.expander("🔍 Filtros de Busca", expanded=True):
             f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", value="", placeholder="", key="f_nota_bonf")
+            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", value="", key="f_nota_bonf")
             with f_col2: f_loja = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bonf, index=idx_filtro_bonf, key="f_loja_bonf")
             with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], key="f_status_bonf")
-            with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="", key="f_prod_bonf")
+            with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", key="f_prod_bonf")
                 
         conn_b_sel, db_tb_sel = get_db_connection()
         df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
@@ -1493,13 +1524,13 @@ else:
                 st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
                 col_e1, col_e2, col_e3 = st.columns(3)
                 with col_e1:
-                    novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","), placeholder="")
+                    novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","))
                 with col_e2:
                     status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
                     idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
                     novo_st_nota = st.selectbox("Status", status_atuais_lst, index=idx_st_atual)
                 with col_e3:
-                    novo_prod_nota = st.text_input("Produto Hortifrúti", value=reg_obj_atual["produto_hortifruti"], placeholder="")
+                    novo_prod_nota = st.text_input("Produto Hortifrúti", value=reg_obj_atual["produto_hortifruti"])
                 
                 novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
                 
@@ -1528,7 +1559,7 @@ else:
         else: st.info("Nenhuma bonificação encontrada.")
 
     # ---------------------------------------------------------
-    # 7. CONTROLE DE BAIXA DE AVARIAS (COM ANEXOS PERSISTENTES)
+    # 7. CONTROLE DE BAIXA DE AVARIAS
     # ---------------------------------------------------------
     elif menu == "Controle de Baixa de Avarias":
         st.title("📉 Registro de Baixas das Avarias")
@@ -1598,13 +1629,13 @@ else:
                     lista_lojas_reg = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa)
-                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="")
+                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="")
                 with col_m2:
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=[item["nf_entrada"] for item in notas_com_saldo_loja] if notas_com_saldo_loja else ["Nenhuma Nota Disponível"])
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, placeholder="")
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0)
                 with col_m3:
-                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="", placeholder="")
-                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="", placeholder="")
+                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="")
+                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="")
                     
                 nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"])
                 
@@ -1682,8 +1713,8 @@ else:
         with st.expander("🔍 Filtros da Planilha de Baixas", expanded=True):
             fb1, fb2, fb3 = st.columns(3)
             with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bx, index=idx_filtro_bx)
-            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon.", value="", placeholder="")
-            with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="")
+            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon.", value="")
+            with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="")
             
         conn_bx_view, db_tbx_v = get_db_connection()
         df_bx_table = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
@@ -1807,9 +1838,9 @@ else:
             with st.expander("➕ Cadastrar Novo Produto", expanded=False):
                 with st.form("cad_prod_form", clear_on_submit=True):
                     col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="", placeholder="")
-                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="", placeholder="")
-                    with col_cp3: nome_p = st.text_input("Nome do Produto *", value="", placeholder="")
+                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="")
+                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="")
+                    with col_cp3: nome_p = st.text_input("Nome do Produto *", value="")
                     with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
                     if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                         if not nome_p.strip(): st.error("O Nome é obrigatório.")
@@ -1843,9 +1874,9 @@ else:
             with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
                 with st.form("cad_forn_form", clear_on_submit=True):
                     col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                    with col_fc1: f_cod_input = st.text_input("Código", value="", placeholder="")
-                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="", placeholder="")
-                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="", placeholder="")
+                    with col_fc1: f_cod_input = st.text_input("Código", value="")
+                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="")
+                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="")
                     
                     if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
                         if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
@@ -1878,9 +1909,9 @@ else:
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
             with st.form("cad_usuario_form", clear_on_submit=True):
                 col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
-                with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="")
-                with col_u2: novo_login = st.text_input("Login", value="", placeholder="")
-                with col_u3: nova_senha = st.text_input("Senha", type="password", value="", placeholder="")
+                with col_u1: novo_nome = st.text_input("Nome Completo", value="")
+                with col_u2: novo_login = st.text_input("Login", value="")
+                with col_u3: nova_senha = st.text_input("Senha", type="password", value="")
                 with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0)
                 if st.form_submit_button("➕ Cadastrar", type="primary"):
                     if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
