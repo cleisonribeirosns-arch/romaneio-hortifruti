@@ -1297,7 +1297,7 @@ else:
                     
                     if row.get('caminho_foto') or row.get('foto_b64'):
                         st.write("")
-                        if st.button("👁️ Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                        if st.button(" Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
                             exibir_foto_modal(row['caminho_foto'], row.get('foto_b64'))
                             
                     conn_i, db_t_i = get_db_connection()
