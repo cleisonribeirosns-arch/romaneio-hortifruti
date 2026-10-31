@@ -91,29 +91,57 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
         pass
 
 # ---------------------------------------------------------
-# MODAL PARA VISUALIZAÇÃO DIRETA DA NOTA FISCAL / ANEXO
+# MODAL DE VISUALIZAÇÃO DE ANEXOS (INSPIRADO NO GOOGLE DRIVE)
 # ---------------------------------------------------------
-@st.dialog("📄 Visualização Direta da Nota Fiscal / Anexo", width="large")
+@st.dialog("📄 Visualizador Estilo Google Drive", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
     if b64_dados:
         salvar_arquivo_fisico_do_b64(caminho_foto, b64_dados)
         
     if os.path.exists(caminho_foto):
         nome_arquivo = os.path.basename(caminho_foto)
-        if caminho_foto.lower().endswith(".pdf"):
-            st.info(f"📄 Visualizando documento PDF: **{nome_arquivo}**")
+        is_pdf = caminho_foto.lower().endswith(".pdf")
+        
+        # Barra superior estilo Google Drive (Dark Header)
+        ext_tag = "PDF" if is_pdf else "IMG"
+        bg_tag_color = "#EA4335" if is_pdf else "#4285F4"
+        
+        st.markdown(f"""
+        <div style="background-color: #202124; padding: 12px 18px; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3c4043; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="background-color: {bg_tag_color}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">{ext_tag}</span>
+                <span style="color: #ffffff; font-weight: 600; font-size: 15px;">{nome_arquivo}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if is_pdf:
             if HAS_PYMUPDF:
                 try:
                     doc_pdf = fitz.open(caminho_foto)
-                    for page_index in range(len(doc_pdf)):
+                    total_paginas = len(doc_pdf)
+                    
+                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>Exibindo documento completo • {total_paginas} página(s)</p>", unsafe_allow_html=True)
+                    
+                    for page_index in range(total_paginas):
                         page = doc_pdf[page_index]
                         pix = page.get_pixmap(dpi=150)
                         img_bytes = pix.tobytes("png")
-                        st.image(img_bytes, caption=f"Página {page_index + 1} de {len(doc_pdf)}", use_container_width=True)
+                        
+                        # Container simulando a folha de papel no visualizador do Drive
+                        st.markdown(f"""
+                        <div style="background-color: #2d2e30; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px solid #3c4043;">
+                            <p style="color: #bdc1c6; font-size: 12px; margin-bottom: 8px; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.image(img_bytes, use_container_width=True)
                 except Exception as e:
                     st.error(f"Erro ao renderizar PDF como imagem: {e}")
             else:
-                st.warning("Biblioteca de renderização de PDF não instalada.")
+                with open(caminho_foto, "rb") as f:
+                    base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
@@ -125,6 +153,11 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                     type="primary"
                 )
         else:
+            st.markdown(f"""
+            <div style="background-color: #2d2e30; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px solid #3c4043;">
+                <p style="color: #bdc1c6; font-size: 12px; margin-bottom: 8px; font-weight: bold;">Visualização de Imagem / Comprovante</p>
+            </div>
+            """, unsafe_allow_html=True)
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
             with open(caminho_foto, "rb") as f_img:
                 img_bytes = f_img.read()
@@ -139,7 +172,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         st.error("Ficheiro de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL (OPÇÃO A: CARDS CORPORATIVOS LIMPOS)
+# 2. ESTILOS E PADRÃO VISUAL
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -198,7 +231,6 @@ st.markdown(
         color: #FFFFFF !important;
     }}
 
-    /* Estilização OPÇÃO A: Cards Individuais Corporativos (Sem Bordas Verdes, Tom Neutro Grafite) */
     div[data-testid="stRadio"] > div {{
         background: transparent !important;
         padding: 0px !important;
@@ -341,7 +373,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA DE ANEXOS E MIGRAÇÃO)
+# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -442,7 +474,6 @@ def init_db():
             )
         """)
         
-        # Migração automática para garantir colunas novas em bases existentes no Postgres
         cursor.execute("ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT;")
         cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT;")
         cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS ass_conf_b64 TEXT;")
@@ -552,7 +583,6 @@ def init_db():
             )
         """)
         
-        # Migração / verificação de colunas para SQLite
         try: cursor.execute("ALTER TABLE bonificacoes ADD COLUMN anexo_b64 TEXT;")
         except Exception: pass
         try: cursor.execute("ALTER TABLE romaneios ADD COLUMN foto_b64 TEXT;")
@@ -962,7 +992,6 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    # OPÇÃO A: MENU EM CARDS CORPORATIVOS LADO A LADO
     opcoes_menu_map = {
         "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
         "🔍 Consultar Romaneios": "Consultar Romaneios",
