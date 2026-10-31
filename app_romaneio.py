@@ -81,7 +81,7 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
     if not caminho_alvo or not b64_str:
         return
     try:
-        if not os.path.exists(caminho_alvo):
+        if not os.path.exists(caminho_alvo) or os.path.getsize(caminho_alvo) == 0:
             diretorio = os.path.dirname(caminho_alvo)
             if diretorio and not os.path.exists(diretorio):
                 os.makedirs(diretorio)
@@ -91,14 +91,17 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
         pass
 
 # ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS (SEGURO CONTRA BLOQUEIO DO CHROME)
+# MODAL DE VISUALIZAÇÃO DE ANEXOS (SEGURO CONTRA BLOQUEIO E ARQUIVO VAZIO)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualizador de Documentos", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
+    if not caminho_foto and b64_dados:
+        caminho_foto = os.path.join("uploads", "documento_anexado.pdf")
+
     if b64_dados:
         salvar_arquivo_fisico_do_b64(caminho_foto, b64_dados)
         
-    if os.path.exists(caminho_foto):
+    if caminho_foto and os.path.exists(caminho_foto) and os.path.getsize(caminho_foto) > 0:
         nome_arquivo = os.path.basename(caminho_foto)
         is_pdf = caminho_foto.lower().endswith(".pdf")
         
@@ -171,7 +174,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                 type="primary"
             )
     else:
-        st.error("Ficheiro de anexo não encontrado no servidor.")
+        st.error("Ficheiro de anexo não encontrado no servidor ou o registo não possui conteúdo binário válido.")
 
 # ---------------------------------------------------------
 # 2. ESTILOS E PADRÃO VISUAL
