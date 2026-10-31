@@ -139,7 +139,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         st.error("Ficheiro de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL (OPÇÃO A: CARDS INDIVIDUAIS CORPORATIVOS)
+# 2. ESTILOS E PADRÃO VISUAL (OPÇÃO B: GUIAS HORIZONTAIS INTEGRADAS)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -199,49 +199,42 @@ st.markdown(
         text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.9) !important;
     }}
 
-    /* Estilização OPÇÃO A: Menu Radio transformado em Cards Corporativos com Borda Elegante */
+    /* Estilização OPÇÃO B: Menu em Barra Estilo Guias Corporativas Horizontais */
     div[data-testid="stRadio"] > div {{
-        background: transparent !important;
-        padding: 0px !important;
-        border: none !important;
-        box-shadow: none !important;
-        gap: 14px !important;
-        flex-wrap: wrap !important;
+        background: linear-gradient(135deg, rgba(18, 28, 20, 0.95), rgba(12, 18, 14, 0.98)) !important;
+        padding: 12px 18px !important;
+        border-radius: 14px !important;
+        border: 1px solid rgba(255, 255, 255, 0.2) !important;
+        box-shadow: 0px 8px 20px rgba(0,0,0,0.7) !important;
+        gap: 16px !important;
         display: flex !important;
+        flex-direction: row !important;
+        overflow-x: auto !important;
     }}
-    
-    /* Transformando cada opção do radio em um Card Individual Corporativo */
+
     div[data-testid="stRadio"] label {{
-        background: linear-gradient(135deg, rgba(25, 35, 28, 0.92), rgba(15, 22, 17, 0.95)) !important;
-        padding: 14px 22px !important;
-        border-radius: 12px !important;
-        border: 1px solid rgba(255, 255, 255, 0.18) !important;
-        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.5) !important;
-        margin-bottom: 8px !important;
+        background: rgba(255, 255, 255, 0.05) !important;
+        padding: 10px 18px !important;
+        border-radius: 8px !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
         transition: all 0.2s ease-in-out !important;
-        cursor: pointer !important;
-        flex: 1 1 auto !important;
-        min-width: 200px !important;
-        justify-content: center !important;
+        white-space: nowrap !important;
     }}
 
     div[data-testid="stRadio"] label:hover {{
-        background: linear-gradient(135deg, rgba(35, 50, 40, 0.95), rgba(20, 30, 22, 0.98)) !important;
-        border-color: rgba(255, 255, 255, 0.4) !important;
-        transform: translateY(-2px) !important;
-        box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.7) !important;
+        background: rgba(76, 175, 80, 0.2) !important;
+        border-color: rgba(76, 175, 80, 0.5) !important;
     }}
 
-    /* Card selecionado */
     div[data-testid="stRadio"] label[data-checked="true"] {{
         background: linear-gradient(135deg, #1B5E20, #2E7D32) !important;
         border: 1px solid #FFFFFF !important;
-        box-shadow: 0px 6px 18px rgba(0, 0, 0, 0.8) !important;
+        box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.6) !important;
     }}
 
     div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
-        font-size: 15px !important;
+        font-size: 14px !important;
         font-weight: 800 !important;
     }}
 
@@ -952,7 +945,7 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    # OPÇÃO A: MENU EM CARDS INDIVIDUAIS CORPORATIVOS
+    # OPÇÃO B: MENU EM GUIAS HORIZONTAIS CORPORATIVAS (COM ÍCONE DE PASTA/ARQUIVO PARA CADASTROS)
     opcoes_menu_map = {
         "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
         "🔍 Consultar Romaneios": "Consultar Romaneios",
@@ -962,7 +955,7 @@ else:
     if is_admin:
         opcoes_menu_map.update({
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🥦 Cadastros": "Gerenciar Cadastros (Produtos)",
+            "📁 Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         })
     
@@ -1328,7 +1321,7 @@ else:
                     
                     if row.get('caminho_foto') or row.get('foto_b64'):
                         st.write("")
-                        if st.button("👁️ Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                        if st.button("📄 Abrir Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
                             exibir_foto_modal(row['caminho_foto'], row.get('foto_b64'))
                             
                     conn_i, db_t_i = get_db_connection()
@@ -1361,7 +1354,7 @@ else:
         else: st.info("Nenhum romaneio encontrado.")
 
     # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO (CAMPOS TOTALMENTE LIMPOS)
+    # 6. CONTROLE DE BONIFICAÇÃO (SEM ÍCONE DE OLHO E COM ANEXOS PERSISTENTES)
     # ---------------------------------------------------------
     elif menu == "Controle de Bonificação":
         st.title("🎁 Controle de Bonificação Hortifrúti")
@@ -1515,7 +1508,7 @@ else:
                 caminho_nota_alvo = reg_obj_atual.get("caminho_anexo", "")
                 b64_anexo_reg = reg_obj_atual.get("anexo_b64", "")
                 if caminho_nota_alvo or b64_anexo_reg:
-                    if st.button("👁️ Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
+                    if st.button("📄 Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
                         exibir_foto_modal(caminho_nota_alvo, b64_anexo_reg)
                 else:
                     st.warning("Este registro não possui arquivo de nota anexado.")
@@ -1762,7 +1755,7 @@ else:
             st.dataframe(df_final_show, use_container_width=True, height=400)
             
             st.markdown("---")
-            st.subheader("👁️ Visualizar Anexo de Baixa")
+            st.subheader("📄 Visualizar Anexo de Baixa")
             opcoes_baixas_ver = [(row["id"], f"Loja: {row['loja_baixa']} | Ref: {row['ref_bon_transferen']} | NF Entrada: {row['nf_b_entrada']}") for _, row in df_bx_table.iterrows() if row.get("nf_baixa") or row.get("nf_baixa_b64")]
             if opcoes_baixas_ver:
                 escolha_bx_ver = st.selectbox("Selecione a baixa para abrir o comprovante/anexo", options=opcoes_baixas_ver, format_func=lambda x: x[1])
@@ -1831,7 +1824,7 @@ else:
                 st.download_button(label="📥 Baixar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("🥦 Gerenciamento e Cadastro (Produtos & Fornecedores)")
+        st.title("📁 Gerenciamento e Cadastro (Produtos & Fornecedores)")
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🚚 Cadastro de Fornecedores"])
         
         with tab_prod:
