@@ -19,6 +19,7 @@ from reportlab.platypus import (
 import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
+from zoneinfo import ZoneInfo
 
 # Tenta importar fitz (PyMuPDF) para conversão visual e renderização de PDF em imagem
 try:
@@ -792,7 +793,7 @@ def gerar_pdf_produtos(produtos_data):
     else:
         logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
 
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now().strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 15))
@@ -829,7 +830,7 @@ def gerar_pdf_bonificacoes(df_bonf_data):
         if logo_path: break
 
     logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Controle de Bonificação", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Controle de Bonificação", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 15))
@@ -876,7 +877,7 @@ def gerar_pdf_baixas(df_baixas_data):
         if logo_path: break
 
     logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Registro de Baixas de Avarias", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now().strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Registro de Baixas de Avarias", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
     story.append(Spacer(1, 12))
@@ -1068,14 +1069,14 @@ else:
             col1, col2, col3 = st.columns([1, 1, 1])
             with col1:
                 if f"num_rom_auto_{k_suffix}" not in st.session_state:
-                    data_hoje_str = datetime.now().strftime("%Y%m%d%H%M%S")
+                    data_hoje_str = datetime.now(ZoneInfo("America/Manaus")).strftime("%Y%m%d%H%M%S")
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
 
             with col2:
-                data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
+                data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
@@ -1446,9 +1447,9 @@ else:
                 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
                 with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
-                with col_dt2: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dt2: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY")
                 with col_dt3:
-                    hora_auto = datetime.now().strftime('%H:%M:%S')
+                    hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
                 
                 dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
@@ -1524,7 +1525,7 @@ else:
             st.download_button(
                 label="📥 Descarregar Relatório de Bonificação em PDF",
                 data=pdf_bonf_bytes,
-                file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf",
+                file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
                 type="primary",
                 key="btn_download_pdf_bonf"
@@ -1691,9 +1692,9 @@ else:
                 nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"])
                 
                 col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(), format="DD/MM/YYYY")
+                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY")
                 with col_dm2:
-                    hora_baixa_aut = datetime.now().strftime('%H:%M:%S')
+                    hora_baixa_aut = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True)
                     
                 data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}" if data_baixa_man else ""
@@ -1781,7 +1782,7 @@ else:
             st.download_button(
                 label="📥 Descarregar Planilha de Baixas de Avarias em PDF",
                 data=pdf_bytes_bx,
-                file_name=f"Registro_Baixas_Avarias_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf",
+                file_name=f"Registro_Baixas_Avarias_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
                 type="primary",
                 key="btn_download_pdf_planilha_baixas"
@@ -1845,10 +1846,10 @@ else:
             with col_f1: loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + list(df_roms["loja"].unique()), placeholder="Selecione...", key="rel_filter_loja")
             with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
             with col_f3:
-                dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now()
+                dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
                 dt_inicio = st.date_input("Data Início", value=dt_min, format="DD/MM/YYYY", key="rel_filter_dt_ini")
             with col_f4:
-                dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now()
+                dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
                 dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
                 
             df_filtrado = df_full.copy()
@@ -1879,7 +1880,7 @@ else:
                     fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_qtd, use_container_width=True)
                 
-                st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
+                st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("📦🚚 Gerenciamento e Cadastro (Produtos & Fornecedores)")
@@ -1916,7 +1917,7 @@ else:
             if produtos_cadastrados:
                 produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
                 df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
-                st.download_button(label="📥 Descarregar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
+                st.download_button(label="📥 Descarregar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=300)
             else: st.info("Nenhum produto cadastrado.")
