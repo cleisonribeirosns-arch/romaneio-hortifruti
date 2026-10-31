@@ -341,7 +341,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA DE ANEXOS)
+# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA DE ANEXOS E MIGRAÇÃO)
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -441,6 +441,13 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
         """)
+        
+        # Migração automática para garantir colunas novas em bases existentes no Postgres
+        cursor.execute("ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT;")
+        cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT;")
+        cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS ass_conf_b64 TEXT;")
+        cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS ass_ent_b64 TEXT;")
+        cursor.execute("ALTER TABLE baixas_avarias ADD COLUMN IF NOT EXISTS nf_baixa_b64 TEXT;")
         
         cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
         if not cursor.fetchone():
@@ -544,6 +551,18 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
         """)
+        
+        # Migração / verificação de colunas para SQLite
+        try: cursor.execute("ALTER TABLE bonificacoes ADD COLUMN anexo_b64 TEXT;")
+        except Exception: pass
+        try: cursor.execute("ALTER TABLE romaneios ADD COLUMN foto_b64 TEXT;")
+        except Exception: pass
+        try: cursor.execute("ALTER TABLE romaneios ADD COLUMN ass_conf_b64 TEXT;")
+        except Exception: pass
+        try: cursor.execute("ALTER TABLE romaneios ADD COLUMN ass_ent_b64 TEXT;")
+        except Exception: pass
+        try: cursor.execute("ALTER TABLE baixas_avarias ADD COLUMN nf_baixa_b64 TEXT;")
+        except Exception: pass
         
         cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
         if not cursor.fetchone():
@@ -943,7 +962,7 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    # OPÇÃO A: MENU EM CARDS CORPORATIVOS LADO A LADO (COM ÍCONE JUNÇÃO DE PRODUTO + FORNECEDOR PARA CADASTROS)
+    # OPÇÃO A: MENU EM CARDS CORPORATIVOS LADO A LADO
     opcoes_menu_map = {
         "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
         "🔍 Consultar Romaneios": "Consultar Romaneios",
