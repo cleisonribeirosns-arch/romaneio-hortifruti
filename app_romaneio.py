@@ -91,9 +91,9 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
         pass
 
 # ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS (INSPIRADO NO GOOGLE DRIVE)
+# MODAL DE VISUALIZAÇÃO DE ANEXOS (ESTILO GOOGLE DRIVE SEGURO)
 # ---------------------------------------------------------
-@st.dialog("📄 Visualizador Estilo Google Drive", width="large")
+@st.dialog("📄 Visualizador de Documentos", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
     if b64_dados:
         salvar_arquivo_fisico_do_b64(caminho_foto, b64_dados)
@@ -102,10 +102,10 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         nome_arquivo = os.path.basename(caminho_foto)
         is_pdf = caminho_foto.lower().endswith(".pdf")
         
-        # Barra superior estilo Google Drive (Dark Header)
         ext_tag = "PDF" if is_pdf else "IMG"
         bg_tag_color = "#EA4335" if is_pdf else "#4285F4"
         
+        # Barra superior estilo Google Drive (Dark Header)
         st.markdown(f"""
         <div style="background-color: #202124; padding: 12px 18px; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3c4043; margin-bottom: 15px;">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -121,27 +121,23 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                     doc_pdf = fitz.open(caminho_foto)
                     total_paginas = len(doc_pdf)
                     
-                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>Exibindo documento completo • {total_paginas} página(s)</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>Exibindo documento • {total_paginas} página(s)</p>", unsafe_allow_html=True)
                     
                     for page_index in range(total_paginas):
                         page = doc_pdf[page_index]
                         pix = page.get_pixmap(dpi=150)
                         img_bytes = pix.tobytes("png")
                         
-                        # Container simulando a folha de papel no visualizador do Drive
                         st.markdown(f"""
-                        <div style="background-color: #2d2e30; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px solid #3c4043;">
-                            <p style="color: #bdc1c6; font-size: 12px; margin-bottom: 8px; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
+                        <div style="background-color: #2d2e30; padding: 10px; border-radius: 6px; margin-bottom: 10px; text-align: center; border: 1px solid #3c4043;">
+                            <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
                         </div>
                         """, unsafe_allow_html=True)
                         st.image(img_bytes, use_container_width=True)
                 except Exception as e:
                     st.error(f"Erro ao renderizar PDF como imagem: {e}")
             else:
-                with open(caminho_foto, "rb") as f:
-                    base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="600px" type="application/pdf"></iframe>'
-                st.markdown(pdf_display, unsafe_allow_html=True)
+                st.warning("A biblioteca PyMuPDF não está instalada no ambiente para renderizar o PDF visualmente.")
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
@@ -154,8 +150,8 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                 )
         else:
             st.markdown(f"""
-            <div style="background-color: #2d2e30; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px solid #3c4043;">
-                <p style="color: #bdc1c6; font-size: 12px; margin-bottom: 8px; font-weight: bold;">Visualização de Imagem / Comprovante</p>
+            <div style="background-color: #2d2e30; padding: 10px; border-radius: 6px; margin-bottom: 10px; text-align: center; border: 1px solid #3c4043;">
+                <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Visualização de Imagem / Comprovante</p>
             </div>
             """, unsafe_allow_html=True)
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
