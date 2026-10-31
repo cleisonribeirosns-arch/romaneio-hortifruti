@@ -1005,8 +1005,11 @@ else:
         def atualizar_por_select():
             s_selecionado = st.session_state.get(f"sel_forn_{k_suffix}", "")
             st.session_state[f"val_sel_forn_{k_suffix}"] = s_selecionado
+            novo_cod = ""
             if s_selecionado in forn_por_nome:
-                st.session_state[f"val_cod_forn_{k_suffix}"] = forn_por_nome[s_selecionado]
+                novo_cod = forn_por_nome[s_selecionado]
+            st.session_state[f"val_cod_forn_{k_suffix}"] = novo_cod
+            st.session_state[f"in_cod_forn_{k_suffix}"] = novo_cod
 
         with st.expander("1. Cabeçalho do Recebimento", expanded=True):
             col1, col2, col3 = st.columns([1, 1, 1])
@@ -1040,7 +1043,11 @@ else:
                     idx_sel = forn_nomes_keys.index(atual_sel) + 1
 
                 fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=idx_sel, placeholder="Selecione o fornecedor...", key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
-                cod_fornecedor = st.text_input("Código do Fornecedor (Automático)", value=st.session_state[f"val_cod_forn_{k_suffix}"], disabled=True, key=f"in_cod_forn_{k_suffix}")
+                
+                if f"in_cod_forn_{k_suffix}" not in st.session_state:
+                    st.session_state[f"in_cod_forn_{k_suffix}"] = st.session_state[f"val_cod_forn_{k_suffix}"]
+
+                cod_fornecedor = st.text_input("Código do Fornecedor (Automático)", key=f"in_cod_forn_{k_suffix}", disabled=True)
 
             col_tel1, col_tel2 = st.columns([2, 2])
             with col_tel1:
