@@ -20,7 +20,7 @@ import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
-# Tenta importar fitz (PyMuPDF) opcionalmente para renderização avançada
+# Tenta importar fitz (PyMuPDF) para conversão visual e renderização de PDF em imagem
 try:
     import fitz  # PyMuPDF
     HAS_PYMUPDF = True
@@ -91,7 +91,7 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
         pass
 
 # ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS (ESTILO GOOGLE DRIVE SEGURO)
+# MODAL DE VISUALIZAÇÃO DE ANEXOS (COM CONVERSÃO PÁGINA A PÁGINA OU PDF)
 # ---------------------------------------------------------
 @st.dialog("📄 Visualizador de Documentos", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
@@ -105,7 +105,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         ext_tag = "PDF" if is_pdf else "IMG"
         bg_tag_color = "#EA4335" if is_pdf else "#4285F4"
         
-        # Barra superior estilo Google Drive (Dark Header)
+        # Barra superior estilo Google Drive
         st.markdown(f"""
         <div style="background-color: #202124; padding: 12px 18px; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3c4043; margin-bottom: 15px;">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -121,14 +121,14 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                 try:
                     doc_pdf = fitz.open(caminho_foto)
                     total_paginas = len(doc_pdf)
-                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>Exibindo documento • {total_paginas} página(s)</p>", unsafe_allow_html=True)
+                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>PDF convertido visualmente • {total_paginas} página(s)</p>", unsafe_allow_html=True)
                     
                     for page_index in range(total_paginas):
                         page = doc_pdf[page_index]
                         pix = page.get_pixmap(dpi=150)
                         img_bytes = pix.tobytes("png")
                         st.markdown(f"""
-                        <div style="background-color: #2d2e30; padding: 8px; border-radius: 6px; margin-bottom: 8px; text-align: center; border: 1px solid #3c4043;">
+                        <div style="background-color: #2d2e30; padding: 6px; border-radius: 6px; margin-bottom: 6px; text-align: center; border: 1px solid #3c4043;">
                             <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -142,17 +142,17 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                     with open(caminho_foto, "rb") as f_pdf_embed:
                         b64_pdf = base64.b64encode(f_pdf_embed.read()).decode("utf-8")
                     st.markdown(f"""
-                        <div style="text-align: center; margin-bottom: 15px; background-color: #202124; padding: 10px; border-radius: 8px;">
-                            <embed src="data:application/pdf;base64,{b64_pdf}" width="100%" height="500px" type="application/pdf">
+                        <div style="text-align: center; margin-bottom: 15px; background-color: #FFFFFF; padding: 6px; border-radius: 8px;">
+                            <iframe src="data:application/pdf;base64,{b64_pdf}#view=FitH" width="100%" height="500px" style="border: none;"></iframe>
                         </div>
                     """, unsafe_allow_html=True)
                 except Exception as e:
-                    st.warning(f"Não foi possível pré-visualizar o PDF diretamente: {e}")
+                    st.warning(f"Não foi possível renderizar o PDF: {e}")
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
                 st.download_button(
-                    label=f"📥 Descarregar Ficheiro PDF ({nome_arquivo})",
+                    label=f"📥 Descarregar Ficheiro PDF Original ({nome_arquivo})",
                     data=f_pdf.read(),
                     file_name=nome_arquivo,
                     mime="application/pdf",
@@ -164,7 +164,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                 <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Visualização de Imagem / Comprovativo</p>
             </div>
             """, unsafe_allow_html=True)
-            st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
+            st.image(caminho_foto, use_container_width=True, caption="Documento Anexado")
             with open(caminho_foto, "rb") as f_img:
                 img_bytes = f_img.read()
             st.download_button(
@@ -1183,7 +1183,7 @@ else:
                 st.rerun()
                 
         st.subheader("3. Anexo de Foto da Mercadoria / Nota Fiscal")
-        fotos_upload = st.file_uploader("Foto da Mercadoria / Nota Fiscal", type=["jpg", "jpeg", "png"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
+        fotos_upload = st.file_uploader("Foto da Mercadoria / Nota Fiscal", type=["jpg", "jpeg", "png", "pdf"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
         
         st.subheader("4. Informações Adicionais / Observações")
         observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", value="", placeholder="Insira observações relevantes aqui...", key=f"obs_{k_suffix}")
