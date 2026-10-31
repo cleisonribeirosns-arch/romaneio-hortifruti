@@ -20,7 +20,7 @@ import sqlite3
 import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 
-# Tenta importar fitz (PyMuPDF) para renderizar PDFs como imagens sem bloqueio do navegador
+# Tenta importar fitz (PyMuPDF) opcionalmente para renderização avançada
 try:
     import fitz  # PyMuPDF
     HAS_PYMUPDF = True
@@ -116,33 +116,43 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         """, unsafe_allow_html=True)
 
         if is_pdf:
+            pdf_renderizado = False
             if HAS_PYMUPDF:
                 try:
                     doc_pdf = fitz.open(caminho_foto)
                     total_paginas = len(doc_pdf)
-                    
                     st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>Exibindo documento • {total_paginas} página(s)</p>", unsafe_allow_html=True)
                     
                     for page_index in range(total_paginas):
                         page = doc_pdf[page_index]
                         pix = page.get_pixmap(dpi=150)
                         img_bytes = pix.tobytes("png")
-                        
                         st.markdown(f"""
-                        <div style="background-color: #2d2e30; padding: 10px; border-radius: 6px; margin-bottom: 10px; text-align: center; border: 1px solid #3c4043;">
+                        <div style="background-color: #2d2e30; padding: 8px; border-radius: 6px; margin-bottom: 8px; text-align: center; border: 1px solid #3c4043;">
                             <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
                         </div>
                         """, unsafe_allow_html=True)
                         st.image(img_bytes, use_container_width=True)
+                    pdf_renderizado = True
+                except Exception:
+                    pass
+            
+            if not pdf_renderizado:
+                try:
+                    with open(caminho_foto, "rb") as f_pdf_embed:
+                        b64_pdf = base64.b64encode(f_pdf_embed.read()).decode("utf-8")
+                    st.markdown(f"""
+                        <div style="text-align: center; margin-bottom: 15px; background-color: #202124; padding: 10px; border-radius: 8px;">
+                            <embed src="data:application/pdf;base64,{b64_pdf}" width="100%" height="500px" type="application/pdf">
+                        </div>
+                    """, unsafe_allow_html=True)
                 except Exception as e:
-                    st.error(f"Erro ao renderizar PDF como imagem: {e}")
-            else:
-                st.warning("A biblioteca PyMuPDF não está instalada no ambiente para renderizar o PDF visualmente.")
+                    st.warning(f"Não foi possível pré-visualizar o PDF diretamente: {e}")
             
             st.markdown("---")
             with open(caminho_foto, "rb") as f_pdf:
                 st.download_button(
-                    label=f"📥 Baixar Ficheiro PDF ({nome_arquivo})",
+                    label=f"📥 Descarregar Ficheiro PDF ({nome_arquivo})",
                     data=f_pdf.read(),
                     file_name=nome_arquivo,
                     mime="application/pdf",
@@ -151,14 +161,14 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         else:
             st.markdown(f"""
             <div style="background-color: #2d2e30; padding: 10px; border-radius: 6px; margin-bottom: 10px; text-align: center; border: 1px solid #3c4043;">
-                <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Visualização de Imagem / Comprovante</p>
+                <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Visualização de Imagem / Comprovativo</p>
             </div>
             """, unsafe_allow_html=True)
             st.image(caminho_foto, use_container_width=True, caption="Documento / Nota Fiscal Anexada")
             with open(caminho_foto, "rb") as f_img:
                 img_bytes = f_img.read()
             st.download_button(
-                label=f"📥 Baixar Imagem ({nome_arquivo})",
+                label=f"📥 Descarregar Imagem ({nome_arquivo})",
                 data=img_bytes,
                 file_name=nome_arquivo,
                 mime="application/jpeg",
@@ -1267,7 +1277,7 @@ else:
         if "ultimo_pdf_bytes" in st.session_state and "ultimo_num_romaneio" in st.session_state:
             st.markdown("---")
             st.success(f"📄 Romaneio **{st.session_state['ultimo_num_romaneio']}** pronto para download!")
-            st.download_button(label=f"📥 Baixar PDF - {st.session_state['ultimo_num_romaneio']}", data=st.session_state["ultimo_pdf_bytes"], file_name=f"{st.session_state['ultimo_num_romaneio']}.pdf", mime="application/pdf", type="primary")
+            st.download_button(label=f"📥 Descarregar PDF - {st.session_state['ultimo_num_romaneio']}", data=st.session_state["ultimo_pdf_bytes"], file_name=f"{st.session_state['ultimo_num_romaneio']}.pdf", mime="application/pdf", type="primary")
             
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consulta de Romaneios")
@@ -1387,7 +1397,7 @@ else:
                     pdf_buffer = gerar_pdf_romaneio(row.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens.iterrows()], row.get("assinatura_conferente"), row.get("assinatura_entregador"))
                     
                     col_dl, col_del = st.columns([4, 1])
-                    with col_dl: st.download_button(label=f"📥 Baixar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
+                    with col_dl: st.download_button(label=f"📥 Descarregar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
                     with col_del:
                         if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
                             try:
@@ -1513,7 +1523,7 @@ else:
             
             pdf_bonf_bytes = gerar_pdf_bonificacoes(df_bonf)
             st.download_button(
-                label="📥 Baixar Relatório de Bonificação em PDF",
+                label="📥 Descarregar Relatório de Bonificação em PDF",
                 data=pdf_bonf_bytes,
                 file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
@@ -1560,7 +1570,7 @@ else:
                     if st.button("📄 Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
                         exibir_foto_modal(caminho_nota_alvo, b64_anexo_reg)
                 else:
-                    st.warning("Este registro não possui arquivo de nota anexado.")
+                    st.warning("Este registo não possui ficheiro de nota anexado.")
 
             with st.form("form_edicao_direta_bonificacao"):
                 st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
@@ -1576,7 +1586,7 @@ else:
                 
                 novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
                 
-                if st.form_submit_button("💾 Salvar Alterações do Registro", type="primary"):
+                if st.form_submit_button("💾 Salvar Alterações do Registo", type="primary"):
                     try:
                         val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else reg_obj_atual["valor_bonificacao"]
                         path_novo_arq = reg_obj_atual["caminho_anexo"]
@@ -1595,7 +1605,7 @@ else:
                         )
                         conn_up_dir.commit()
                         conn_up_dir.close()
-                        st.success("Registro atualizado com sucesso!")
+                        st.success("Registo atualizado com sucesso!")
                         st.rerun()
                     except Exception as e: st.error(f"Erro ao atualizar: {e}")
         else: st.info("Nenhuma bonificação encontrada.")
@@ -1770,7 +1780,7 @@ else:
         if not df_bx_table.empty:
             pdf_bytes_bx = gerar_pdf_baixas(df_bx_table)
             st.download_button(
-                label="📥 Baixar Planilha de Baixas de Avarias em PDF",
+                label="📥 Descarregar Planilha de Baixas de Avarias em PDF",
                 data=pdf_bytes_bx,
                 file_name=f"Registro_Baixas_Avarias_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf",
                 mime="application/pdf",
@@ -1807,7 +1817,7 @@ else:
             st.subheader("📄 Visualizar Anexo de Baixa")
             opcoes_baixas_ver = [(row["id"], f"Loja: {row['loja_baixa']} | Ref: {row['ref_bon_transferen']} | NF Entrada: {row['nf_b_entrada']}") for _, row in df_bx_table.iterrows() if row.get("nf_baixa") or row.get("nf_baixa_b64")]
             if opcoes_baixas_ver:
-                escolha_bx_ver = st.selectbox("Selecione a baixa para abrir o comprovante/anexo", options=opcoes_baixas_ver, format_func=lambda x: x[1], placeholder="Selecione...")
+                escolha_bx_ver = st.selectbox("Selecione a baixa para abrir o comprovativo/anexo", options=opcoes_baixas_ver, format_func=lambda x: x[1], placeholder="Selecione...")
                 if escolha_bx_ver:
                     reg_bx_escolhido = df_bx_table[df_bx_table["id"] == escolha_bx_ver[0]].iloc[0]
                     if st.button("📄 Abrir Anexo da Baixa Selecionada", type="primary"):
@@ -1870,7 +1880,7 @@ else:
                     fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_qtd, use_container_width=True)
                 
-                st.download_button(label="📥 Baixar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
+                st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("📦🚚 Gerenciamento e Cadastro (Produtos & Fornecedores)")
@@ -1907,7 +1917,7 @@ else:
             if produtos_cadastrados:
                 produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
                 df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
-                st.download_button(label="📥 Baixar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
+                st.download_button(label="📥 Descarregar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_HortiControl_{datetime.now().strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=300)
             else: st.info("Nenhum produto cadastrado.")
