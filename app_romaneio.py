@@ -76,6 +76,35 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
+# FUNÇÃO DE SPINNER / FEEDBACK COM LOGOTIPO DO SUPERNOVA
+# ---------------------------------------------------------
+def spinner_supernova(mensagem="A carregar dados do Supernova..."):
+    logo_path_spin = None
+    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
+        if os.path.exists(nome):
+            logo_path_spin = nome
+            break
+    
+    if logo_path_spin:
+        with open(logo_path_spin, "rb") as img_f:
+            b64_spin = base64.b64encode(img_f.read()).decode()
+        return st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(20, 24, 30, 0.95); padding: 15px 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); margin: 15px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+            <img src="data:image/jpeg;base64,{b64_spin}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; animation: pulse 1.5s infinite;" />
+            <span style="color: #FFFFFF; font-weight: 800; font-size: 15px; letter-spacing: 0.5px;">{mensagem}</span>
+        </div>
+        <style>
+        @keyframes pulse {{
+            0% {{ transform: scale(0.95); opacity: 0.8; }}
+            50% {{ transform: scale(1.05); opacity: 1; filter: drop-shadow(0 0 8px #4CAF50); }}
+            100% {{ transform: scale(0.95); opacity: 0.8; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
+    else:
+        return st.spinner(mensagem)
+
+# ---------------------------------------------------------
 # FUNÇÃO DE PERSISTÊNCIA DE ANEXOS (BASE64 NO BANCO)
 # ---------------------------------------------------------
 def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
@@ -92,7 +121,7 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
         pass
 
 # ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS (SEGURO CONTRA BLOQUEIO E ARQUIVO VAZIO)
+# MODAL DE VISUALIZAÇÃO DE ANEXOS
 # ---------------------------------------------------------
 @st.dialog("📄 Visualizador de Documentos", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
@@ -109,7 +138,6 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         ext_tag = "PDF" if is_pdf else "IMG"
         bg_tag_color = "#EA4335" if is_pdf else "#4285F4"
         
-        # Barra superior estilo Google Drive
         st.markdown(f"""
         <div style="background-color: #202124; padding: 12px 18px; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3c4043; margin-bottom: 15px;">
             <div style="display: flex; align-items: center; gap: 12px;">
@@ -145,7 +173,6 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                 st.markdown("""
                 <div style="background-color: #2d2e30; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #3c4043; margin-bottom: 15px;">
                     <p style="color: #ffffff; font-size: 15px; font-weight: bold; margin-bottom: 8px;">Visualização direta de PDF restrita pelo navegador</p>
-                    <p style="color: #9aa0a6; font-size: 13px; margin: 0;">Para visualizar o documento diretamente na tela, adicione <b>PyMuPDF</b> ao seu ficheiro <code>requirements.txt</code>.</p>
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -159,11 +186,6 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
                     type="primary"
                 )
         else:
-            st.markdown(f"""
-            <div style="background-color: #2d2e30; padding: 10px; border-radius: 6px; margin-bottom: 10px; text-align: center; border: 1px solid #3c4043;">
-                <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Visualização de Imagem / Comprovativo</p>
-            </div>
-            """, unsafe_allow_html=True)
             st.image(caminho_foto, use_container_width=True, caption="Documento Anexado")
             with open(caminho_foto, "rb") as f_img:
                 img_bytes = f_img.read()
@@ -969,6 +991,7 @@ if st.session_state["usuario_logado"] is None:
                 if not loja_login_sel:
                     st.error("Por favor, selecione a loja em que você está atuando antes de entrar.")
                 else:
+                    spinner_supernova("Validando acesso no Supernova...")
                     usuario = fazer_login(login_input, senha_input)
                     if usuario:
                         st.session_state["usuario_logado"] = {
@@ -1208,6 +1231,7 @@ else:
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
+                spinner_supernova("Salvando romaneio no Supernova...")
                 try:
                     if not os.path.exists("uploads"): os.makedirs("uploads")
                     path_ass_conf = ""
@@ -1356,6 +1380,7 @@ else:
                         st.write("")
                         st.write("")
                         if st.button("💾 Salvar Status", key=f"btn_salvar_status_{row['id']}"):
+                            spinner_supernova("Atualizando status...")
                             try:
                                 conn_st, db_t_st = get_db_connection()
                                 cur_st = conn_st.cursor()
@@ -1400,6 +1425,7 @@ else:
                     with col_dl: st.download_button(label=f"📥 Descarregar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
                     with col_del:
                         if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
+                            spinner_supernova("Excluindo romaneio...")
                             try:
                                 conn_del, db_t_del = get_db_connection()
                                 cursor_del = conn_del.cursor()
@@ -1407,7 +1433,7 @@ else:
                                 cursor_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
                                 conn_del.commit()
                                 conn_del.close()
-                                st.success("Excluído com sucesso!")
+                                st.success("Romaneio excluído com sucesso!")
                                 st.rerun()
                             except Exception as e: st.error(f"Erro: {e}")
         else: st.info("Nenhum romaneio encontrado.")
@@ -1458,6 +1484,7 @@ else:
                     if not num_nota_bonf.strip() or not loja_bonf or not prod_bonf or not status_bonf:
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
+                        spinner_supernova("Salvando bonificação...")
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
                         except ValueError: valor_bonf_val = 0.0
                             
@@ -1551,7 +1578,7 @@ else:
             st.dataframe(cols_exibidas, use_container_width=True, height=350)
             
             st.markdown("---")
-            st.subheader("📄 Abertura de Anexo & Edição de Registro")
+            st.subheader("📄 Abertura de Anexo, Edição & Exclusão de Registro")
             
             opcoes_notas_editar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} | Status: {row['status']} ({row['data_entrada']})") for _, row in df_bonf.iterrows()]
             
@@ -1586,7 +1613,14 @@ else:
                 
                 novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
                 
-                if st.form_submit_button("💾 Salvar Alterações do Registo", type="primary"):
+                col_btn_up1, col_btn_up2 = st.columns(2)
+                with col_btn_up1:
+                    salvar_alt_bonf = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                with col_btn_up2:
+                    excluir_bonf_btn = st.form_submit_button("🗑️ Excluir Bonificação", type="secondary")
+
+                if salvar_alt_bonf:
+                    spinner_supernova("Salvando alterações...")
                     try:
                         val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else reg_obj_atual["valor_bonificacao"]
                         path_novo_arq = reg_obj_atual["caminho_anexo"]
@@ -1608,6 +1642,21 @@ else:
                         st.success("Registo atualizado com sucesso!")
                         st.rerun()
                     except Exception as e: st.error(f"Erro ao atualizar: {e}")
+                
+                if excluir_bonf_btn:
+                    spinner_supernova("Excluindo bonificação...")
+                    try:
+                        conn_del_b, db_td_b = get_db_connection()
+                        cursor_db = conn_del_b.cursor()
+                        cursor_db.execute(
+                            "DELETE FROM bonificacoes WHERE id = %s" if db_td_b == "postgres" else "DELETE FROM bonificacoes WHERE id = ?",
+                            (int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual,)
+                        )
+                        conn_del_b.commit()
+                        conn_del_b.close()
+                        st.success("Bonificação excluída com sucesso!")
+                        st.rerun()
+                    except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhuma bonificação encontrada.")
 
     # ---------------------------------------------------------
@@ -1703,6 +1752,7 @@ else:
                     if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
+                        spinner_supernova("Registrando baixa de avaria...")
                         try:
                             qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
                             val_avaria_f = float(valor_total_avaria_str.replace(".", "").replace(",", ".")) if valor_total_avaria_str else 0.0
@@ -1897,6 +1947,7 @@ else:
                     if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                         if not nome_p.strip(): st.error("O Nome é obrigatório.")
                         else:
+                            spinner_supernova("Cadastrando produto...")
                             conn, db_type = get_db_connection()
                             cursor = conn.cursor()
                             try:
@@ -1919,7 +1970,58 @@ else:
                 df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
                 st.download_button(label="📥 Descarregar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
                 st.markdown("")
-                st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=300)
+                st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=250)
+                
+                st.markdown("### ✏️ Editar ou Excluir Produto")
+                opcoes_edit_prod = [(p[5], f"{p[3]} (Cód: {p[2] or 'S/Cód'})") for p in produtos_com_id_ajustado]
+                prod_sel_ed = st.selectbox("Selecione o produto para editar ou excluir", options=opcoes_edit_prod, format_func=lambda x: x[1], key="sel_prod_editar")
+                if prod_sel_ed:
+                    id_p_ed = prod_sel_ed[0]
+                    conn_p_det, db_tp_det = get_db_connection()
+                    cur_pd = conn_p_det.cursor()
+                    cur_pd.execute("SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos WHERE id = %s" if db_tp_det == "postgres" else "SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos WHERE id = ?", (int(id_p_ed) if db_tp_det == "postgres" else id_p_ed,))
+                    dados_p_atual = cur_pd.fetchone()
+                    conn_p_det.close()
+                    
+                    if dados_p_atual:
+                        with st.form("form_edit_produto"):
+                            ep_cod_bar = st.text_input("Código de Barras", value=dados_p_atual[0] or "")
+                            ep_cod_prod = st.text_input("Código do Produto", value=dados_p_atual[1] or "")
+                            ep_nome = st.text_input("Nome do Produto", value=dados_p_atual[2] or "")
+                            lista_unds = ["KG", "UNID", "GRM", "CX"]
+                            idx_u = lista_unds.index(dados_p_atual[3]) if dados_p_atual[3] in lista_unds else 0
+                            ep_und = st.selectbox("Unidade", lista_unds, index=idx_u)
+                            
+                            col_bp1, col_bp2 = st.columns(2)
+                            with col_bp1: btn_salvar_prod = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                            with col_bp2: btn_excluir_prod = st.form_submit_button("🗑️ Excluir Produto", type="secondary")
+                            
+                            if btn_salvar_prod:
+                                spinner_supernova("Atualizando produto...")
+                                try:
+                                    conn_up_p, db_tup = get_db_connection()
+                                    cur_upp = conn_up_p.cursor()
+                                    cur_upp.execute(
+                                        "UPDATE produtos SET codigo_barras = %s, codigo_produto = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
+                                        (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), ep_und, int(id_p_ed) if db_tup == "postgres" else id_p_ed)
+                                    )
+                                    conn_up_p.commit()
+                                    conn_up_p.close()
+                                    st.success("Produto atualizado com sucesso!")
+                                    st.rerun()
+                                except Exception as e: st.error(f"Erro ao atualizar: {e}")
+                                
+                            if btn_excluir_prod:
+                                spinner_supernova("Excluindo produto...")
+                                try:
+                                    conn_del_p, db_tdp = get_db_connection()
+                                    cur_delp = conn_del_p.cursor()
+                                    cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
+                                    conn_del_p.commit()
+                                    conn_del_p.close()
+                                    st.success("Produto excluído com sucesso!")
+                                    st.rerun()
+                                except Exception as e: st.error(f"Erro ao excluir: {e}")
             else: st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
@@ -1933,6 +2035,7 @@ else:
                     if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
                         if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
                         else:
+                            spinner_supernova("Cadastrando fornecedor...")
                             conn, db_type = get_db_connection()
                             cursor = conn.cursor()
                             try:
@@ -1953,7 +2056,56 @@ else:
             if fornecedores_cadastrados:
                 forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
                 df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
-                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True, height=300)
+                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True, height=250)
+                
+                st.markdown("### ✏️ Editar ou Excluir Fornecedor")
+                opcoes_edit_forn = [(f[5], f"{f[3]} (Cód: {f[1] or 'S/Cód'})") for f in forn_com_id_ajustado]
+                forn_sel_ed = st.selectbox("Selecione o fornecedor para editar ou excluir", options=opcoes_edit_forn, format_func=lambda x: x[1], key="sel_forn_editar")
+                if forn_sel_ed:
+                    id_f_ed = forn_sel_ed[0]
+                    conn_f_det, db_tf_det = get_db_connection()
+                    cur_fd = conn_f_det.cursor()
+                    cur_fd.execute("SELECT codigo_fornecedor, cnpj, nome, contato FROM fornecedores WHERE id = %s" if db_tf_det == "postgres" else "SELECT codigo_fornecedor, cnpj, nome, contato FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tf_det == "postgres" else id_f_ed,))
+                    dados_f_atual = cur_fd.fetchone()
+                    conn_f_det.close()
+                    
+                    if dados_f_atual:
+                        with st.form("form_edit_fornecedor"):
+                            ef_cod = st.text_input("Código do Fornecedor", value=dados_f_atual[0] or "")
+                            ef_cnpj = st.text_input("CNPJ", value=dados_f_atual[1] or "")
+                            ef_nome = st.text_input("Nome / Razão Social", value=dados_f_atual[2] or "")
+                            ef_contato = st.text_input("Contato", value=dados_f_atual[3] or "")
+                            
+                            col_bf1, col_bf2 = st.columns(2)
+                            with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                            with col_bf2: btn_excluir_forn = st.form_submit_button("🗑️ Excluir Fornecedor", type="secondary")
+                            
+                            if btn_salvar_forn:
+                                spinner_supernova("Atualizando fornecedor...")
+                                try:
+                                    conn_up_f, db_tupf = get_db_connection()
+                                    cur_upf = conn_up_f.cursor()
+                                    cur_upf.execute(
+                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s, contato = %s WHERE id = %s" if db_tupf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ?, contato = ? WHERE id = ?",
+                                        (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), ef_contato.strip(), int(id_f_ed) if db_tupf == "postgres" else id_f_ed)
+                                    )
+                                    conn_up_f.commit()
+                                    conn_up_f.close()
+                                    st.success("Fornecedor atualizado com sucesso!")
+                                    st.rerun()
+                                except Exception as e: st.error(f"Erro ao atualizar: {e}")
+                                
+                            if btn_excluir_forn:
+                                spinner_supernova("Excluindo fornecedor...")
+                                try:
+                                    conn_del_f, db_tdf = get_db_connection()
+                                    cur_delf = conn_del_f.cursor()
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
+                                    conn_del_f.commit()
+                                    conn_del_f.close()
+                                    st.success("Fornecedor excluído com sucesso!")
+                                    st.rerun()
+                                except Exception as e: st.error(f"Erro ao excluir: {e}")
             else: st.info("Nenhum fornecedor cadastrado.")
 
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
@@ -1968,6 +2120,7 @@ else:
                 if st.form_submit_button("➕ Cadastrar", type="primary"):
                     if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
                     else:
+                        spinner_supernova("Cadastrando usuário...")
                         conn, db_type = get_db_connection()
                         cursor = conn.cursor()
                         try:
@@ -1989,4 +2142,55 @@ else:
             usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
             df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
             st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True, height=250)
+            
+            st.markdown("### ✏️ Editar ou Excluir Utilizador")
+            opcoes_edit_usr = [(u[5], f"{u[1]} (Login: {u[2]})") for u in usuarios_com_id_ajustado]
+            usr_sel_ed = st.selectbox("Selecione o utilizador para editar ou excluir", options=opcoes_edit_usr, format_func=lambda x: x[1], key="sel_usr_editar")
+            if usr_sel_ed:
+                id_u_ed = usr_sel_ed[0]
+                conn_u_det, db_tu_det = get_db_connection()
+                cur_ud = conn_u_det.cursor()
+                cur_ud.execute("SELECT nome, login, senha, perfil FROM usuarios WHERE id = %s" if db_tu_det == "postgres" else "SELECT nome, login, senha, perfil FROM usuarios WHERE id = ?", (int(id_u_ed) if db_tu_det == "postgres" else id_u_ed,))
+                dados_u_atual = cur_ud.fetchone()
+                conn_u_det.close()
+                
+                if dados_u_atual:
+                    with st.form("form_edit_usuario"):
+                        eu_nome = st.text_input("Nome Completo", value=dados_u_atual[0] or "")
+                        eu_login = st.text_input("Login", value=dados_u_atual[1] or "")
+                        eu_senha = st.text_input("Senha", type="password", value=dados_u_atual[2] or "")
+                        perfis_lst = ["Conferente", "Gestor"]
+                        idx_per = perfis_lst.index(dados_u_atual[3]) if dados_u_atual[3] in perfis_lst else 0
+                        eu_perfil = st.selectbox("Perfil", perfis_lst, index=idx_per)
+                        
+                        col_bu1, col_bu2 = st.columns(2)
+                        with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                        with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Utilizador", type="secondary")
+                        
+                        if btn_salvar_usr:
+                            spinner_supernova("Atualizando utilizador...")
+                            try:
+                                conn_up_u, db_tupu = get_db_connection()
+                                cur_upu = conn_up_u.cursor()
+                                cur_upu.execute(
+                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
+                                    (eu_nome.strip(), eu_login.strip(), eu_senha.strip(), eu_perfil, int(id_u_ed) if db_tupu == "postgres" else id_u_ed)
+                                )
+                                conn_up_u.commit()
+                                conn_up_u.close()
+                                st.success("Utilizador atualizado com sucesso!")
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro ao atualizar: {e}")
+                            
+                        if btn_excluir_usr:
+                            spinner_supernova("Excluindo utilizador...")
+                            try:
+                                conn_del_u, db_tdu = get_db_connection()
+                                cur_delu = conn_del_u.cursor()
+                                cur_delu.execute("DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,))
+                                conn_del_u.commit()
+                                conn_del_u.close()
+                                st.success("Utilizador excluído com sucesso!")
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum usuário cadastrado.")
