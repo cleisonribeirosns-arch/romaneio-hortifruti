@@ -1601,14 +1601,18 @@ else:
 
             with st.form("form_edicao_direta_bonificacao"):
                 st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
-                col_e1, col_e2, col_e3 = st.columns(3)
+                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
                 with col_e1:
                     novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","))
                 with col_e2:
+                    lista_lojas_alt = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
+                    nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
+                with col_e3:
                     status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
                     idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
                     novo_st_nota = st.selectbox("Status", status_atuais_lst, index=idx_st_atual)
-                with col_e3:
+                with col_e4:
                     novo_prod_nota = st.text_input("Produto Hortifrúti", value=reg_obj_atual["produto_hortifruti"])
                 
                 novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
@@ -1634,8 +1638,8 @@ else:
                         conn_up_dir, db_t_upd = get_db_connection()
                         cursor_upd = conn_up_dir.cursor()
                         cursor_upd.execute(
-                            "UPDATE bonificacoes SET valor_bonificacao = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
-                            (val_f_edit, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual)
+                            "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
+                            (val_f_edit, nova_loja_nota, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual)
                         )
                         conn_up_dir.commit()
                         conn_up_dir.close()
