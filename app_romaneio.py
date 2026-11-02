@@ -1708,7 +1708,6 @@ else:
                 baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
                 saldo_b = max(0.0, val_orig_b - baixado_b)
                 
-                # Regra de status automática
                 if baixado_b <= 0:
                     novo_st_auto = "Disponível"
                 elif saldo_b > 0:
@@ -1729,15 +1728,14 @@ else:
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
         conn_b_all2.close()
 
-        # CONFORME SOLICITADO: APENAS notas da LOJA 02 contabilizam como saldo para baixar as avarias. 
-        # As demais notas de transferência servem estritamente como rastreio/referência.
+        # Apenas notas da LOJA 02 contabilizam como saldo para baixar as avarias
         if not df_todas_bonf.empty:
             df_bonf_loja02 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02|NOVA CIDADE", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
         else:
             df_bonf_loja02 = pd.DataFrame()
 
         notas_com_saldo_loja02 = []
-        saldo_total_disp_loja02 = 0.0
+        saldo_geral_somado_loja02 = 0.0
         
         if not df_bonf_loja02.empty:
             for _, r_bonf in df_bonf_loja02.iterrows():
@@ -1747,7 +1745,7 @@ else:
                 saldo_restante_nota = max(0.0, val_original - ja_baixado)
                 
                 if saldo_restante_nota > 0:
-                    saldo_total_disp_loja02 += saldo_restante_nota
+                    saldo_geral_somado_loja02 += saldo_restante_nota
                     notas_com_saldo_loja02.append({
                         "nf_entrada": num_nf_ent,
                         "produto": r_bonf["produto_hortifruti"],
@@ -1755,7 +1753,13 @@ else:
                         "saldo_restante": saldo_restante_nota
                     })
 
-        st.info(f"💡 **Saldo Total Disponível (Referente às notas da Loja 02): R$ {fmt_ptbr(saldo_total_disp_loja02, 2)}**")
+        # PAINEL DO TOPO (LÂMPADA) COM O SALDO GLOBAL DA LOJA 02
+        st.markdown(f"""
+        <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
+            <span style="font-size: 20px;">💡</span>
+            <span style="color: #FFFFFF; font-weight: 700; font-size: 15px;">Saldo Total Disponível (Referente às notas da Loja 02): R$ {fmt_ptbr(saldo_geral_somado_loja02, 2)}</span>
+        </div>
+        """, unsafe_allow_html=True)
         
         if notas_com_saldo_loja02:
             with st.expander("📌 Notas com Saldo Disponível (Loja 02 - Base para Baixas)", expanded=True):
@@ -1827,8 +1831,12 @@ else:
                                 with open(path_nf_baixa, "wb") as f_out: f_out.write(bytes_baixa)
                                 b64_nf_baixa = base64.b64encode(bytes_baixa).decode('utf-8')
                                 
-                            novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
-                            novo_saldo_total_disp = saldo_total_disp_loja02 - val_avaria_f
+                            # REGRA CORRIGIDA:
+                            # 1. Saldo Total Disponível = O saldo antes do abatimento da NOTA REFERENCIADA DA LOJA 02
+                            saldo_disponivel_da_nota_referenciada = nota_selecionada_dict["saldo_restante"]
+                            
+                            # 2. Saldo = O valor restante da NOTA REFERENCIADA após o abatimento da avaria
+                            novo_saldo_restante_nota = saldo_disponivel_da_nota_referenciada - val_avaria_f
                             
                             try:
                                 conn_ins, db_tins = get_db_connection()
@@ -1849,19 +1857,17 @@ else:
                                     """,
                                     (
                                         lojas_baixa_sel, data_hora_baixa_str, ref_bon_transf.strip(), path_nf_baixa,
-                                        nf_b_entrada_sel, prod_hort_sel, qtd_val_f, val_avaria_f, novo_saldo_nota, novo_saldo_total_disp, b64_nf_baixa
+                                        nf_b_entrada_sel, prod_hort_sel, qtd_val_f, val_avaria_f, novo_saldo_restante_nota, saldo_disponivel_da_nota_referenciada, b64_nf_baixa
                                     )
                                 )
                                 
-                                # Se NÃO for a Loja 02, a nota de transferência referenciada deve ser marcada como Totalmente Utilizada (uso único)
                                 if "02" not in lojas_baixa_sel and "NOVA CIDADE" not in lojas_baixa_sel:
                                     cursor_ins.execute(
                                         "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = ?",
                                         (nf_b_entrada_sel,)
                                     )
                                 else:
-                                    # Se for Loja 02, atualiza conforme o saldo restante da nota
-                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_nota <= 0 else "Parcialmente Utilizada"
+                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
                                     cursor_ins.execute(
                                         "UPDATE bonificacoes SET status = %s WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE numero_nota = ?",
                                         (st_auto_l2, nf_b_entrada_sel)
@@ -1916,7 +1922,10 @@ else:
             df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
             df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             df_display_plan["Saldo"] = df_display_plan["saldo_restante_nota"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            
+            # EXIBIÇÃO CORRETA NA PLANILHA: Reflete o Saldo Total Disponível referente à NOTA REFERENCIADA da Loja 02
             df_display_plan["Saldo Total disponível"] = df_display_plan["saldo_total_disponivel"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            
             df_display_plan["NF da baixa"] = df_display_plan.apply(lambda r: "Ver Anexo" if (r.get("nf_baixa") and os.path.exists(str(r["nf_baixa"]))) or r.get("nf_baixa_b64") else "S/Anexo", axis=1)
             
             df_display_plan = df_display_plan.rename(columns={
