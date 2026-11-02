@@ -1601,7 +1601,15 @@ else:
 
             with st.form("form_edicao_direta_bonificacao"):
                 st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
-                col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+                
+                # Extrair data atual do registo para preencher o date_input
+                data_atual_str = str(reg_obj_atual["data_entrada"]).split(" ")[0] if reg_obj_atual["data_entrada"] else ""
+                try:
+                    dt_obj_default = datetime.strptime(data_atual_str, "%d/%m/%Y").date()
+                except Exception:
+                    dt_obj_default = datetime.now(ZoneInfo("America/Manaus")).date()
+
+                col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns(5)
                 with col_e1:
                     novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","))
                 with col_e2:
@@ -1609,10 +1617,12 @@ else:
                     idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
                     nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
                 with col_e3:
+                    nova_data_input = st.date_input("Data de Entrada", value=dt_obj_default, format="DD/MM/YYYY")
+                with col_e4:
                     status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
                     idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
                     novo_st_nota = st.selectbox("Status", status_atuais_lst, index=idx_st_atual)
-                with col_e4:
+                with col_e5:
                     novo_prod_nota = st.text_input("Produto Hortifrúti", value=reg_obj_atual["produto_hortifruti"])
                 
                 novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
@@ -1627,6 +1637,13 @@ else:
                     spinner_supernova("Salvando alterações...")
                     try:
                         val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else reg_obj_atual["valor_bonificacao"]
+                        
+                        # Preservar hora anterior se existir
+                        hora_antiga = "00:00:00"
+                        if len(str(reg_obj_atual["data_entrada"]).split(" ")) > 1:
+                            hora_antiga = str(reg_obj_atual["data_entrada"]).split(" ")[1]
+                        nova_data_str = f"{nova_data_input.strftime('%d/%m/%Y')} {hora_antiga}"
+
                         path_novo_arq = reg_obj_atual["caminho_anexo"]
                         b64_novo_arq = reg_obj_atual.get("anexo_b64", "")
                         if novo_anexo_up:
@@ -1638,8 +1655,8 @@ else:
                         conn_up_dir, db_t_upd = get_db_connection()
                         cursor_upd = conn_up_dir.cursor()
                         cursor_upd.execute(
-                            "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
-                            (val_f_edit, nova_loja_nota, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual)
+                            "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
+                            (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual)
                         )
                         conn_up_dir.commit()
                         conn_up_dir.close()
