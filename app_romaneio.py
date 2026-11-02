@@ -1763,6 +1763,11 @@ else:
         st.title("📉 Registro de Baixas das Avarias")
         loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
         
+        # Gerador de sufixo para limpar o formulário ao salvar
+        if "baixa_form_suffix" not in st.session_state:
+            st.session_state["baixa_form_suffix"] = 0
+        bx_suf = st.session_state["baixa_form_suffix"]
+        
         # 1. Carregar histórico de baixas
         conn_bx_chk, db_tbx_chk = get_db_connection()
         df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
@@ -1866,31 +1871,34 @@ else:
             lista_opcoes_prod_v.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
         with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=False):
-            with st.form("form_registro_baixa_modelo", clear_on_submit=True):
+            with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
                     lista_lojas_reg = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
-                    lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, placeholder="Selecione...")
-                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...")
+                    lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
+                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...", key=f"bx_ref_{bx_suf}")
                 with col_m2:
-                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=[item["nf_entrada"] for item in notas_com_saldo_loja02] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"], placeholder="Selecione a nota...")
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, placeholder="Selecione o produto...")
+                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
+                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
+                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
                 with col_m3:
-                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="", placeholder="0,000")
-                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="", placeholder="0,00")
+                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="", placeholder="0,000", key=f"bx_qtd_{bx_suf}")
+                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="", placeholder="0,00", key=f"bx_val_{bx_suf}")
                     
-                nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"])
+                nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"], key=f"bx_file_{bx_suf}")
                 
                 col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY")
+                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"bx_dt_{bx_suf}")
                 with col_dm2:
                     hora_baixa_aut = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
-                    st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True)
+                    st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True, key=f"bx_hr_{bx_suf}")
                     
                 data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}" if data_baixa_man else ""
                 
-                if st.form_submit_button("✅ Registrar Baixa", type="primary"):
+                btn_enviar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
+                
+                if btn_enviar_baixa:
                     if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
@@ -1955,6 +1963,9 @@ else:
 
                                 conn_ins.commit()
                                 conn_ins.close()
+                                
+                                # Incrementa o sufixo para limpar e reiniciar o formulário perfeitamente
+                                st.session_state["baixa_form_suffix"] += 1
                                 st.success("Baixa registrada com sucesso!")
                                 st.rerun()
                             except Exception as e: st.error(f"Erro: {e}")
@@ -1983,10 +1994,7 @@ else:
             if f_prod_bx.strip(): df_bx_table = df_bx_table[df_bx_table["produto_hortifruti"].str.contains(f_prod_bx.strip(), case=False, na=False)]
             
         if not df_bx_table.empty:
-            # Recomposição dinâmica do Saldo Utilizado e Saldo Restante por Nota de Entrada
             df_display_plan = df_bx_table.copy()
-            
-            # Dicionários de totais usados e saldos restantes por NF de Entrada
             total_utilizado_por_nf = total_baixado_por_nota
             
             saldo_calculado_list = []
@@ -1994,12 +2002,9 @@ else:
             
             for _, row_bx in df_display_plan.iterrows():
                 nf_ent_item = str(row_bx["nf_b_entrada"])
-                
-                # Total Utilizado acumulado para esta nota
                 v_utilizado = total_utilizado_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"]))
                 utilizado_calculado_list.append(v_utilizado)
                 
-                # Saldo Restante = Valor Original da Nota - Total Utilizado
                 v_original = dict_valor_orig_por_nf.get(nf_ent_item, 0.0)
                 if v_original > 0:
                     v_saldo_restante = max(0.0, v_original - v_utilizado)
@@ -2028,13 +2033,8 @@ else:
             
             df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
             df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            
-            # O SALDO agora é dinâmico e igual para todos os registros da mesma Nota
             df_display_plan["Saldo"] = df_display_plan["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            
-            # COLUNA ALTERADA: Saldo Total Utilizado referente à Nota Fiscal de Entrada
             df_display_plan["Saldo Total Utilizado"] = df_display_plan["saldo_total_utilizado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            
             df_display_plan["NF da baixa"] = df_display_plan.apply(lambda r: "Ver Anexo" if (r.get("nf_baixa") and os.path.exists(str(r["nf_baixa"]))) or r.get("nf_baixa_b64") else "S/Anexo", axis=1)
             
             df_display_plan = df_display_plan.rename(columns={
@@ -2234,7 +2234,6 @@ else:
                 with col_bi_f4:
                     bi_periodo = st.selectbox("Período de Análise", ["Todo o Histórico", "Últimos 30 dias", "Últimos 90 dias", "Ano Atual"], key="bi_sel_periodo")
 
-            # Tratamento e filtragem dos DataFrames
             df_b_sub = df_bonf_rel.copy()
             df_bx_sub = df_baixas_rel.copy()
 
@@ -2263,7 +2262,6 @@ else:
                 elif bi_periodo == "Ano Atual":
                     df_bx_sub = df_bx_sub[df_bx_sub['data_dt'].dt.year == datetime.now().year]
 
-            # Totais para os KPIs
             v_tot_bonf = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == 'Bonificação']['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
             v_tot_transf = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == 'Transferência de Bonificação']['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
             v_tot_entradas = df_b_sub['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
@@ -2382,7 +2380,7 @@ else:
                             conn, db_type = get_db_connection()
                             cursor = conn.cursor()
                             try:
-                                cursor.execute("INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_produto, codigo_barras, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_prod_input.strip() if cod_prod_input else None, cod_bar_input.strip() if cod_bar_input else None, nome_p.strip().upper(), und_p))
+                                cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
                                 conn.commit()
                                 st.success("Cadastrado com sucesso!")
                                 st.rerun()
@@ -2625,3 +2623,4 @@ else:
                                 st.rerun()
                             except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum usuário cadastrado.")
+```eof
