@@ -1501,7 +1501,7 @@ else:
                             cursor_b = conn_b.cursor()
                             cursor_b.execute(
                                 "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel, b64_anexo_bonf)
+                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonificacao, b64_anexo_bonf)
                             )
                             conn_b.commit()
                             conn_b.close()
@@ -1729,41 +1729,37 @@ else:
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
         conn_b_all2.close()
 
-        # Filtrar notas disponíveis para a loja ativa (ou notas da Loja 02 com saldo, ou outras lojas com status Disponível)
+        # CONFORME SOLICITADO: APENAS notas da LOJA 02 contabilizam como saldo para baixar as avarias. 
+        # As demais notas de transferência servem estritamente como rastreio/referência.
         if not df_todas_bonf.empty:
-            # Se for LOJA 02, pode usar notas da loja que estejam Disponível ou Parcialmente Utilizada
-            if "02" in loja_ativa_sessao or "NOVA CIDADE" in loja_ativa_sessao:
-                df_bonf_loja = df_todas_bonf[df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
-            else:
-                # Outras lojas só podem usar notas próprias e que estejam Disponíveis (e que ainda não foram referenciadas)
-                df_bonf_loja = df_todas_bonf[df_todas_bonf["loja"].str.contains(loja_ativa_sessao.replace("LOJA ", ""), case=False, na=False) & (df_todas_bonf["status"] == "Disponível")]
+            df_bonf_loja02 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02|NOVA CIDADE", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
         else:
-            df_bonf_loja = pd.DataFrame()
+            df_bonf_loja02 = pd.DataFrame()
 
-        notas_com_saldo_loja = []
-        saldo_total_disp_loja = 0.0
+        notas_com_saldo_loja02 = []
+        saldo_total_disp_loja02 = 0.0
         
-        if not df_bonf_loja.empty:
-            for _, r_bonf in df_bonf_loja.iterrows():
+        if not df_bonf_loja02.empty:
+            for _, r_bonf in df_bonf_loja02.iterrows():
                 num_nf_ent = str(r_bonf["numero_nota"])
                 val_original = float(r_bonf["valor_bonificacao"])
                 ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
                 saldo_restante_nota = max(0.0, val_original - ja_baixado)
                 
                 if saldo_restante_nota > 0:
-                    saldo_total_disp_loja += saldo_restante_nota
-                    notas_com_saldo_loja.append({
+                    saldo_total_disp_loja02 += saldo_restante_nota
+                    notas_com_saldo_loja02.append({
                         "nf_entrada": num_nf_ent,
                         "produto": r_bonf["produto_hortifruti"],
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
                     })
 
-        st.info(f"💡 **Saldo Total Disponível para a {loja_ativa_sessao}: R$ {fmt_ptbr(saldo_total_disp_loja, 2)}**")
+        st.info(f"💡 **Saldo Total Disponível (Referente às notas da Loja 02): R$ {fmt_ptbr(saldo_total_disp_loja02, 2)}**")
         
-        if notas_com_saldo_loja:
-            with st.expander(f"📌 Notas com Saldo Disponível ({loja_ativa_sessao})", expanded=True):
-                df_ns_show = pd.DataFrame(notas_com_saldo_loja)
+        if notas_com_saldo_loja02:
+            with st.expander("📌 Notas com Saldo Disponível (Loja 02 - Base para Baixas)", expanded=True):
+                df_ns_show = pd.DataFrame(notas_com_saldo_loja02)
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
@@ -1790,7 +1786,7 @@ else:
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, placeholder="Selecione...")
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...")
                 with col_m2:
-                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=[item["nf_entrada"] for item in notas_com_saldo_loja] if notas_com_saldo_loja else ["Nenhuma Nota Disponível"], placeholder="Selecione a nota...")
+                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=[item["nf_entrada"] for item in notas_com_saldo_loja02] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"], placeholder="Selecione a nota...")
                     prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, placeholder="Selecione o produto...")
                 with col_m3:
                     qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="", placeholder="0,000")
@@ -1817,11 +1813,11 @@ else:
                         except ValueError:
                             qtd_val_f, val_avaria_f = 0.0, 0.0
                             
-                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja if item["nf_entrada"] == nf_b_entrada_sel), None)
+                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada inválida.")
                         elif val_avaria_f > nota_selecionada_dict["saldo_restante"]:
-                            st.error(f"❌ O valor da avaria ultrapassa o saldo restante da nota!")
+                            st.error(f"❌ O valor da avaria ultrapassa o saldo restante da nota da Loja 02!")
                         else:
                             path_nf_baixa = ""
                             b64_nf_baixa = ""
@@ -1832,7 +1828,7 @@ else:
                                 b64_nf_baixa = base64.b64encode(bytes_baixa).decode('utf-8')
                                 
                             novo_saldo_nota = nota_selecionada_dict["saldo_restante"] - val_avaria_f
-                            novo_saldo_total_disp = saldo_total_disp_loja - val_avaria_f
+                            novo_saldo_total_disp = saldo_total_disp_loja02 - val_avaria_f
                             
                             try:
                                 conn_ins, db_tins = get_db_connection()
@@ -1857,7 +1853,7 @@ else:
                                     )
                                 )
                                 
-                                # Se NÃO for a Loja 02, a nota deve ser imediatamente marcada como Totalmente Utilizada (uso único)
+                                # Se NÃO for a Loja 02, a nota de transferência referenciada deve ser marcada como Totalmente Utilizada (uso único)
                                 if "02" not in lojas_baixa_sel and "NOVA CIDADE" not in lojas_baixa_sel:
                                     cursor_ins.execute(
                                         "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = ?",
