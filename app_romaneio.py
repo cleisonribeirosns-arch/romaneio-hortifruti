@@ -5,6 +5,7 @@ import os
 import pandas as pd
 from PIL import Image
 import plotly.express as px
+import plotly.graph_objects as go
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -946,6 +947,83 @@ def gerar_pdf_baixas(df_baixas_data):
     total_table = Table([[f"VALOR TOTAL DAS AVARIAS: R$ {fmt_ptbr(tot_val_avarias, 2)}"]], colWidths=[792])
     total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
     story.append(total_table)
+    doc.build(story)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    story = []
+    styles = getSampleStyleSheet()
+    
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
+    
+    logo_path = None
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                logo_path = pos_p
+                break
+        if logo_path: break
+
+    logo_img = RLImage(logo_path, width=65, height=40) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA</b>", styles["Normal"])
+    header = Table([[logo_img, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório Gerencial de Bonificações, Transferências e Prevenção de Perdas (BI)", styles["Normal"]), Paragraph(f"<b>Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}", styles["Normal"])]], colWidths=[75, 530, 187])
+    header.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("BACKGROUND", (0,0), (-1,-1), colors.lightgrey)]))
+    story.append(header)
+    story.append(Spacer(1, 10))
+    
+    kpi_summary = [
+        [Paragraph("<b>Tot. Bonificado (R$)</b>", style_header_center), Paragraph("<b>Tot. Transferido (R$)</b>", style_header_center), Paragraph("<b>Avarias Bonificadas / Salvas (R$)</b>", style_header_center), Paragraph("<b>Taxa Cobertura (%)</b>", style_header_center), Paragraph("<b>Saldo Remanescente (R$)</b>", style_header_center)],
+        [
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_bonf'], 2)}", style_center),
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_transf'], 2)}", style_center),
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_avaria'], 2)}", style_center),
+            Paragraph(f"{fmt_ptbr(metrics_dict['taxa_cobertura'], 2)}%", style_center),
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['saldo_restante'], 2)}", style_center),
+        ]
+    ]
+    t_kpi = Table(kpi_summary, colWidths=[158, 158, 160, 158, 158])
+    t_kpi.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#1A202C")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(t_kpi)
+    story.append(Spacer(1, 12))
+    
+    story.append(Paragraph("<b>1. Resumo Analítico de Entradas e Bonificações Filtradas</b>", styles["Heading3"]))
+    tb_b = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Valor (R$)", style_header_center), Paragraph("Status", style_header_center), Paragraph("Produto", style_header_center)]]
+    for _, r in df_bonf_sub.head(15).iterrows():
+        tb_b.append([
+            Paragraph(str(r["numero_nota"]), style_center),
+            Paragraph(str(r.get("tipo_bonificacao", "Bonificação")), style_center),
+            Paragraph(str(r["loja"]), style_center),
+            Paragraph(str(r["data_entrada"]), style_center),
+            Paragraph(f"R$ {fmt_ptbr(r['valor_bonificacao'], 2)}", style_center),
+            Paragraph(str(r["status"]), style_center),
+            Paragraph(str(r["produto_hortifruti"]), style_left)
+        ])
+    table_b = Table(tb_b, colWidths=[65, 95, 95, 95, 80, 90, 272])
+    table_b.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(table_b)
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("<b>2. Resumo de Baixas de Avarias Compensadas (Evitando Perdas Físicas e Financeiras)</b>", styles["Heading3"]))
+    tb_bx = [[Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Ref. Bon.", style_header_center), Paragraph("NF Ent.", style_header_center), Paragraph("Produto", style_header_center), Paragraph("Qtd (kg/cx)", style_header_center), Paragraph("Valor Avaria (R$)", style_header_center)]]
+    for _, r in df_baixas_sub.head(15).iterrows():
+        tb_bx.append([
+            Paragraph(str(r["loja_baixa"]), style_center),
+            Paragraph(str(r["data_baixa"]), style_center),
+            Paragraph(str(r["ref_bon_transferen"]), style_center),
+            Paragraph(str(r["nf_b_entrada"]), style_center),
+            Paragraph(str(r["produto_hortifruti"]), style_left),
+            Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
+            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_center)
+        ])
+    table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
+    table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(table_bx)
+
     doc.build(story)
     buffer.seek(0)
     return buffer
@@ -2074,59 +2152,216 @@ else:
             st.info("Nenhum registo de baixa encontrado.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
-        st.title("📊 Relatórios e Análise Gerencial de Recebimento")
+        st.title("📊 Relatórios & Business Intelligence (BI) Executive")
+        
+        tab_bi_receb, tab_bi_bonf_avaria = st.tabs([
+            "🚚 BI de Recebimento de Cargas",
+            "🎁 BI Bonificações, Transferências & Prevenção de Perdas"
+        ])
+        
         conn, db_type = get_db_connection()
         df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
         df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
         df_bonf_rel = pd.read_sql_query("SELECT * FROM bonificacoes", conn)
         df_baixas_rel = pd.read_sql_query("SELECT * FROM baixas_avarias", conn)
         conn.close()
-        
-        if df_roms.empty or df_itens.empty:
-            st.warning("Ainda não existem dados de recebimento cadastrados.")
-        else:
-            df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
-            df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
-            st.markdown("### 🔍 Filtros da Análise Gerencial")
-            col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
-            with col_f1: loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + list(df_roms["loja"].unique()), placeholder="Selecione...", key="rel_filter_loja")
-            with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
-            with col_f3:
-                dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                dt_inicio = st.date_input("Data Início", value=dt_min, format="DD/MM/YYYY", key="rel_filter_dt_ini")
-            with col_f4:
-                dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
-                
-            df_filtrado = df_full.copy()
-            if loja_sel != "TODAS AS LOJAS": df_filtrado = df_filtrado[df_filtrado["loja"] == loja_sel]
-            if prod_sel != "TODOS OS PRODUTOS": df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
-            if dt_inicio and dt_fim: df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
-                
-            if df_filtrado.empty: st.info("Nenhum registo encontrado.")
+
+        with tab_bi_receb:
+            if df_roms.empty or df_itens.empty:
+                st.warning("Ainda não existem dados de recebimento cadastrados.")
             else:
-                st.markdown("---")
-                st.subheader("📈 Indicadores Principais (KPIs)")
-                kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(df_filtrado['valor_total'].sum(), 2)}")
-                kpi2.metric("Total de Romaneios", f"{df_filtrado['numero_romaneio'].nunique()} romaneios")
-                kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(df_filtrado['quantidade'].sum(), 3)}")
-                kpi4.metric("Principal Fornecedor", str(df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() if not df_filtrado.empty else "N/A"))
-                st.markdown("---")
+                df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
+                df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
+                st.markdown("### 🔍 Filtros da Análise Gerencial")
+                col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
+                with col_f1: loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + list(df_roms["loja"].unique()), placeholder="Selecione...", key="rel_filter_loja")
+                with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
+                with col_f3:
+                    dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
+                    dt_inicio = st.date_input("Data Início", value=dt_min, format="DD/MM/YYYY", key="rel_filter_dt_ini")
+                with col_f4:
+                    dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
+                    dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
+                    
+                df_filtrado = df_full.copy()
+                if loja_sel != "TODAS AS LOJAS": df_filtrado = df_filtrado[df_filtrado["loja"] == loja_sel]
+                if prod_sel != "TODOS OS PRODUTOS": df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
+                if dt_inicio and dt_fim: df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
+                    
+                if df_filtrado.empty: st.info("Nenhum registo encontrado.")
+                else:
+                    st.markdown("---")
+                    st.subheader("📈 Indicadores Principais (KPIs)")
+                    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+                    kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(df_filtrado['valor_total'].sum(), 2)}")
+                    kpi2.metric("Total de Romaneios", f"{df_filtrado['numero_romaneio'].nunique()} romaneios")
+                    kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(df_filtrado['quantidade'].sum(), 3)}")
+                    kpi4.metric("Principal Fornecedor", str(df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() if not df_filtrado.empty else "N/A"))
+                    st.markdown("---")
+                    
+                    col_g1, col_g2 = st.columns(2)
+                    with col_g1:
+                        top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
+                        fig_val = px.bar(top_prods_val, x="produto", y="valor_total", text_auto=".2f", color="valor_total", color_continuous_scale="Greens")
+                        fig_val.update_layout(xaxis_title="Produto", yaxis_title="Total (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                        st.plotly_chart(fig_val, use_container_width=True)
+                    with col_g2:
+                        top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
+                        fig_qtd = px.bar(top_prods_qtd, x="produto", y="quantidade", text_auto=".2f", color="quantidade", color_continuous_scale="Reds")
+                        fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                        st.plotly_chart(fig_qtd, use_container_width=True)
+                    
+                    st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
+
+        with tab_bi_bonf_avaria:
+            st.subheader("💡 Análise Executiva de Bonificações, Transferências & Mitigação de Perdas")
+            st.markdown("Visão consolidada para a alta gerência sobre a **eficiência do processo de conferência, bonificação e aproveitamento de avarias** para a saúde financeira do supermercado.")
+            
+            with st.expander("🔍 Filtros Avançados para Apresentação à Liderança", expanded=True):
+                col_bi_f1, col_bi_f2, col_bi_f3, col_bi_f4 = st.columns(4)
                 
-                col_g1, col_g2 = st.columns(2)
-                with col_g1:
-                    top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
-                    fig_val = px.bar(top_prods_val, x="produto", y="valor_total", text_auto=".2f", color="valor_total", color_continuous_scale="Greens")
-                    fig_val.update_layout(xaxis_title="Produto", yaxis_title="Total (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_val, use_container_width=True)
-                with col_g2:
-                    top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
-                    fig_qtd = px.bar(top_prods_qtd, x="produto", y="quantidade", text_auto=".2f", color="quantidade", color_continuous_scale="Reds")
-                    fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_qtd, use_container_width=True)
+                todas_lojas_bi = sorted(list(set(df_bonf_rel['loja'].dropna().unique()).union(set(df_baixas_rel['loja_baixa'].dropna().unique()))))
+                with col_bi_f1:
+                    bi_loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + todas_lojas_bi, key="bi_sel_loja")
                 
-                st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
+                todos_prods_bi = sorted(list(set(df_bonf_rel['produto_hortifruti'].dropna().unique()).union(set(df_baixas_rel['produto_hortifruti'].dropna().unique()))))
+                with col_bi_f2:
+                    bi_prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + todos_prods_bi, key="bi_sel_prod")
+                
+                with col_bi_f3:
+                    bi_tipo_sel = st.selectbox("Tipo de Operação Bonificada", ["TODOS", "Bonificação", "Transferência de Bonificação"], key="bi_sel_tipo")
+                
+                with col_bi_f4:
+                    bi_periodo = st.selectbox("Período de Análise", ["Todo o Histórico", "Últimos 30 dias", "Últimos 90 dias", "Ano Atual"], key="bi_sel_periodo")
+
+            # Tratamento e filtragem dos DataFrames
+            df_b_sub = df_bonf_rel.copy()
+            df_bx_sub = df_baixas_rel.copy()
+
+            if not df_b_sub.empty:
+                df_b_sub['data_dt'] = pd.to_datetime(df_b_sub['data_entrada'].str.split(' ').str[0], format='%d/%m/%Y', errors='coerce')
+                if bi_loja_sel != "TODAS AS LOJAS": df_b_sub = df_b_sub[df_b_sub['loja'] == bi_loja_sel]
+                if bi_prod_sel != "TODOS OS PRODUTOS": df_b_sub = df_b_sub[df_b_sub['produto_hortifruti'] == bi_prod_sel]
+                if bi_tipo_sel != "TODOS": df_b_sub = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == bi_tipo_sel]
+                
+                if bi_periodo == "Últimos 30 dias":
+                    df_b_sub = df_b_sub[df_b_sub['data_dt'] >= (datetime.now() - timedelta(days=30))]
+                elif bi_periodo == "Últimos 90 dias":
+                    df_b_sub = df_b_sub[df_b_sub['data_dt'] >= (datetime.now() - timedelta(days=90))]
+                elif bi_periodo == "Ano Atual":
+                    df_b_sub = df_b_sub[df_b_sub['data_dt'].dt.year == datetime.now().year]
+
+            if not df_bx_sub.empty:
+                df_bx_sub['data_dt'] = pd.to_datetime(df_bx_sub['data_baixa'].str.split(' ').str[0], format='%d/%m/%Y', errors='coerce')
+                if bi_loja_sel != "TODAS AS LOJAS": df_bx_sub = df_bx_sub[df_bx_sub['loja_baixa'] == bi_loja_sel]
+                if bi_prod_sel != "TODOS OS PRODUTOS": df_bx_sub = df_bx_sub[df_bx_sub['produto_hortifruti'] == bi_prod_sel]
+
+                if bi_periodo == "Últimos 30 dias":
+                    df_bx_sub = df_bx_sub[df_bx_sub['data_dt'] >= (datetime.now() - timedelta(days=30))]
+                elif bi_periodo == "Últimos 90 dias":
+                    df_bx_sub = df_bx_sub[df_bx_sub['data_dt'] >= (datetime.now() - timedelta(days=90))]
+                elif bi_periodo == "Ano Atual":
+                    df_bx_sub = df_bx_sub[df_bx_sub['data_dt'].dt.year == datetime.now().year]
+
+            # Totais para os KPIs
+            v_tot_bonf = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == 'Bonificação']['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
+            v_tot_transf = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == 'Transferência de Bonificação']['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
+            v_tot_entradas = df_b_sub['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
+            v_tot_avarias_salvas = df_bx_sub['valor_total_avaria'].sum() if not df_bx_sub.empty else 0.0
+            
+            taxa_cobertura = (v_tot_avarias_salvas / v_tot_entradas * 100) if v_tot_entradas > 0 else 0.0
+            v_saldo_remanescente = max(0.0, v_tot_entradas - v_tot_avarias_salvas)
+
+            st.markdown("---")
+            st.markdown("### 🎯 Painel de Impacto Executivo")
+            
+            kpi_e1, kpi_e2, kpi_e3, kpi_e4, kpi_e5 = st.columns(5)
+            kpi_e1.metric("1. Entradas Bonificadas", f"R$ {fmt_ptbr(v_tot_bonf, 2)}", help="Valor total obtido diretamente com fornecedores")
+            kpi_e2.metric("2. Transferências", f"R$ {fmt_ptbr(v_tot_transf, 2)}", help="Valor total redistribuído entre lojas da rede")
+            kpi_e3.metric("3. Perdas Evitadas (Avarias)", f"R$ {fmt_ptbr(v_tot_avarias_salvas, 2)}", delta=f"{fmt_ptbr(v_tot_avarias_salvas, 2)} Salvos", delta_color="normal", help="Valor de perdas físicas amortizadas por saldo de bonificação")
+            kpi_e4.metric("4. Taxa de Cobertura", f"{fmt_ptbr(taxa_cobertura, 2)}%", help="Porcentagem de bonificações convertida em amortização de perdas")
+            kpi_e5.metric("5. Saldo Remanescente", f"R$ {fmt_ptbr(v_saldo_remanescente, 2)}", help="Saldo de bonificação ainda disponível para compensação")
+
+            st.markdown("""
+            <div style="background: rgba(46, 125, 50, 0.25); border: 1px solid #4CAF50; border-radius: 8px; padding: 12px 18px; margin: 15px 0;">
+                <span style="color: #81C784; font-weight: bold; font-size: 15px;">🛡️ Mensagem para a Liderança:</span>
+                <span style="color: #FFFFFF; font-size: 14px;"> O processo de acompanhamento de bonificações já garantiu uma <b>recuperação direta de R$ </span>
+                <span style="color: #FFF; font-weight: bold;">{}</span>
+                <span style="color: #FFFFFF;"> em avarias que seriam registradas como prejuízo líquido direto para a empresa.</span>
+            </div>
+            """.format(fmt_ptbr(v_tot_avarias_salvas, 2)), unsafe_allow_html=True)
+
+            st.markdown("---")
+            st.markdown("### 📊 Gráficos Analíticos de Desempenho")
+            
+            bg_bi1, bg_bi2 = st.columns(2)
+            with bg_bi1:
+                st.markdown("#### Entradas por Tipo e Loja (R$)")
+                if not df_b_sub.empty:
+                    fig_lojas = px.bar(
+                        df_b_sub, x="loja", y="valor_bonificacao", color="tipo_bonificacao",
+                        barmode="group", text_auto=".2f",
+                        color_discrete_map={"Bonificação": "#4CAF50", "Transferência de Bonificação": "#2196F3"}
+                    )
+                    fig_lojas.update_layout(xaxis_title="Loja", yaxis_title="Valor (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                    st.plotly_chart(fig_lojas, use_container_width=True)
+                else:
+                    st.info("Sem dados para a combinação de filtros.")
+
+            with bg_bi2:
+                st.markdown("#### Avarias Bonificadas por Loja (Economia Gerada)")
+                if not df_bx_sub.empty:
+                    df_bx_grp = df_bx_sub.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index()
+                    fig_avarias = px.bar(df_bx_grp, x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Purples")
+                    fig_avarias.update_layout(xaxis_title="Loja da Baixa", yaxis_title="Avaria Coberta (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                    st.plotly_chart(fig_avarias, use_container_width=True)
+                else:
+                    st.info("Sem dados de baixas para os filtros.")
+
+            bg_bi3, bg_bi4 = st.columns(2)
+            with bg_bi3:
+                st.markdown("#### Top Produtos Beneficiados por Bonificação")
+                if not df_b_sub.empty:
+                    df_p_bonf = df_b_sub.groupby("produto_hortifruti")["valor_bonificacao"].sum().nlargest(7).reset_index()
+                    fig_prod_b = px.bar(df_p_bonf, y="produto_hortifruti", x="valor_bonificacao", orientation="h", text_auto=".2f", color="valor_bonificacao", color_continuous_scale="Teal")
+                    fig_prod_b.update_layout(xaxis_title="Total (R$)", yaxis_title="Produto", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                    st.plotly_chart(fig_prod_b, use_container_width=True)
+                else:
+                    st.info("Sem dados de produtos.")
+
+            with bg_bi4:
+                st.markdown("#### Distribuição do Status de Notas de Bonificação")
+                if not df_b_sub.empty:
+                    fig_st_pie = px.pie(df_b_sub, names="status", values="valor_bonificacao", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                    fig_st_pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                    st.plotly_chart(fig_st_pie, use_container_width=True)
+                else:
+                    st.info("Sem status para exibir.")
+
+            st.markdown("---")
+            st.markdown("### 📄 Geração de Relatório Executivo em PDF")
+            
+            metrics_dict = {
+                "tot_bonf": v_tot_bonf,
+                "tot_transf": v_tot_transf,
+                "tot_avaria": v_tot_avarias_salvas,
+                "taxa_cobertura": taxa_cobertura,
+                "saldo_restante": v_saldo_remanescente
+            }
+            pdf_bi_bytes = gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_b_sub, df_bx_sub)
+            
+            col_pdf_bi1, col_pdf_bi2 = st.columns([3, 1])
+            with col_pdf_bi1:
+                st.markdown("Gere um relatório em PDF para apresentações de resultados em reuniões com a diretoria.")
+            with col_pdf_bi2:
+                st.download_button(
+                    label="📥 Baixar PDF Executivo",
+                    data=pdf_bi_bytes,
+                    file_name=f"Relatorio_Executivo_Lideranca_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d_%H%M')}.pdf",
+                    mime="application/pdf",
+                    type="primary",
+                    key="btn_download_executivo_bi"
+                )
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         st.title("📦🚚 Gerenciamento e Cadastro (Produtos & Fornecedores)")
