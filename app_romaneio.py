@@ -1501,7 +1501,7 @@ else:
                             cursor_b = conn_b.cursor()
                             cursor_b.execute(
                                 "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonificacao, b64_anexo_bonf)
+                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel, b64_anexo_bonf)
                             )
                             conn_b.commit()
                             conn_b.close()
@@ -1954,18 +1954,26 @@ else:
                     reg_bx_atual = df_bx_table[df_bx_table["id"] == id_bx_atual].iloc[0]
                     
                     with st.form("form_edicao_baixa_avaria"):
-                        st.markdown(f"**Editando Baixa (Ref: {reg_bx_atual['ref_bon_transferen']} - NF Entrada: {reg_bx_atual['nf_b_entrada']})**")
+                        st.markdown(f"**Editando Baixa (Ref: {reg_bx_atual['ref_bon_transferen']} - NF Entrada Atual: {reg_bx_atual['nf_b_entrada']})**")
                         
                         col_eb1, col_eb2, col_eb3 = st.columns(3)
                         with col_eb1:
                             lista_lojas_eb = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                             idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                             nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
-                            novo_ref_bx = st.text_input("Ref. Bon. transferen", value=reg_bx_atual["ref_bon_transferen"])
+                            
+                            # CAMPO ADICIONADO: Seleção e alteração da NF de B. ENTRADA
+                            notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
+                            if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
+                                notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
+                            idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
+                            nova_nf_b_entrada = st.selectbox("NF de B. ENTRADA", options=notas_disponiveis_edicao, index=idx_nf_atual)
+                            
                         with col_eb2:
+                            novo_ref_bx = st.text_input("Ref. Bon. transferen", value=reg_bx_atual["ref_bon_transferen"])
                             novo_prod_bx = st.text_input("Produto Hortifrúti", value=reg_bx_atual["produto_hortifruti"])
-                            novo_qtd_bx_str = st.text_input("Qtd (kg/cx)", value=str(reg_bx_atual["quantidade_kg_cx"]).replace(".", ","))
                         with col_eb3:
+                            novo_qtd_bx_str = st.text_input("Qtd (kg/cx)", value=str(reg_bx_atual["quantidade_kg_cx"]).replace(".", ","))
                             novo_val_bx_str = st.text_input("Valor Total Avaria (R$)", value=str(reg_bx_atual["valor_total_avaria"]).replace(".", ","))
                             
                         novo_anexo_bx_up = st.file_uploader("Substituir NF da Baixa (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
@@ -1990,11 +1998,16 @@ else:
                                     with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
                                     b64_nf_bx_ed = base64.b64encode(bytes_bx_up).decode('utf-8')
                                     
+                                # Busca o saldo da nota de entrada selecionada para atualizar corretamente
+                                nota_edit_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nova_nf_b_entrada), None)
+                                saldo_disp_edit = nota_edit_dict["saldo_restante"] if nota_edit_dict else reg_bx_atual["saldo_total_disponivel"]
+                                novo_saldo_restante_ed = saldo_disp_edit - v_f_ed
+                                    
                                 conn_up_bx, db_t_upbx = get_db_connection()
                                 cur_upbx = conn_up_bx.cursor()
                                 cur_upbx.execute(
-                                    "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
-                                    (nova_loja_bx, novo_ref_bx.strip(), novo_prod_bx, q_f_ed, v_f_ed, path_nf_bx_ed, b64_nf_bx_ed, int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual)
+                                    "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
+                                    (nova_loja_bx, novo_ref_bx.strip(), nova_nf_b_entrada, novo_prod_bx, q_f_ed, v_f_ed, novo_saldo_restante_ed, saldo_disp_edit, path_nf_bx_ed, b64_nf_bx_ed, int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual)
                                 )
                                 conn_up_bx.commit()
                                 conn_up_bx.close()
