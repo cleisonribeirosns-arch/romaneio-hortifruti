@@ -914,7 +914,7 @@ def gerar_pdf_baixas(df_baixas_data):
         Paragraph("Qtd (kg/cx)", style_header_center),
         Paragraph("Valor Total Avaria (R$)", style_header_left),
         Paragraph("Saldo", style_header_left),
-        Paragraph("Saldo Total disponível", style_header_left)
+        Paragraph("Saldo Total Utilizado", style_header_left)
     ]]
     
     tot_val_avarias = 0.0
@@ -922,7 +922,7 @@ def gerar_pdf_baixas(df_baixas_data):
         v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
         tot_val_avarias += v_av
         s_nota = float(r["saldo_restante_nota"]) if r["saldo_restante_nota"] else 0.0
-        s_disp = float(r["saldo_total_disponivel"]) if r["saldo_total_disponivel"] else 0.0
+        s_util = float(r.get("saldo_total_utilizado", 0.0))
         qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
         
         table_content.append([
@@ -935,7 +935,7 @@ def gerar_pdf_baixas(df_baixas_data):
             Paragraph(fmt_ptbr(qtd_val, 3), style_center),
             Paragraph(f"R$ {fmt_ptbr(v_av, 2)}", style_left),
             Paragraph(f"R$ {fmt_ptbr(s_nota, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_disp, 2)}", style_left),
+            Paragraph(f"R$ {fmt_ptbr(s_util, 2)}", style_left),
         ])
         
     baixas_table = Table(table_content, colWidths=[70, 95, 85, 75, 85, 120, 60, 85, 65, 52])
@@ -1728,6 +1728,12 @@ else:
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
         conn_b_all2.close()
 
+        # Dicionário mapeando NF de Entrada -> Valor Original da Nota
+        dict_valor_orig_por_nf = {}
+        if not df_todas_bonf.empty:
+            for _, r_b in df_todas_bonf.iterrows():
+                dict_valor_orig_por_nf[str(r_b["numero_nota"])] = float(r_b["valor_bonificacao"])
+
         # Apenas notas da LOJA 02 contabilizam como saldo para baixar as avarias
         if not df_todas_bonf.empty:
             df_bonf_loja02 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02|NOVA CIDADE", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
@@ -1831,11 +1837,7 @@ else:
                                 with open(path_nf_baixa, "wb") as f_out: f_out.write(bytes_baixa)
                                 b64_nf_baixa = base64.b64encode(bytes_baixa).decode('utf-8')
                                 
-                            # REGRA CORRIGIDA:
-                            # 1. Saldo Total Disponível = O saldo antes do abatimento da NOTA REFERENCIADA DA LOJA 02
                             saldo_disponivel_da_nota_referenciada = nota_selecionada_dict["saldo_restante"]
-                            
-                            # 2. Saldo = O valor restante da NOTA REFERENCIADA após o abatimento da avaria
                             novo_saldo_restante_nota = saldo_disponivel_da_nota_referenciada - val_avaria_f
                             
                             try:
@@ -1903,7 +1905,35 @@ else:
             if f_prod_bx.strip(): df_bx_table = df_bx_table[df_bx_table["produto_hortifruti"].str.contains(f_prod_bx.strip(), case=False, na=False)]
             
         if not df_bx_table.empty:
-            pdf_bytes_bx = gerar_pdf_baixas(df_bx_table)
+            # Recomposição dinâmica do Saldo Utilizado e Saldo Restante por Nota de Entrada
+            df_display_plan = df_bx_table.copy()
+            
+            # Dicionários de totais usados e saldos restantes por NF de Entrada
+            total_utilizado_por_nf = total_baixado_por_nota
+            
+            saldo_calculado_list = []
+            utilizado_calculado_list = []
+            
+            for _, row_bx in df_display_plan.iterrows():
+                nf_ent_item = str(row_bx["nf_b_entrada"])
+                
+                # Total Utilizado acumulado para esta nota
+                v_utilizado = total_utilizado_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"]))
+                utilizado_calculado_list.append(v_utilizado)
+                
+                # Saldo Restante = Valor Original da Nota - Total Utilizado
+                v_original = dict_valor_orig_por_nf.get(nf_ent_item, 0.0)
+                if v_original > 0:
+                    v_saldo_restante = max(0.0, v_original - v_utilizado)
+                else:
+                    v_saldo_restante = float(row_bx["saldo_restante_nota"])
+                    
+                saldo_calculado_list.append(v_saldo_restante)
+
+            df_display_plan["saldo_restante_calculado"] = saldo_calculado_list
+            df_display_plan["saldo_total_utilizado"] = utilizado_calculado_list
+
+            pdf_bytes_bx = gerar_pdf_baixas(df_display_plan)
             st.download_button(
                 label="📥 Descarregar Planilha de Baixas de Avarias em PDF",
                 data=pdf_bytes_bx,
@@ -1918,13 +1948,14 @@ else:
                 if r_bx.get("nf_baixa_b64") and r_bx.get("nf_baixa"):
                     salvar_arquivo_fisico_do_b64(r_bx["nf_baixa"], r_bx["nf_baixa_b64"])
             
-            df_display_plan = df_bx_table.copy()
             df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
             df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_plan["Saldo"] = df_display_plan["saldo_restante_nota"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             
-            # EXIBIÇÃO CORRETA NA PLANILHA: Reflete o Saldo Total Disponível referente à NOTA REFERENCIADA da Loja 02
-            df_display_plan["Saldo Total disponível"] = df_display_plan["saldo_total_disponivel"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            # O SALDO agora é dinâmico e igual para todos os registros da mesma Nota
+            df_display_plan["Saldo"] = df_display_plan["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+            
+            # COLUNA ALTERADA: Saldo Total Utilizado referente à Nota Fiscal de Entrada
+            df_display_plan["Saldo Total Utilizado"] = df_display_plan["saldo_total_utilizado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
             
             df_display_plan["NF da baixa"] = df_display_plan.apply(lambda r: "Ver Anexo" if (r.get("nf_baixa") and os.path.exists(str(r["nf_baixa"]))) or r.get("nf_baixa_b64") else "S/Anexo", axis=1)
             
@@ -1936,7 +1967,7 @@ else:
                 "produto_hortifruti": "Produto Hortifrúti"
             })
             
-            df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total disponível"]]
+            df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total Utilizado"]]
             df_final_show.index = range(1, len(df_final_show) + 1)
             
             st.dataframe(df_final_show, use_container_width=True, height=400)
@@ -1962,7 +1993,6 @@ else:
                             idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                             nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
                             
-                            # CAMPO ADICIONADO: Seleção e alteração da NF de B. ENTRADA
                             notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
                             if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
                                 notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
@@ -1998,7 +2028,6 @@ else:
                                     with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
                                     b64_nf_bx_ed = base64.b64encode(bytes_bx_up).decode('utf-8')
                                     
-                                # Busca o saldo da nota de entrada selecionada para atualizar corretamente
                                 nota_edit_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nova_nf_b_entrada), None)
                                 saldo_disp_edit = nota_edit_dict["saldo_restante"] if nota_edit_dict else reg_bx_atual["saldo_total_disponivel"]
                                 novo_saldo_restante_ed = saldo_disp_edit - v_f_ed
@@ -2340,7 +2369,7 @@ else:
                                 conn_up_u, db_tupu = get_db_connection()
                                 cur_upu = conn_up_u.cursor()
                                 cur_upu.execute(
-                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
+                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ?",
                                     (eu_nome.strip(), eu_login.strip(), eu_senha.strip(), eu_perfil, int(id_u_ed) if db_tupu == "postgres" else id_u_ed)
                                 )
                                 conn_up_u.commit()
