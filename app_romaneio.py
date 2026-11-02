@@ -1602,7 +1602,6 @@ else:
             with st.form("form_edicao_direta_bonificacao"):
                 st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
                 
-                # Extrair data atual do registo para preencher o date_input
                 data_atual_str = str(reg_obj_atual["data_entrada"]).split(" ")[0] if reg_obj_atual["data_entrada"] else ""
                 try:
                     dt_obj_default = datetime.strptime(data_atual_str, "%d/%m/%Y").date()
@@ -1638,7 +1637,6 @@ else:
                     try:
                         val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else reg_obj_atual["valor_bonificacao"]
                         
-                        # Preservar hora anterior se existir
                         hora_antiga = "00:00:00"
                         if len(str(reg_obj_atual["data_entrada"]).split(" ")) > 1:
                             hora_antiga = str(reg_obj_atual["data_entrada"]).split(" ")[1]
@@ -1687,12 +1685,7 @@ else:
         st.title("📉 Registro de Baixas das Avarias")
         loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
         
-        conn_b_all, db_tb_all = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
-        conn_b_all.close()
-        
-        df_bonf_loja = df_todas_bonf[df_todas_bonf["loja"].str.contains(loja_ativa_sessao.replace("LOJA ", ""), case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])] if not df_todas_bonf.empty else pd.DataFrame()
-        
+        # 1. Carregar histórico de baixas
         conn_bx_chk, db_tbx_chk = get_db_connection()
         df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
         conn_bx_chk.close()
@@ -1702,7 +1695,51 @@ else:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
+
+        # 2. Carregar todas as bonificações e recalcular/atualizar status automaticamente no banco
+        conn_b_all, db_tb_all = get_db_connection()
+        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
+        
+        if not df_todas_bonf.empty:
+            cur_st_up = conn_b_all.cursor()
+            for _, r_b in df_todas_bonf.iterrows():
+                num_nf_b = str(r_b["numero_nota"])
+                val_orig_b = float(r_b["valor_bonificacao"])
+                baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
+                saldo_b = max(0.0, val_orig_b - baixado_b)
                 
+                # Regra de status automática
+                if baixado_b <= 0:
+                    novo_st_auto = "Disponível"
+                elif saldo_b > 0:
+                    novo_st_auto = "Parcialmente Utilizada"
+                else:
+                    novo_st_auto = "Totalmente Utilizada"
+                
+                if r_b["status"] != novo_st_auto:
+                    cur_st_up.execute(
+                        "UPDATE bonificacoes SET status = %s WHERE id = %s" if db_tb_all == "postgres" else "UPDATE bonificacoes SET status = ? WHERE id = ?",
+                        (novo_st_auto, int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"])
+                    )
+            conn_b_all.commit()
+        conn_b_all.close()
+
+        # Recarregar bonificações atualizadas
+        conn_b_all2, db_tb_all2 = get_db_connection()
+        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
+        conn_b_all2.close()
+
+        # Filtrar notas disponíveis para a loja ativa (ou notas da Loja 02 com saldo, ou outras lojas com status Disponível)
+        if not df_todas_bonf.empty:
+            # Se for LOJA 02, pode usar notas da loja que estejam Disponível ou Parcialmente Utilizada
+            if "02" in loja_ativa_sessao or "NOVA CIDADE" in loja_ativa_sessao:
+                df_bonf_loja = df_todas_bonf[df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
+            else:
+                # Outras lojas só podem usar notas próprias e que estejam Disponíveis (e que ainda não foram referenciadas)
+                df_bonf_loja = df_todas_bonf[df_todas_bonf["loja"].str.contains(loja_ativa_sessao.replace("LOJA ", ""), case=False, na=False) & (df_todas_bonf["status"] == "Disponível")]
+        else:
+            df_bonf_loja = pd.DataFrame()
+
         notas_com_saldo_loja = []
         saldo_total_disp_loja = 0.0
         
@@ -1819,6 +1856,21 @@ else:
                                         nf_b_entrada_sel, prod_hort_sel, qtd_val_f, val_avaria_f, novo_saldo_nota, novo_saldo_total_disp, b64_nf_baixa
                                     )
                                 )
+                                
+                                # Se NÃO for a Loja 02, a nota deve ser imediatamente marcada como Totalmente Utilizada (uso único)
+                                if "02" not in lojas_baixa_sel and "NOVA CIDADE" not in lojas_baixa_sel:
+                                    cursor_ins.execute(
+                                        "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = ?",
+                                        (nf_b_entrada_sel,)
+                                    )
+                                else:
+                                    # Se for Loja 02, atualiza conforme o saldo restante da nota
+                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_nota <= 0 else "Parcialmente Utilizada"
+                                    cursor_ins.execute(
+                                        "UPDATE bonificacoes SET status = %s WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE numero_nota = ?",
+                                        (st_auto_l2, nf_b_entrada_sel)
+                                    )
+
                                 conn_ins.commit()
                                 conn_ins.close()
                                 st.success("Baixa registrada com sucesso!")
@@ -1883,6 +1935,82 @@ else:
             df_final_show.index = range(1, len(df_final_show) + 1)
             
             st.dataframe(df_final_show, use_container_width=True, height=400)
+            
+            st.markdown("---")
+            st.subheader("📄 Gerenciamento: Editar ou Excluir Registro de Baixa")
+            
+            opcoes_baixas_editar = [(row["id"], f"Loja: {row['loja_baixa']} | Ref: {row['ref_bon_transferen']} | NF Ent: {row['nf_b_entrada']} (R$ {fmt_ptbr(row['valor_total_avaria'], 2)})") for _, row in df_bx_table.iterrows()]
+            
+            if opcoes_baixas_editar:
+                baixa_selecionada_ed = st.selectbox("Selecione a Baixa para Editar ou Excluir", options=opcoes_baixas_editar, format_func=lambda x: x[1], key="sel_baixa_gerenciar_edicao")
+                
+                if baixa_selecionada_ed:
+                    id_bx_atual = baixa_selecionada_ed[0]
+                    reg_bx_atual = df_bx_table[df_bx_table["id"] == id_bx_atual].iloc[0]
+                    
+                    with st.form("form_edicao_baixa_avaria"):
+                        st.markdown(f"**Editando Baixa (Ref: {reg_bx_atual['ref_bon_transferen']} - NF Entrada: {reg_bx_atual['nf_b_entrada']})**")
+                        
+                        col_eb1, col_eb2, col_eb3 = st.columns(3)
+                        with col_eb1:
+                            lista_lojas_eb = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                            idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
+                            nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
+                            novo_ref_bx = st.text_input("Ref. Bon. transferen", value=reg_bx_atual["ref_bon_transferen"])
+                        with col_eb2:
+                            novo_prod_bx = st.text_input("Produto Hortifrúti", value=reg_bx_atual["produto_hortifruti"])
+                            novo_qtd_bx_str = st.text_input("Qtd (kg/cx)", value=str(reg_bx_atual["quantidade_kg_cx"]).replace(".", ","))
+                        with col_eb3:
+                            novo_val_bx_str = st.text_input("Valor Total Avaria (R$)", value=str(reg_bx_atual["valor_total_avaria"]).replace(".", ","))
+                            
+                        novo_anexo_bx_up = st.file_uploader("Substituir NF da Baixa (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
+                        
+                        col_bnt_bx1, col_bnt_bx2 = st.columns(2)
+                        with col_bnt_bx1:
+                            salvar_alt_bx = st.form_submit_button("💾 Salvar Alterações da Baixa", type="primary")
+                        with col_bnt_bx2:
+                            excluir_bx_btn = st.form_submit_button("🗑️ Excluir Registo de Baixa", type="secondary")
+                            
+                        if salvar_alt_bx:
+                            spinner_supernova("Atualizando baixa...")
+                            try:
+                                q_f_ed = float(novo_qtd_bx_str.replace(".", "").replace(",", ".")) if novo_qtd_bx_str else reg_bx_atual["quantidade_kg_cx"]
+                                v_f_ed = float(novo_val_bx_str.replace(".", "").replace(",", ".")) if novo_val_bx_str else reg_bx_atual["valor_total_avaria"]
+                                
+                                path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
+                                b64_nf_bx_ed = reg_bx_atual.get("nf_baixa_b64", "")
+                                if novo_anexo_bx_up:
+                                    path_nf_bx_ed = os.path.join("uploads", f"NF_BAIXA_EDIT_{novo_ref_bx}_{novo_anexo_bx_up.name}")
+                                    bytes_bx_up = novo_anexo_bx_up.getbuffer()
+                                    with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
+                                    b64_nf_bx_ed = base64.b64encode(bytes_bx_up).decode('utf-8')
+                                    
+                                conn_up_bx, db_t_upbx = get_db_connection()
+                                cur_upbx = conn_up_bx.cursor()
+                                cur_upbx.execute(
+                                    "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
+                                    (nova_loja_bx, novo_ref_bx.strip(), novo_prod_bx, q_f_ed, v_f_ed, path_nf_bx_ed, b64_nf_bx_ed, int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual)
+                                )
+                                conn_up_bx.commit()
+                                conn_up_bx.close()
+                                st.success("Baixa atualizada com sucesso!")
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro ao atualizar baixa: {e}")
+                            
+                        if excluir_bx_btn:
+                            spinner_supernova("Excluindo baixa...")
+                            try:
+                                conn_del_bx, db_td_bx = get_db_connection()
+                                cur_delbx = conn_del_bx.cursor()
+                                cur_delbx.execute(
+                                    "DELETE FROM baixas_avarias WHERE id = %s" if db_td_bx == "postgres" else "DELETE FROM baixas_avarias WHERE id = ?",
+                                    (int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual,)
+                                )
+                                conn_del_bx.commit()
+                                conn_del_bx.close()
+                                st.success("Baixa excluída com sucesso!")
+                                st.rerun()
+                            except Exception as e: st.error(f"Erro ao excluir baixa: {e}")
             
             st.markdown("---")
             st.subheader("📄 Visualizar Anexo de Baixa")
