@@ -2623,4 +2623,3 @@ else:
                                 st.rerun()
                             except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum usuário cadastrado.")
-```eof
