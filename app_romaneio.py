@@ -432,8 +432,7 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 codigo_fornecedor VARCHAR(255) UNIQUE,
                 cnpj VARCHAR(255),
-                nome VARCHAR(255) UNIQUE NOT NULL,
-                contato VARCHAR(255)
+                nome VARCHAR(255) UNIQUE NOT NULL
             )
         """)
         cursor.execute("""
@@ -540,8 +539,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 codigo_fornecedor TEXT UNIQUE,
                 cnpj TEXT,
-                nome TEXT UNIQUE NOT NULL,
-                contato TEXT
+                nome TEXT UNIQUE NOT NULL
             )
         """)
         cursor.execute("""
@@ -2478,23 +2476,23 @@ else:
             st.markdown("---")
             conn, db_type = get_db_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome, contato FROM fornecedores ORDER BY nome")
+            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome FROM fornecedores ORDER BY nome")
             fornecedores_cadastrados = cursor.fetchall()
             conn.close()
             
             if fornecedores_cadastrados:
-                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[4], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
-                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato", "ID_Real"])
-                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor", "Contato"]], use_container_width=True, hide_index=True, height=250)
+                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
+                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "ID_Real"])
+                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor"]], use_container_width=True, hide_index=True, height=250)
                 
                 st.markdown("### ✏️ Editar ou Excluir Fornecedor")
-                opcoes_edit_forn = [(f[5], f"{f[3]} (Cód: {f[1] or 'S/Cód'})") for f in forn_com_id_ajustado]
+                opcoes_edit_forn = [(f[4], f"{f[3]} (Cód: {f[1] or 'S/Cód'})") for f in forn_com_id_ajustado]
                 forn_sel_ed = st.selectbox("Selecione o fornecedor para editar ou excluir", options=opcoes_edit_forn, format_func=lambda x: x[1], key="sel_forn_editar")
                 if forn_sel_ed:
                     id_f_ed = forn_sel_ed[0]
                     conn_f_det, db_tf_det = get_db_connection()
                     cur_fd = conn_f_det.cursor()
-                    cur_fd.execute("SELECT codigo_fornecedor, cnpj, nome, contato FROM fornecedores WHERE id = %s" if db_tf_det == "postgres" else "SELECT codigo_fornecedor, cnpj, nome, contato FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tf_det == "postgres" else id_f_ed,))
+                    cur_fd.execute("SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = %s" if db_tf_det == "postgres" else "SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tf_det == "postgres" else id_f_ed,))
                     dados_f_atual = cur_fd.fetchone()
                     conn_f_det.close()
                     
@@ -2503,7 +2501,6 @@ else:
                             ef_cod = st.text_input("Código do Fornecedor", value=dados_f_atual[0] or "")
                             ef_cnpj = st.text_input("CNPJ", value=dados_f_atual[1] or "")
                             ef_nome = st.text_input("Nome / Razão Social", value=dados_f_atual[2] or "")
-                            ef_contato = st.text_input("Contato", value=dados_f_atual[3] or "")
                             
                             col_bf1, col_bf2 = st.columns(2)
                             with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
@@ -2515,8 +2512,8 @@ else:
                                     conn_up_f, db_tupf = get_db_connection()
                                     cur_upf = conn_up_f.cursor()
                                     cur_upf.execute(
-                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s, contato = %s WHERE id = %s" if db_tupf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ?, contato = ? WHERE id = ?",
-                                        (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), ef_contato.strip(), int(id_f_ed) if db_tupf == "postgres" else id_f_ed)
+                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s WHERE id = %s" if db_tupf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ? WHERE id = ?",
+                                        (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), int(id_f_ed) if db_tupf == "postgres" else id_f_ed)
                                     )
                                     conn_up_f.commit()
                                     conn_up_f.close()
