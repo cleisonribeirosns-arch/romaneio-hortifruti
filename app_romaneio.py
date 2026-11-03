@@ -1291,10 +1291,28 @@ else:
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
             st.write("**Assinatura do Conferente**")
-            canvas_conf = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF", height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_conf_{k_suffix}")
+            canvas_conf = st_canvas(
+                stroke_width=3, 
+                stroke_color="#000000", 
+                background_color="#FFFFFF", 
+                height=120, 
+                width=280, 
+                drawing_mode="freedraw", 
+                return_image_data=True, 
+                key=f"canv_conf_{k_suffix}"
+            )
         with col_ass2:
             st.write("**Assinatura do Entregador / Fornecedor**")
-            canvas_ent = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF", height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_ent_{k_suffix}")
+            canvas_ent = st_canvas(
+                stroke_width=3, 
+                stroke_color="#000000", 
+                background_color="#FFFFFF", 
+                height=120, 
+                width=280, 
+                drawing_mode="freedraw", 
+                return_image_data=True, 
+                key=f"canv_ent_{k_suffix}"
+            )
             
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
             num_rom_final = st.session_state[f"num_rom_auto_{k_suffix}"]
