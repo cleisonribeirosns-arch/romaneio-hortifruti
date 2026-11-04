@@ -22,14 +22,14 @@ import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 
-# Tenta importar fitz (PyMuPDF) para conversão visual e renderização de PDF em imagem
+# Tenta importar fitz (PyMuPDF)
 try:
     import fitz  # PyMuPDF
     HAS_PYMUPDF = True
 except ImportError:
     HAS_PYMUPDF = False
 
-# Tenta importar psycopg2 para suporte ao PostgreSQL permanente
+# Tenta importar psycopg2
 try:
     import psycopg2
     import psycopg2.extras
@@ -76,9 +76,6 @@ def get_db_connection():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
 
-# ---------------------------------------------------------
-# FUNÇÃO DE SPINNER / FEEDBACK COM LOGOTIPO DO SUPERNOVA
-# ---------------------------------------------------------
 def spinner_supernova(mensagem="A carregar dados do Supernova..."):
     logo_path_spin = None
     for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
@@ -105,9 +102,6 @@ def spinner_supernova(mensagem="A carregar dados do Supernova..."):
     else:
         return st.spinner(mensagem)
 
-# ---------------------------------------------------------
-# FUNÇÃO DE PERSISTÊNCIA DE ANEXOS (BASE64 NO BANCO)
-# ---------------------------------------------------------
 def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
     if not caminho_alvo or not b64_str:
         return
@@ -121,9 +115,6 @@ def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
     except Exception:
         pass
 
-# ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS
-# ---------------------------------------------------------
 @st.dialog("📄 Visualizador de Documentos", width="large")
 def exibir_foto_modal(caminho_foto, b64_dados=None):
     if not caminho_foto and b64_dados:
@@ -201,7 +192,7 @@ def exibir_foto_modal(caminho_foto, b64_dados=None):
         st.error("Ficheiro de anexo não encontrado no servidor ou o registo não possui conteúdo binário válido.")
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL
+# ESTILOS VISUAIS
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
@@ -374,13 +365,6 @@ st.markdown(
         font-weight: bold !important;
     }}
 
-    div[data-testid="stFileUploader"], 
-    div[data-testid="stFileUploader"] section {{
-        background: rgba(30, 35, 42, 0.85) !important;
-        border: 2px solid rgba(255, 255, 255, 0.4) !important;
-        border-radius: 8px !important;
-    }}
-
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background-color: #2D3748 !important;
         color: #FFFFFF !important;
@@ -402,7 +386,7 @@ st.markdown(
 )
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
+# INICIALIZAÇÃO DE BANCO
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -501,13 +485,6 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
         """)
-        
-        cursor.execute("ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT;")
-        cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT;")
-        cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS ass_conf_b64 TEXT;")
-        cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS ass_ent_b64 TEXT;")
-        cursor.execute("ALTER TABLE baixas_avarias ADD COLUMN IF NOT EXISTS nf_baixa_b64 TEXT;")
-        
         cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
         if not cursor.fetchone():
             cursor.execute("DELETE FROM usuarios WHERE login = %s", ('admin',))
@@ -521,7 +498,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome TEXT NOT NULL,
                 login TEXT UNIQUE NOT NULL,
-                senha TEXT NOT NULL,
+                senha TEXT UNIQUE NOT NULL,
                 perfil TEXT NOT NULL
             )
         """)
@@ -609,18 +586,6 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
         """)
-        
-        try: cursor.execute("ALTER TABLE bonificacoes ADD COLUMN anexo_b64 TEXT;")
-        except Exception: pass
-        try: cursor.execute("ALTER TABLE romaneios ADD COLUMN foto_b64 TEXT;")
-        except Exception: pass
-        try: cursor.execute("ALTER TABLE romaneios ADD COLUMN ass_conf_b64 TEXT;")
-        except Exception: pass
-        try: cursor.execute("ALTER TABLE romaneios ADD COLUMN ass_ent_b64 TEXT;")
-        except Exception: pass
-        try: cursor.execute("ALTER TABLE baixas_avarias ADD COLUMN nf_baixa_b64 TEXT;")
-        except Exception: pass
-        
         cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
         if not cursor.fetchone():
             cursor.execute("DELETE FROM usuarios WHERE login = 'admin'")
@@ -714,12 +679,9 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
                 pass
             canvas_obj.restoreState()
 
-    if logo_path and os.path.exists(logo_path):
-        logo_img_header = RLImage(logo_path, width=70, height=50)
-    else:
-        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
+    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
     tipo_op_pdf = romaneio_data.get('tipo_operacao', 'Compra')
+    
     header_table = Table([[logo_img_header, Paragraph(f"<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Romaneio de Recebimento ({tipo_op_pdf.upper()})", styles["Normal"]), Paragraph(f"<b>ROM:</b> {romaneio_data['numero_romaneio']}<br/><b>Data:</b> {romaneio_data['data_recebimento']}", styles["Normal"])]], colWidths=[80, 300, 160])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -732,7 +694,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     info_data = [
         [Paragraph(f"<b>Tipo de Operação:</b> {tipo_op_pdf}", styles["Normal"]), Paragraph(f"<b>Fornecedor:</b> {romaneio_data.get('fornecedor','')}", styles["Normal"])],
         [Paragraph(f"<b>Cód. Fornecedor:</b> {romaneio_data.get('codigo_fornecedor','')}", styles["Normal"]), Paragraph(f"<b>Telefone:</b> {romaneio_data.get('telefone_fornecedor','')}", styles["Normal"])],
-        [Paragraph(f"<b>Loja / Rota:</b> {loja_txt_pdf}", styles["Normal"]), Paragraph(f"<b>Conferente:</b> {romaneio_data.get('conferente','')}", styles["Normal"])],
+        [Paragraph(f"<b>Loja / Pasta:</b> {loja_txt_pdf}", styles["Normal"]), Paragraph(f"<b>Conferente:</b> {romaneio_data.get('conferente','')}", styles["Normal"])],
         [Paragraph(f"<b>Pagamento à Vista:</b> {romaneio_data.get('pagamento_a_vista','')}", styles["Normal"]), Paragraph(f"<b>Data Pagamento:</b> {romaneio_data.get('data_pagamento','')}" if romaneio_data.get("pagamento_a_vista") == "NÃO" else "", styles["Normal"])],
     ]
     info_table = Table(info_data, colWidths=[270, 270])
@@ -788,246 +750,8 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     buffer.seek(0)
     return buffer
 
-def gerar_pdf_produtos(produtos_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path:
-            break
-
-    if logo_path and os.path.exists(logo_path):
-        logo_img_header = RLImage(logo_path, width=70, height=50)
-    else:
-        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 15))
-    
-    table_content = [[Paragraph("Item", style_header_center), Paragraph("Cód. Produto", style_header_center), Paragraph("Código de Barras", style_header_center), Paragraph("Nome do Produto", style_header_left), Paragraph("UND", style_header_center)]]
-    for idx, p in enumerate(produtos_data, 1):
-        table_content.append([Paragraph(str(idx), style_center), Paragraph(str(p[2] or "S/N"), style_center), Paragraph(str(p[1] or "S/N"), style_center), Paragraph(str(p[3]), style_left), Paragraph(str(p[4]), style_center)])
-        
-    prod_table = Table(table_content, colWidths=[35, 95, 125, 235, 50])
-    prod_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(prod_table)
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_bonificacoes(df_bonf_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path: break
-
-    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Controle de Bonificação", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 15))
-    
-    table_content = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data Entrada", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Status", style_header_center), Paragraph("Produto Hortifrúti", style_header_left)]]
-    
-    tot_val = 0.0
-    for _, r in df_bonf_data.iterrows():
-        v_b = float(r["valor_bonificacao"]) if r["valor_bonificacao"] else 0.0
-        tot_val += v_b
-        t_bonf = r.get("tipo_bonificacao", "Bonificação")
-        table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
-        
-    bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
-    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(bonf_table)
-    story.append(Spacer(1, 10))
-    
-    total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
-    story.append(total_table)
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_baixas(df_baixas_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path: break
-
-    logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Registro de Baixas de Avarias", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 12))
-    
-    table_content = [[
-        Paragraph("LOJAS", style_header_center),
-        Paragraph("Data Baixa", style_header_center),
-        Paragraph("Ref. Bon. transferen", style_header_center),
-        Paragraph("NF da baixa", style_header_center),
-        Paragraph("NF de B. ENTRADA", style_header_center),
-        Paragraph("Produto Hortifrúti", style_header_left),
-        Paragraph("Qtd (kg/cx)", style_header_center),
-        Paragraph("Valor Total Avaria (R$)", style_header_left),
-        Paragraph("Saldo", style_header_left),
-        Paragraph("Saldo Total Utilizado", style_header_left)
-    ]]
-    
-    tot_val_avarias = 0.0
-    for _, r in df_baixas_data.iterrows():
-        v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
-        tot_val_avarias += v_av
-        s_nota = float(r["saldo_restante_nota"]) if r["saldo_restante_nota"] else 0.0
-        s_util = float(r.get("saldo_total_utilizado", 0.0))
-        qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
-        
-        table_content.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_baixa"] if r["nf_baixa"] else "S/Anexo"), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(qtd_val, 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(v_av, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_nota, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_util, 2)}", style_left),
-        ])
-        
-    baixas_table = Table(table_content, colWidths=[70, 95, 85, 75, 85, 120, 60, 85, 65, 52])
-    baixas_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(baixas_table)
-    story.append(Spacer(1, 10))
-    
-    total_table = Table([[f"VALOR TOTAL DAS AVARIAS: R$ {fmt_ptbr(tot_val_avarias, 2)}"]], colWidths=[792])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
-    story.append(total_table)
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path: break
-
-    logo_img = RLImage(logo_path, width=65, height=40) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA</b>", styles["Normal"])
-    header = Table([[logo_img, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório Gerencial de Bonificações, Transferências e Prevenção de Perdas (BI)", styles["Normal"]), Paragraph(f"<b>Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}", styles["Normal"])]], colWidths=[75, 530, 187])
-    header.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("BACKGROUND", (0,0), (-1,-1), colors.lightgrey)]))
-    story.append(header)
-    story.append(Spacer(1, 10))
-    
-    kpi_summary = [
-        [Paragraph("<b>Tot. Bonificado (R$)</b>", style_header_center), Paragraph("<b>Tot. Transferido (R$)</b>", style_header_center), Paragraph("<b>Avarias Bonificadas / Salvas (R$)</b>", style_header_center), Paragraph("<b>Taxa Cobertura (%)</b>", style_header_center), Paragraph("<b>Saldo Remanescente (R$)</b>", style_header_center)],
-        [
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_bonf'], 2)}", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_transf'], 2)}", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_avaria'], 2)}", style_center),
-            Paragraph(f"{fmt_ptbr(metrics_dict['taxa_cobertura'], 2)}%", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['saldo_restante'], 2)}", style_center),
-        ]
-    ]
-    t_kpi = Table(kpi_summary, colWidths=[158, 158, 160, 158, 158])
-    t_kpi.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#1A202C")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(t_kpi)
-    story.append(Spacer(1, 12))
-    
-    story.append(Paragraph("<b>1. Resumo Analítico de Entradas e Bonificações Filtradas</b>", styles["Heading3"]))
-    tb_b = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Valor (R$)", style_header_center), Paragraph("Status", style_header_center), Paragraph("Produto", style_header_center)]]
-    for _, r in df_bonf_sub.head(15).iterrows():
-        tb_b.append([
-            Paragraph(str(r["numero_nota"]), style_center),
-            Paragraph(str(r.get("tipo_bonificacao", "Bonificação")), style_center),
-            Paragraph(str(r["loja"]), style_center),
-            Paragraph(str(r["data_entrada"]), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_bonificacao'], 2)}", style_center),
-            Paragraph(str(r["status"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left)
-        ])
-    table_b = Table(tb_b, colWidths=[65, 95, 95, 95, 80, 90, 272])
-    table_b.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(table_b)
-    story.append(Spacer(1, 12))
-
-    story.append(Paragraph("<b>2. Resumo de Baixas de Avarias Compensadas (Evitando Perdas Físicas e Financeiras)</b>", styles["Heading3"]))
-    tb_bx = [[Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Ref. Bon.", style_header_center), Paragraph("NF Ent.", style_header_center), Paragraph("Produto", style_header_center), Paragraph("Qtd (kg/cx)", style_header_center), Paragraph("Valor Avaria (R$)", style_header_center)]]
-    for _, r in df_baixas_sub.head(15).iterrows():
-        tb_bx.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_center)
-        ])
-    table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
-    table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(table_bx)
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN
+# TELA DE LOGIN
 # ---------------------------------------------------------
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
@@ -1048,16 +772,14 @@ if st.session_state["usuario_logado"] is None:
             with col_titulo:
                 st.markdown("""<div class='titulo-logo'><span class='palavra-sup-mercado'>Supermercado</span><br><span class='palavra-super'>SUPER</span> <span class='palavra-nova'>NOVA</span><br><span class='palavra-cidade'>Cidade</span></div>""", unsafe_allow_html=True)
                 st.markdown("<h3>HortiControl - Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-        else:
-            st.markdown("""<div class='titulo-logo'><span class='palavra-sup-mercado'>Supermercado</span><br><span class='palavra-super'>SUPER</span> <span class='palavra-nova'>NOVA</span><br><span class='palavra-cidade'>Cidade</span></div>""", unsafe_allow_html=True)
-            st.markdown("<h3>HortiControl - Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
 
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login ou Nome Completo", value="", placeholder="Digite seu usuário ou nome...")
             senha_input = st.text_input("Senha", type="password", value="", placeholder="Digite sua senha...")
             
+            # SELEÇÃO INICIAL DA LOJA EM QUE O CONFERENTE IRÁ ATUAR NESTA SESSÃO
             loja_login_sel = st.selectbox(
-                "Selecione a Loja de Atuação", 
+                "Selecione a Loja em que vai operar hoje", 
                 ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], 
                 index=0
             )
@@ -1085,15 +807,15 @@ else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db)
-    loja_atual_usuario = user_info.get("loja_atual", "Não definida")
+    loja_atual_usuario = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
     
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
     with col_info_usr:
-        tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else f"👤 Conferente ({loja_atual_usuario})"
-        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+        tipo_perfil_txt = "🔒 Gestor / Administrador" if is_admin else f"👤 Conferente Em Operação"
+        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt} &nbsp;|&nbsp; 📁 **Pasta de Trabalho:** <span style='color: #4CAF50; font-weight: bold;'>{loja_atual_usuario}</span>", unsafe_allow_html=True)
     with col_logout:
-        if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
+        if st.button("🚪 Sair / Trocar de Loja", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
             st.rerun()
             
@@ -1119,8 +841,11 @@ else:
     menu = opcoes_menu_map[menu_selecionado_label]
     st.markdown("---")
     
+    # ---------------------------------------------------------
+    # ROMANEIO DE RECEBIMENTO
+    # ---------------------------------------------------------
     if menu == "Romaneio de Recebimento - Hortifrúti":
-        st.title("📋 Romaneio de Recebimento - Hortifrúti")
+        st.title("📋 Novo Romaneio de Recebimento")
         if "form_key_suffix" not in st.session_state: st.session_state["form_key_suffix"] = 0
         if "item_key_suffix" not in st.session_state: st.session_state["item_key_suffix"] = 0
         k_suffix = st.session_state["form_key_suffix"]
@@ -1143,14 +868,8 @@ else:
             prod_dict[label] = (p[0], p[1] if p[1] else "KG")
             
         prod_nomes_keys = list(prod_dict.keys())
-        
-        forn_por_nome = {}
-        forn_nomes_keys = []
-        for f in fornecedores_lista:
-            nome_f = f[0]
-            cod_f = str(f[1]).strip() if f[1] else ""
-            forn_nomes_keys.append(nome_f)
-            forn_por_nome[nome_f] = cod_f
+        forn_por_nome = {f[0]: (str(f[1]).strip() if f[1] else "") for f in fornecedores_lista}
+        forn_nomes_keys = list(forn_por_nome.keys())
 
         if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
         if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
@@ -1158,9 +877,7 @@ else:
         def atualizar_por_select():
             s_selecionado = st.session_state.get(f"sel_forn_{k_suffix}", "")
             st.session_state[f"val_sel_forn_{k_suffix}"] = s_selecionado
-            novo_cod = ""
-            if s_selecionado in forn_por_nome:
-                novo_cod = forn_por_nome[s_selecionado]
+            novo_cod = forn_por_nome.get(s_selecionado, "")
             st.session_state[f"val_cod_forn_{k_suffix}"] = novo_cod
             st.session_state[f"in_cod_forn_{k_suffix}"] = novo_cod
 
@@ -1187,7 +904,7 @@ else:
                     loja_destino = ""
                     lista_lojas_opc = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_loja_login = lista_lojas_opc.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_opc else 0
-                    loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, placeholder="Selecione a loja...", key=f"loja_{k_suffix}")
+                    loja = st.selectbox("Loja / Pasta de Destino da Carga", lista_lojas_opc, index=idx_loja_login, placeholder="Selecione a loja...", key=f"loja_{k_suffix}")
 
             with col3:
                 idx_sel = 0
@@ -1229,7 +946,7 @@ else:
                 data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
             
             conferente = st.text_input("Responsável Rec. Físico", value=user_info["nome"], disabled=True, key=f"conf_{k_suffix}")
-            
+
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state: st.session_state["itens_romaneio"] = []
             
@@ -1291,30 +1008,12 @@ else:
         col_ass1, col_ass2 = st.columns(2)
         with col_ass1:
             st.write("**Assinatura do Conferente**")
-            canvas_conf = st_canvas(
-                stroke_width=3, 
-                stroke_color="#000000", 
-                background_color="#FFFFFF", 
-                height=120, 
-                width=280, 
-                drawing_mode="freedraw", 
-                return_image_data=True, 
-                key=f"canv_conf_{k_suffix}"
-            )
+            canvas_conf = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF", height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_conf_{k_suffix}")
         with col_ass2:
             st.write("**Assinatura do Entregador / Fornecedor**")
-            canvas_ent = st_canvas(
-                stroke_width=3, 
-                stroke_color="#000000", 
-                background_color="#FFFFFF", 
-                height=120, 
-                width=280, 
-                drawing_mode="freedraw", 
-                return_image_data=True, 
-                key=f"canv_ent_{k_suffix}"
-            )
+            canvas_ent = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF", height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_ent_{k_suffix}")
             
-        if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
+        if st.button("✅ Salvar Romaneio na Pasta da Loja", type="primary", key=f"btn_salvar_{k_suffix}"):
             num_rom_final = st.session_state[f"num_rom_auto_{k_suffix}"]
             forn_final = fornecedor if isinstance(fornecedor, str) else ""
             cod_forn_val = st.session_state[f"val_cod_forn_{k_suffix}"]
@@ -1325,29 +1024,23 @@ else:
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
-                spinner_supernova("Salvando romaneio no Supernova...")
+                spinner_supernova("Salvando romaneio na pasta correspondente...")
                 try:
-                    if not os.path.exists("uploads"): os.makedirs("uploads")
-                    path_ass_conf = ""
-                    b64_conf = ""
+                    path_ass_conf, b64_conf = "", ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
                         img_c.save(path_ass_conf)
-                        with open(path_ass_conf, "rb") as f_ac:
-                            b64_conf = base64.b64encode(f_ac.read()).decode('utf-8')
+                        with open(path_ass_conf, "rb") as f_ac: b64_conf = base64.b64encode(f_ac.read()).decode('utf-8')
                     
-                    path_ass_ent = ""
-                    b64_ent = ""
+                    path_ass_ent, b64_ent = "", ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
                         img_e.save(path_ass_ent)
-                        with open(path_ass_ent, "rb") as f_ae:
-                            b64_ent = base64.b64encode(f_ae.read()).decode('utf-8')
+                        with open(path_ass_ent, "rb") as f_ae: b64_ent = base64.b64encode(f_ae.read()).decode('utf-8')
                     
-                    caminho_foto_salva = ""
-                    b64_foto = ""
+                    caminho_foto_salva, b64_foto = "", ""
                     if fotos_upload:
                         for f in fotos_upload:
                             path_f = os.path.join("uploads", f.name)
@@ -1388,7 +1081,7 @@ else:
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso!")
+                    st.success(f"Romaneio {num_rom_final} salvo com sucesso na pasta da {loja}!")
                     st.rerun()
                 except Exception as e: st.error(f"Erro ao salvar romaneio: {e}")
                     
@@ -1396,21 +1089,26 @@ else:
             st.markdown("---")
             st.success(f"📄 Romaneio **{st.session_state['ultimo_num_romaneio']}** pronto para download!")
             st.download_button(label=f"📥 Descarregar PDF - {st.session_state['ultimo_num_romaneio']}", data=st.session_state["ultimo_pdf_bytes"], file_name=f"{st.session_state['ultimo_num_romaneio']}.pdf", mime="application/pdf", type="primary")
-            
+
+    # ---------------------------------------------------------
+    # CONSULTA DE ROMANEIOS POR PASTA DA LOJA
+    # ---------------------------------------------------------
     elif menu == "Consultar Romaneios":
-        st.title("🔍 Consulta de Romaneios")
+        st.title("🔍 Consulta e Pastas por Loja")
         
         lista_lojas_filtro = ["TODAS AS LOJAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+        
+        # Padrão: já seleciona a pasta da loja que o usuário está atuando
         idx_loja_padrao_filtro = 0
-        if not is_admin and loja_atual_usuario in lista_lojas_filtro:
+        if loja_atual_usuario in lista_lojas_filtro:
             idx_loja_padrao_filtro = lista_lojas_filtro.index(loja_atual_usuario)
 
         lista_tipos_op_filtro = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
 
-        with st.expander("🔍 Filtrar Romaneios", expanded=True):
-            col_f0, col_f_op, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1.2, 1, 1, 1, 1])
-            with col_f0: filtro_loja_sel = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro, index=idx_loja_padrao_filtro, placeholder="Selecione...")
-            with col_f_op: filtro_tipo_op_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_filtro, index=0, placeholder="Selecione...")
+        with st.expander("📁 Selecionar Pasta de Loja & Filtros", expanded=True):
+            col_f0, col_f_op, col_f1, col_f2, col_f3, col_f4 = st.columns([1.3, 1.2, 1, 1, 1, 1])
+            with col_f0: filtro_loja_sel = st.selectbox("Pasta / Loja", options=lista_lojas_filtro, index=idx_loja_padrao_filtro, help="Exibe apenas os romaneios da pasta selecionada")
+            with col_f_op: filtro_tipo_op_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_filtro, index=0)
             with col_f1: filtro_num = st.text_input("Número do Romaneio", value="", placeholder="Ex: ROM-...")
             with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="", placeholder="Nome do fornecedor...")
             with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="", placeholder="Código...")
@@ -1433,7 +1131,7 @@ else:
             if filtro_data_str: df_rom = df_rom[df_rom["data_recebimento"] == filtro_data_str]
                 
         if not df_rom.empty:
-            st.markdown(f"**Total de romaneios encontrados:** {len(df_rom)}")
+            st.markdown(f"📁 **Romaneios na pasta '{filtro_loja_sel}':** {len(df_rom)} registro(s)")
             st.markdown("---")
             
             df_rom_resumo = df_rom[["numero_romaneio", "tipo_operacao", "loja", "data_recebimento", "fornecedor", "conferente", "status_nota"]].rename(columns={
@@ -1530,1111 +1228,4 @@ else:
                                 st.success("Romaneio excluído com sucesso!")
                                 st.rerun()
                             except Exception as e: st.error(f"Erro: {e}")
-        else: st.info("Nenhum romaneio encontrado.")
-
-    # ---------------------------------------------------------
-    # 6. CONTROLE DE BONIFICAÇÃO
-    # ---------------------------------------------------------
-    elif menu == "Controle de Bonificação":
-        st.title("🎁 Controle de Bonificação Hortifrúti")
-        
-        conn_prod, db_p = get_db_connection()
-        cursor_p = conn_prod.cursor()
-        cursor_p.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
-        prods_cad = cursor_p.fetchall()
-        conn_prod.close()
-        
-        lista_opcoes_prod = []
-        for p in prods_cad:
-            c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
-            c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
-            lista_opcoes_prod.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
-        
-        with st.expander("➕ Cadastrar Nova Bonificação", expanded=False):
-            with st.form("form_cad_bonificacao", clear_on_submit=True):
-                col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
-                with col_b1:
-                    num_nota_bonf = st.text_input("N° Nota Fiscal", value="", placeholder="Número da nota...")
-                    lista_lojas_cad_b = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-                    idx_l_cad_b = lista_lojas_cad_b.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_cad_b else 0
-                    loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, placeholder="Selecione a loja...", key="loja_bonf_sel")
-                with col_b2:
-                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="", placeholder="0,00")
-                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["", "Bonificação", "Transferência de Bonificação"], index=0, placeholder="Selecione o tipo...", key="tipo_bonf_input_sel")
-                with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0, placeholder="Selecione o produto...")
-                    anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
-                
-                col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
-                with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
-                with col_dt2: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY")
-                with col_dt3:
-                    hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
-                    st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
-                
-                dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
-                
-                if st.form_submit_button("✅ Salvar Bonificação", type="primary"):
-                    if not num_nota_bonf.strip() or not loja_bonf or not prod_bonf or not status_bonf:
-                        st.error("Preencha todos os campos obrigatórios.")
-                    else:
-                        spinner_supernova("Salvando bonificação...")
-                        try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
-                        except ValueError: valor_bonf_val = 0.0
-                            
-                        path_anexo_bonf = ""
-                        b64_anexo_bonf = ""
-                        if anexo_bonf:
-                            path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
-                            anexo_bytes = anexo_bonf.getbuffer()
-                            with open(path_anexo_bonf, "wb") as f_out: f_out.write(anexo_bytes)
-                            b64_anexo_bonf = base64.b64encode(anexo_bytes).decode('utf-8')
-                                
-                        try:
-                            conn_b, db_tb = get_db_connection()
-                            cursor_b = conn_b.cursor()
-                            cursor_b.execute(
-                                "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, valor_bonf_val, status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel, b64_anexo_bonf)
-                            )
-                            conn_b.commit()
-                            conn_b.close()
-                            st.success("Salvo com sucesso!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro: {e}")
-                            
-        st.markdown("---")
-        st.subheader("📋 Registros de Bonificação e Consulta de Notas")
-        
-        lista_lojas_filtro_bonf = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-        idx_filtro_bonf = 0
-        if not is_admin and loja_atual_usuario in lista_lojas_filtro_bonf:
-            idx_filtro_bonf = lista_lojas_filtro_bonf.index(loja_atual_usuario)
-
-        with st.expander("🔍 Filtros de Busca", expanded=True):
-            f_col1, f_col2, f_col3, f_col4 = st.columns(4)
-            with f_col1: f_nota = st.text_input("Filtrar por N° Nota", value="", placeholder="N° da nota...", key="f_nota_bonf")
-            with f_col2: f_loja = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bonf, index=idx_filtro_bonf, placeholder="Selecione...", key="f_loja_bonf")
-            with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], placeholder="Selecione...", key="f_status_bonf")
-            with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
-                
-        conn_b_sel, db_tb_sel = get_db_connection()
-        df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
-        conn_b_sel.close()
-        
-        if not df_bonf.empty:
-            if f_nota.strip(): df_bonf = df_bonf[df_bonf["numero_nota"].str.contains(f_nota.strip(), case=False, na=False)]
-            if f_loja != "TODAS": df_bonf = df_bonf[df_bonf["loja"] == f_loja]
-            if f_status != "TODOS": df_bonf = df_bonf[df_bonf["status"] == f_status]
-            if f_prod.strip(): df_bonf = df_bonf[df_bonf["produto_hortifruti"].str.contains(f_prod.strip(), case=False, na=False)]
-                
-        if not df_bonf.empty:
-            tot_bonf_val = df_bonf["valor_bonificacao"].sum()
-            tot_disp_val = df_bonf[df_bonf["status"] == "Disponível"]["valor_bonificacao"].sum()
-            tot_parc_val = df_bonf[df_bonf["status"] == "Parcialmente Utilizada"]["valor_bonificacao"].sum()
-            tot_util_val = df_bonf[df_bonf["status"] == "Totalmente Utilizada"]["valor_bonificacao"].sum()
-            
-            kpi_b1, kpi_b2, kpi_b3, kpi_b4 = st.columns(4)
-            kpi_b1.metric("Total Bonificado", f"R$ {fmt_ptbr(tot_bonf_val, 2)}")
-            kpi_b2.metric("Disponível", f"R$ {fmt_ptbr(tot_disp_val, 2)}")
-            kpi_b3.metric("Parcialmente Utilizada", f"R$ {fmt_ptbr(tot_parc_val, 2)}")
-            kpi_b4.metric("Totalmente Utilizada", f"R$ {fmt_ptbr(tot_util_val, 2)}")
-            
-            st.markdown("---")
-            
-            pdf_bonf_bytes = gerar_pdf_bonificacoes(df_bonf)
-            st.download_button(
-                label="📥 Descarregar Relatório de Bonificação em PDF",
-                data=pdf_bonf_bytes,
-                file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                type="primary",
-                key="btn_download_pdf_bonf"
-            )
-            st.markdown("")
-            
-            df_bonf_tabela = df_bonf.copy()
-            df_bonf_tabela["Valor (R$)"] = df_bonf_tabela["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_bonf_tabela["Anexo"] = df_bonf_tabela.apply(lambda r: "📄 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) or r.get("anexo_b64") else "Sem Anexo", axis=1)
-            
-            df_bonf_tabela = df_bonf_tabela.rename(columns={
-                "numero_nota": "N° Nota",
-                "tipo_bonificacao": "Tipo",
-                "loja": "Loja",
-                "data_entrada": "Data e Hora",
-                "status": "Status",
-                "produto_hortifruti": "Produto Hortifrúti"
-            })
-            
-            cols_exibidas = df_bonf_tabela[["N° Nota", "Tipo", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
-            cols_exibidas.index = range(1, len(cols_exibidas) + 1)
-            
-            st.dataframe(cols_exibidas, use_container_width=True, height=350)
-            
-            st.markdown("---")
-            st.subheader("📄 Abertura de Anexo, Edição & Exclusão de Registro")
-            
-            opcoes_notas_editar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} | Status: {row['status']} ({row['data_entrada']})") for _, row in df_bonf.iterrows()]
-            
-            col_ed1, col_ed2 = st.columns(2)
-            with col_ed1:
-                nota_selecionada_edicao = st.selectbox("Selecione o Registro para Gerenciar / Abrir Anexo", options=opcoes_notas_editar, format_func=lambda x: x[1], key="sel_registro_bonf_gerenciar")
-            with col_ed2:
-                st.write("")
-                st.write("")
-                id_reg_atual = nota_selecionada_edicao[0]
-                reg_obj_atual = df_bonf[df_bonf["id"] == id_reg_atual].iloc[0]
-                
-                caminho_nota_alvo = reg_obj_atual.get("caminho_anexo", "")
-                b64_anexo_reg = reg_obj_atual.get("anexo_b64", "")
-                if caminho_nota_alvo or b64_anexo_reg:
-                    if st.button("📄 Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
-                        exibir_foto_modal(caminho_nota_alvo, b64_anexo_reg)
-                else:
-                    st.warning("Este registo não possui ficheiro de nota anexado.")
-
-            with st.form("form_edicao_direta_bonificacao"):
-                st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
-                
-                data_atual_str = str(reg_obj_atual["data_entrada"]).split(" ")[0] if reg_obj_atual["data_entrada"] else ""
-                try:
-                    dt_obj_default = datetime.strptime(data_atual_str, "%d/%m/%Y").date()
-                except Exception:
-                    dt_obj_default = datetime.now(ZoneInfo("America/Manaus")).date()
-
-                col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns(5)
-                with col_e1:
-                    novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","))
-                with col_e2:
-                    lista_lojas_alt = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-                    idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
-                    nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
-                with col_e3:
-                    nova_data_input = st.date_input("Data de Entrada", value=dt_obj_default, format="DD/MM/YYYY")
-                with col_e4:
-                    status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
-                    idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
-                    novo_st_nota = st.selectbox("Status", status_atuais_lst, index=idx_st_atual)
-                with col_e5:
-                    novo_prod_nota = st.text_input("Produto Hortifrúti", value=reg_obj_atual["produto_hortifruti"])
-                
-                novo_anexo_up = st.file_uploader("Substituir / Enviar Novo Anexo (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
-                
-                col_btn_up1, col_btn_up2 = st.columns(2)
-                with col_btn_up1:
-                    salvar_alt_bonf = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                with col_btn_up2:
-                    excluir_bonf_btn = st.form_submit_button("🗑️ Excluir Bonificação", type="secondary")
-
-                if salvar_alt_bonf:
-                    spinner_supernova("Salvando alterações...")
-                    try:
-                        val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else reg_obj_atual["valor_bonificacao"]
-                        
-                        hora_antiga = "00:00:00"
-                        if len(str(reg_obj_atual["data_entrada"]).split(" ")) > 1:
-                            hora_antiga = str(reg_obj_atual["data_entrada"]).split(" ")[1]
-                        nova_data_str = f"{nova_data_input.strftime('%d/%m/%Y')} {hora_antiga}"
-
-                        path_novo_arq = reg_obj_atual["caminho_anexo"]
-                        b64_novo_arq = reg_obj_atual.get("anexo_b64", "")
-                        if novo_anexo_up:
-                            path_novo_arq = os.path.join("uploads", f"NF_EDIT_{reg_obj_atual['numero_nota']}_{novo_anexo_up.name}")
-                            bytes_up = novo_anexo_up.getbuffer()
-                            with open(path_novo_arq, "wb") as f_out: f_out.write(bytes_up)
-                            b64_novo_arq = base64.b64encode(bytes_up).decode('utf-8')
-                            
-                        conn_up_dir, db_t_upd = get_db_connection()
-                        cursor_upd = conn_up_dir.cursor()
-                        cursor_upd.execute(
-                            "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
-                            (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual)
-                        )
-                        conn_up_dir.commit()
-                        conn_up_dir.close()
-                        st.success("Registo atualizado com sucesso!")
-                        st.rerun()
-                    except Exception as e: st.error(f"Erro ao atualizar: {e}")
-                
-                if excluir_bonf_btn:
-                    spinner_supernova("Excluindo bonificação...")
-                    try:
-                        conn_del_b, db_td_b = get_db_connection()
-                        cursor_db = conn_del_b.cursor()
-                        cursor_db.execute(
-                            "DELETE FROM bonificacoes WHERE id = %s" if db_td_b == "postgres" else "DELETE FROM bonificacoes WHERE id = ?",
-                            (int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual,)
-                        )
-                        conn_del_b.commit()
-                        conn_del_b.close()
-                        st.success("Bonificação excluída com sucesso!")
-                        st.rerun()
-                    except Exception as e: st.error(f"Erro ao excluir: {e}")
-        else: st.info("Nenhuma bonificação encontrada.")
-
-    # ---------------------------------------------------------
-    # 7. CONTROLE DE BAIXA DE AVARIAS
-    # ---------------------------------------------------------
-    elif menu == "Controle de Baixa de Avarias":
-        st.title("📉 Registro de Baixas das Avarias")
-        loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
-        
-        # Gerador de sufixo para limpar o formulário ao salvar
-        if "baixa_form_suffix" not in st.session_state:
-            st.session_state["baixa_form_suffix"] = 0
-        bx_suf = st.session_state["baixa_form_suffix"]
-        
-        # 1. Carregar histórico de baixas
-        conn_bx_chk, db_tbx_chk = get_db_connection()
-        df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
-        conn_bx_chk.close()
-        
-        total_baixado_por_nota = {}
-        if not df_baixar_hist.empty:
-            totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
-            for nf_e, val_bx in totais_por_nf.items():
-                total_baixado_por_nota[str(nf_e)] = float(val_bx)
-
-        # 2. Carregar todas as bonificações e recalcular/atualizar status automaticamente no banco
-        conn_b_all, db_tb_all = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
-        
-        if not df_todas_bonf.empty:
-            cur_st_up = conn_b_all.cursor()
-            for _, r_b in df_todas_bonf.iterrows():
-                num_nf_b = str(r_b["numero_nota"])
-                val_orig_b = float(r_b["valor_bonificacao"])
-                baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
-                saldo_b = max(0.0, val_orig_b - baixado_b)
-                
-                if baixado_b <= 0:
-                    novo_st_auto = "Disponível"
-                elif saldo_b > 0:
-                    novo_st_auto = "Parcialmente Utilizada"
-                else:
-                    novo_st_auto = "Totalmente Utilizada"
-                
-                if r_b["status"] != novo_st_auto:
-                    cur_st_up.execute(
-                        "UPDATE bonificacoes SET status = %s WHERE id = %s" if db_tb_all == "postgres" else "UPDATE bonificacoes SET status = ? WHERE id = ?",
-                        (novo_st_auto, int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"])
-                    )
-            conn_b_all.commit()
-        conn_b_all.close()
-
-        # Recarregar bonificações atualizadas
-        conn_b_all2, db_tb_all2 = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
-        conn_b_all2.close()
-
-        # Dicionário mapeando NF de Entrada -> Valor Original da Nota
-        dict_valor_orig_por_nf = {}
-        if not df_todas_bonf.empty:
-            for _, r_b in df_todas_bonf.iterrows():
-                dict_valor_orig_por_nf[str(r_b["numero_nota"])] = float(r_b["valor_bonificacao"])
-
-        # Apenas notas da LOJA 02 contabilizam como saldo para baixar as avarias
-        if not df_todas_bonf.empty:
-            df_bonf_loja02 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02|NOVA CIDADE", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
-        else:
-            df_bonf_loja02 = pd.DataFrame()
-
-        notas_com_saldo_loja02 = []
-        saldo_geral_somado_loja02 = 0.0
-        
-        if not df_bonf_loja02.empty:
-            for _, r_bonf in df_bonf_loja02.iterrows():
-                num_nf_ent = str(r_bonf["numero_nota"])
-                val_original = float(r_bonf["valor_bonificacao"])
-                ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
-                saldo_restante_nota = max(0.0, val_original - ja_baixado)
-                
-                if saldo_restante_nota > 0:
-                    saldo_geral_somado_loja02 += saldo_restante_nota
-                    notas_com_saldo_loja02.append({
-                        "nf_entrada": num_nf_ent,
-                        "produto": r_bonf["produto_hortifruti"],
-                        "valor_original": val_original,
-                        "saldo_restante": saldo_restante_nota
-                    })
-
-        # PAINEL DO TOPO (LÂMPADA) COM O SALDO GLOBAL DA LOJA 02
-        st.markdown(f"""
-        <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
-            <span style="font-size: 20px;">💡</span>
-            <span style="color: #FFFFFF; font-weight: 700; font-size: 15px;">Saldo Total Disponível (Referente às notas da Loja 02): R$ {fmt_ptbr(saldo_geral_somado_loja02, 2)}</span>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        if notas_com_saldo_loja02:
-            with st.expander("📌 Notas com Saldo Disponível (Loja 02 - Base para Baixas)", expanded=True):
-                df_ns_show = pd.DataFrame(notas_com_saldo_loja02)
-                df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
-                st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=200)
-
-        conn_prod_v, db_pv = get_db_connection()
-        cursor_pv = conn_prod_v.cursor()
-        cursor_pv.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
-        prods_cad_v = cursor_pv.fetchall()
-        conn_prod_v.close()
-        
-        lista_opcoes_prod_v = []
-        for p in prods_cad_v:
-            c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
-            c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
-            lista_opcoes_prod_v.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
-
-        with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=False):
-            with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=True):
-                col_m1, col_m2, col_m3 = st.columns(3)
-                with col_m1:
-                    lista_lojas_reg = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-                    idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
-                    lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
-                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...", key=f"bx_ref_{bx_suf}")
-                with col_m2:
-                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
-                    nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
-                    prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
-                with col_m3:
-                    qtd_kg_cx_str = st.text_input("Qtd (kg/cx)", value="", placeholder="0,000", key=f"bx_qtd_{bx_suf}")
-                    valor_total_avaria_str = st.text_input("Valor Total Avaria (R$)", value="", placeholder="0,00", key=f"bx_val_{bx_suf}")
-                    
-                nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"], key=f"bx_file_{bx_suf}")
-                
-                col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"bx_dt_{bx_suf}")
-                with col_dm2:
-                    hora_baixa_aut = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
-                    st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True, key=f"bx_hr_{bx_suf}")
-                    
-                data_hora_baixa_str = f"{data_baixa_man.strftime('%d/%m/%Y')} {hora_baixa_aut}" if data_baixa_man else ""
-                
-                btn_enviar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
-                
-                if btn_enviar_baixa:
-                    if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
-                        st.error("Preencha todos os campos obrigatórios.")
-                    else:
-                        spinner_supernova("Registrando baixa de avaria...")
-                        try:
-                            qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
-                            val_avaria_f = float(valor_total_avaria_str.replace(".", "").replace(",", ".")) if valor_total_avaria_str else 0.0
-                        except ValueError:
-                            qtd_val_f, val_avaria_f = 0.0, 0.0
-                            
-                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nf_b_entrada_sel), None)
-                        if not nota_selecionada_dict:
-                            st.error("Nota de entrada inválida.")
-                        elif val_avaria_f > nota_selecionada_dict["saldo_restante"]:
-                            st.error(f"❌ O valor da avaria ultrapassa o saldo restante da nota da Loja 02!")
-                        else:
-                            path_nf_baixa = ""
-                            b64_nf_baixa = ""
-                            if nf_baixa_file:
-                                path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
-                                bytes_baixa = nf_baixa_file.getbuffer()
-                                with open(path_nf_baixa, "wb") as f_out: f_out.write(bytes_baixa)
-                                b64_nf_baixa = base64.b64encode(bytes_baixa).decode('utf-8')
-                                
-                            saldo_disponivel_da_nota_referenciada = nota_selecionada_dict["saldo_restante"]
-                            novo_saldo_restante_nota = saldo_disponivel_da_nota_referenciada - val_avaria_f
-                            
-                            try:
-                                conn_ins, db_tins = get_db_connection()
-                                cursor_ins = conn_ins.cursor()
-                                cursor_ins.execute(
-                                    """
-                                    INSERT INTO baixas_avarias (
-                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, 
-                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx, 
-                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """ if db_tins == "postgres" else """
-                                    INSERT INTO baixas_avarias (
-                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, 
-                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx, 
-                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    (
-                                        lojas_baixa_sel, data_hora_baixa_str, ref_bon_transf.strip(), path_nf_baixa,
-                                        nf_b_entrada_sel, prod_hort_sel, qtd_val_f, val_avaria_f, novo_saldo_restante_nota, saldo_disponivel_da_nota_referenciada, b64_nf_baixa
-                                    )
-                                )
-                                
-                                if "02" not in lojas_baixa_sel and "NOVA CIDADE" not in lojas_baixa_sel:
-                                    cursor_ins.execute(
-                                        "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = ?",
-                                        (nf_b_entrada_sel,)
-                                    )
-                                else:
-                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
-                                    cursor_ins.execute(
-                                        "UPDATE bonificacoes SET status = %s WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE numero_nota = ?",
-                                        (st_auto_l2, nf_b_entrada_sel)
-                                    )
-
-                                conn_ins.commit()
-                                conn_ins.close()
-                                
-                                # Incrementa o sufixo para limpar e reiniciar o formulário perfeitamente
-                                st.session_state["baixa_form_suffix"] += 1
-                                st.success("Baixa registrada com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro: {e}")
-                                
-        st.markdown("---")
-        st.subheader("📋 Planilha de Registro de Baixas das Avarias")
-        
-        lista_lojas_filtro_bx = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-        idx_filtro_bx = 0
-        if not is_admin and loja_atual_usuario in lista_lojas_filtro_bx:
-            idx_filtro_bx = lista_lojas_filtro_bx.index(loja_atual_usuario)
-
-        with st.expander("🔍 Filtros da Planilha de Baixas", expanded=True):
-            fb1, fb2, fb3 = st.columns(3)
-            with fb1: f_loja_bx = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro_bx, index=idx_filtro_bx, placeholder="Selecione...")
-            with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon.", value="", placeholder="Referência...")
-            with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
-            
-        conn_bx_view, db_tbx_v = get_db_connection()
-        df_bx_table = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
-        conn_bx_view.close()
-        
-        if not df_bx_table.empty:
-            if f_loja_bx != "TODAS": df_bx_table = df_bx_table[df_bx_table["loja_baixa"] == f_loja_bx]
-            if f_ref_bx.strip(): df_bx_table = df_bx_table[df_bx_table["ref_bon_transferen"].str.contains(f_ref_bx.strip(), case=False, na=False)]
-            if f_prod_bx.strip(): df_bx_table = df_bx_table[df_bx_table["produto_hortifruti"].str.contains(f_prod_bx.strip(), case=False, na=False)]
-            
-        if not df_bx_table.empty:
-            df_display_plan = df_bx_table.copy()
-            total_utilizado_por_nf = total_baixado_por_nota
-            
-            saldo_calculado_list = []
-            utilizado_calculado_list = []
-            
-            for _, row_bx in df_display_plan.iterrows():
-                nf_ent_item = str(row_bx["nf_b_entrada"])
-                v_utilizado = total_utilizado_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"]))
-                utilizado_calculado_list.append(v_utilizado)
-                
-                v_original = dict_valor_orig_por_nf.get(nf_ent_item, 0.0)
-                if v_original > 0:
-                    v_saldo_restante = max(0.0, v_original - v_utilizado)
-                else:
-                    v_saldo_restante = float(row_bx["saldo_restante_nota"])
-                    
-                saldo_calculado_list.append(v_saldo_restante)
-
-            df_display_plan["saldo_restante_calculado"] = saldo_calculado_list
-            df_display_plan["saldo_total_utilizado"] = utilizado_calculado_list
-
-            pdf_bytes_bx = gerar_pdf_baixas(df_display_plan)
-            st.download_button(
-                label="📥 Descarregar Planilha de Baixas de Avarias em PDF",
-                data=pdf_bytes_bx,
-                file_name=f"Registro_Baixas_Avarias_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
-                mime="application/pdf",
-                type="primary",
-                key="btn_download_pdf_planilha_baixas"
-            )
-            st.markdown("")
-            
-            for _, r_bx in df_bx_table.iterrows():
-                if r_bx.get("nf_baixa_b64") and r_bx.get("nf_baixa"):
-                    salvar_arquivo_fisico_do_b64(r_bx["nf_baixa"], r_bx["nf_baixa_b64"])
-            
-            df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
-            df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_plan["Saldo"] = df_display_plan["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_plan["Saldo Total Utilizado"] = df_display_plan["saldo_total_utilizado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-            df_display_plan["NF da baixa"] = df_display_plan.apply(lambda r: "Ver Anexo" if (r.get("nf_baixa") and os.path.exists(str(r["nf_baixa"]))) or r.get("nf_baixa_b64") else "S/Anexo", axis=1)
-            
-            df_display_plan = df_display_plan.rename(columns={
-                "loja_baixa": "LOJAS",
-                "data_baixa": "Data Baixa",
-                "ref_bon_transferen": "Ref. Bon. transferen",
-                "nf_b_entrada": "NF da b. ENTRADA",
-                "produto_hortifruti": "Produto Hortifrúti"
-            })
-            
-            df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total Utilizado"]]
-            df_final_show.index = range(1, len(df_final_show) + 1)
-            
-            st.dataframe(df_final_show, use_container_width=True, height=400)
-            
-            st.markdown("---")
-            st.subheader("📄 Gerenciamento: Editar ou Excluir Registro de Baixa")
-            
-            opcoes_baixas_editar = [(row["id"], f"Loja: {row['loja_baixa']} | Ref: {row['ref_bon_transferen']} | NF Ent: {row['nf_b_entrada']} (R$ {fmt_ptbr(row['valor_total_avaria'], 2)})") for _, row in df_bx_table.iterrows()]
-            
-            if opcoes_baixas_editar:
-                baixa_selecionada_ed = st.selectbox("Selecione a Baixa para Editar ou Excluir", options=opcoes_baixas_editar, format_func=lambda x: x[1], key="sel_baixa_gerenciar_edicao")
-                
-                if baixa_selecionada_ed:
-                    id_bx_atual = baixa_selecionada_ed[0]
-                    reg_bx_atual = df_bx_table[df_bx_table["id"] == id_bx_atual].iloc[0]
-                    
-                    with st.form("form_edicao_baixa_avaria"):
-                        st.markdown(f"**Editando Baixa (Ref: {reg_bx_atual['ref_bon_transferen']} - NF Entrada Atual: {reg_bx_atual['nf_b_entrada']})**")
-                        
-                        col_eb1, col_eb2, col_eb3 = st.columns(3)
-                        with col_eb1:
-                            lista_lojas_eb = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-                            idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
-                            nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
-                            
-                            notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
-                            if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
-                                notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
-                            idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
-                            nova_nf_b_entrada = st.selectbox("NF de B. ENTRADA", options=notas_disponiveis_edicao, index=idx_nf_atual)
-                            
-                        with col_eb2:
-                            novo_ref_bx = st.text_input("Ref. Bon. transferen", value=reg_bx_atual["ref_bon_transferen"])
-                            novo_prod_bx = st.text_input("Produto Hortifrúti", value=reg_bx_atual["produto_hortifruti"])
-                        with col_eb3:
-                            novo_qtd_bx_str = st.text_input("Qtd (kg/cx)", value=str(reg_bx_atual["quantidade_kg_cx"]).replace(".", ","))
-                            novo_val_bx_str = st.text_input("Valor Total Avaria (R$)", value=str(reg_bx_atual["valor_total_avaria"]).replace(".", ","))
-                            
-                        novo_anexo_bx_up = st.file_uploader("Substituir NF da Baixa (Opcional)", type=["pdf", "png", "jpg", "jpeg"])
-                        
-                        col_bnt_bx1, col_bnt_bx2 = st.columns(2)
-                        with col_bnt_bx1:
-                            salvar_alt_bx = st.form_submit_button("💾 Salvar Alterações da Baixa", type="primary")
-                        with col_bnt_bx2:
-                            excluir_bx_btn = st.form_submit_button("🗑️ Excluir Registo de Baixa", type="secondary")
-                            
-                        if salvar_alt_bx:
-                            spinner_supernova("Atualizando baixa...")
-                            try:
-                                q_f_ed = float(novo_qtd_bx_str.replace(".", "").replace(",", ".")) if novo_qtd_bx_str else reg_bx_atual["quantidade_kg_cx"]
-                                v_f_ed = float(novo_val_bx_str.replace(".", "").replace(",", ".")) if novo_val_bx_str else reg_bx_atual["valor_total_avaria"]
-                                
-                                path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
-                                b64_nf_bx_ed = reg_bx_atual.get("nf_baixa_b64", "")
-                                if novo_anexo_bx_up:
-                                    path_nf_bx_ed = os.path.join("uploads", f"NF_BAIXA_EDIT_{novo_ref_bx}_{novo_anexo_bx_up.name}")
-                                    bytes_bx_up = novo_anexo_bx_up.getbuffer()
-                                    with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
-                                    b64_nf_bx_ed = base64.b64encode(bytes_bx_up).decode('utf-8')
-                                    
-                                nota_edit_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nova_nf_b_entrada), None)
-                                saldo_disp_edit = nota_edit_dict["saldo_restante"] if nota_edit_dict else reg_bx_atual["saldo_total_disponivel"]
-                                novo_saldo_restante_ed = saldo_disp_edit - v_f_ed
-                                    
-                                conn_up_bx, db_t_upbx = get_db_connection()
-                                cur_upbx = conn_up_bx.cursor()
-                                cur_upbx.execute(
-                                    "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
-                                    (nova_loja_bx, novo_ref_bx.strip(), nova_nf_b_entrada, novo_prod_bx, q_f_ed, v_f_ed, novo_saldo_restante_ed, saldo_disp_edit, path_nf_bx_ed, b64_nf_bx_ed, int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual)
-                                )
-                                conn_up_bx.commit()
-                                conn_up_bx.close()
-                                st.success("Baixa atualizada com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro ao atualizar baixa: {e}")
-                            
-                        if excluir_bx_btn:
-                            spinner_supernova("Excluindo baixa...")
-                            try:
-                                conn_del_bx, db_td_bx = get_db_connection()
-                                cur_delbx = conn_del_bx.cursor()
-                                cur_delbx.execute(
-                                    "DELETE FROM baixas_avarias WHERE id = %s" if db_td_bx == "postgres" else "DELETE FROM baixas_avarias WHERE id = ?",
-                                    (int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual,)
-                                )
-                                conn_del_bx.commit()
-                                conn_del_bx.close()
-                                st.success("Baixa excluída com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro ao excluir baixa: {e}")
-            
-            st.markdown("---")
-            st.subheader("📄 Visualizar Anexo de Baixa")
-            opcoes_baixas_ver = [(row["id"], f"Loja: {row['loja_baixa']} | Ref: {row['ref_bon_transferen']} | NF Entrada: {row['nf_b_entrada']}") for _, row in df_bx_table.iterrows() if row.get("nf_baixa") or row.get("nf_baixa_b64")]
-            if opcoes_baixas_ver:
-                escolha_bx_ver = st.selectbox("Selecione a baixa para abrir o comprovativo/anexo", options=opcoes_baixas_ver, format_func=lambda x: x[1], placeholder="Selecione...")
-                if escolha_bx_ver:
-                    reg_bx_escolhido = df_bx_table[df_bx_table["id"] == escolha_bx_ver[0]].iloc[0]
-                    if st.button("📄 Abrir Anexo da Baixa Selecionada", type="primary"):
-                        exibir_foto_modal(reg_bx_escolhido.get("nf_baixa", ""), reg_bx_escolhido.get("nf_baixa_b64", ""))
-            else:
-                st.info("Nenhuma baixa com anexo disponível.")
-        else:
-            st.info("Nenhum registo de baixa encontrado.")
-
-    elif menu == "Relatórios & Gráficos" and is_admin:
-        st.title("📊 Relatórios & Business Intelligence (BI) Executive")
-        
-        tab_bi_receb, tab_bi_bonf_avaria = st.tabs([
-            "🚚 BI de Recebimento de Cargas",
-            "🎁 BI Bonificações, Transferências & Prevenção de Perdas"
-        ])
-        
-        conn, db_type = get_db_connection()
-        df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
-        df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
-        df_bonf_rel = pd.read_sql_query("SELECT * FROM bonificacoes", conn)
-        df_baixas_rel = pd.read_sql_query("SELECT * FROM baixas_avarias", conn)
-        conn.close()
-
-        with tab_bi_receb:
-            if df_roms.empty or df_itens.empty:
-                st.warning("Ainda não existem dados de recebimento cadastrados.")
-            else:
-                df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
-                df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
-                st.markdown("### 🔍 Filtros da Análise Gerencial")
-                col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
-                with col_f1: loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + list(df_roms["loja"].unique()), placeholder="Selecione...", key="rel_filter_loja")
-                with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
-                with col_f3:
-                    dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                    dt_inicio = st.date_input("Data Início", value=dt_min, format="DD/MM/YYYY", key="rel_filter_dt_ini")
-                with col_f4:
-                    dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                    dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
-                    
-                df_filtrado = df_full.copy()
-                if loja_sel != "TODAS AS LOJAS": df_filtrado = df_filtrado[df_filtrado["loja"] == loja_sel]
-                if prod_sel != "TODOS OS PRODUTOS": df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
-                if dt_inicio and dt_fim: df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
-                    
-                if df_filtrado.empty: st.info("Nenhum registo encontrado.")
-                else:
-                    st.markdown("---")
-                    st.subheader("📈 Indicadores Principais (KPIs)")
-                    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                    kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(df_filtrado['valor_total'].sum(), 2)}")
-                    kpi2.metric("Total de Romaneios", f"{df_filtrado['numero_romaneio'].nunique()} romaneios")
-                    kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(df_filtrado['quantidade'].sum(), 3)}")
-                    kpi4.metric("Principal Fornecedor", str(df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() if not df_filtrado.empty else "N/A"))
-                    st.markdown("---")
-                    
-                    col_g1, col_g2 = st.columns(2)
-                    with col_g1:
-                        top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
-                        fig_val = px.bar(top_prods_val, x="produto", y="valor_total", text_auto=".2f", color="valor_total", color_continuous_scale="Greens")
-                        fig_val.update_layout(xaxis_title="Produto", yaxis_title="Total (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                        st.plotly_chart(fig_val, use_container_width=True)
-                    with col_g2:
-                        top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
-                        fig_qtd = px.bar(top_prods_qtd, x="produto", y="quantidade", text_auto=".2f", color="quantidade", color_continuous_scale="Reds")
-                        fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                        st.plotly_chart(fig_qtd, use_container_width=True)
-                    
-                    st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
-
-        with tab_bi_bonf_avaria:
-            st.subheader("💡 Análise Executiva de Bonificações, Transferências & Mitigação de Perdas")
-            st.markdown("Visão consolidada para a alta gerência sobre a **eficiência do processo de conferência, bonificação e aproveitamento de avarias** para a saúde financeira do supermercado.")
-            
-            with st.expander("🔍 Filtros Avançados para Apresentação à Liderança", expanded=True):
-                col_bi_f1, col_bi_f2, col_bi_f3, col_bi_f4 = st.columns(4)
-                
-                todas_lojas_bi = sorted(list(set(df_bonf_rel['loja'].dropna().unique()).union(set(df_baixas_rel['loja_baixa'].dropna().unique()))))
-                with col_bi_f1:
-                    bi_loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + todas_lojas_bi, key="bi_sel_loja")
-                
-                todos_prods_bi = sorted(list(set(df_bonf_rel['produto_hortifruti'].dropna().unique()).union(set(df_baixas_rel['produto_hortifruti'].dropna().unique()))))
-                with col_bi_f2:
-                    bi_prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + todos_prods_bi, key="bi_sel_prod")
-                
-                with col_bi_f3:
-                    bi_tipo_sel = st.selectbox("Tipo de Operação Bonificada", ["TODOS", "Bonificação", "Transferência de Bonificação"], key="bi_sel_tipo")
-                
-                with col_bi_f4:
-                    bi_periodo = st.selectbox("Período de Análise", ["Todo o Histórico", "Últimos 30 dias", "Últimos 90 dias", "Ano Atual"], key="bi_sel_periodo")
-
-            df_b_sub = df_bonf_rel.copy()
-            df_bx_sub = df_baixas_rel.copy()
-
-            if not df_b_sub.empty:
-                df_b_sub['data_dt'] = pd.to_datetime(df_b_sub['data_entrada'].str.split(' ').str[0], format='%d/%m/%Y', errors='coerce')
-                if bi_loja_sel != "TODAS AS LOJAS": df_b_sub = df_b_sub[df_b_sub['loja'] == bi_loja_sel]
-                if bi_prod_sel != "TODOS OS PRODUTOS": df_b_sub = df_b_sub[df_b_sub['produto_hortifruti'] == bi_prod_sel]
-                if bi_tipo_sel != "TODOS": df_b_sub = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == bi_tipo_sel]
-                
-                if bi_periodo == "Últimos 30 dias":
-                    df_b_sub = df_b_sub[df_b_sub['data_dt'] >= (datetime.now() - timedelta(days=30))]
-                elif bi_periodo == "Últimos 90 dias":
-                    df_b_sub = df_b_sub[df_b_sub['data_dt'] >= (datetime.now() - timedelta(days=90))]
-                elif bi_periodo == "Ano Atual":
-                    df_b_sub = df_b_sub[df_b_sub['data_dt'].dt.year == datetime.now().year]
-
-            if not df_bx_sub.empty:
-                df_bx_sub['data_dt'] = pd.to_datetime(df_bx_sub['data_baixa'].str.split(' ').str[0], format='%d/%m/%Y', errors='coerce')
-                if bi_loja_sel != "TODAS AS LOJAS": df_bx_sub = df_bx_sub[df_bx_sub['loja_baixa'] == bi_loja_sel]
-                if bi_prod_sel != "TODOS OS PRODUTOS": df_bx_sub = df_bx_sub[df_bx_sub['produto_hortifruti'] == bi_prod_sel]
-
-                if bi_periodo == "Últimos 30 dias":
-                    df_bx_sub = df_bx_sub[df_bx_sub['data_dt'] >= (datetime.now() - timedelta(days=30))]
-                elif bi_periodo == "Últimos 90 dias":
-                    df_bx_sub = df_bx_sub[df_bx_sub['data_dt'] >= (datetime.now() - timedelta(days=90))]
-                elif bi_periodo == "Ano Atual":
-                    df_bx_sub = df_bx_sub[df_bx_sub['data_dt'].dt.year == datetime.now().year]
-
-            v_tot_bonf = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == 'Bonificação']['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
-            v_tot_transf = df_b_sub[df_b_sub.get('tipo_bonificacao', 'Bonificação') == 'Transferência de Bonificação']['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
-            v_tot_entradas = df_b_sub['valor_bonificacao'].sum() if not df_b_sub.empty else 0.0
-            v_tot_avarias_salvas = df_bx_sub['valor_total_avaria'].sum() if not df_bx_sub.empty else 0.0
-            
-            taxa_cobertura = (v_tot_avarias_salvas / v_tot_entradas * 100) if v_tot_entradas > 0 else 0.0
-            v_saldo_remanescente = max(0.0, v_tot_entradas - v_tot_avarias_salvas)
-
-            st.markdown("---")
-            st.markdown("### 🎯 Painel de Impacto Executivo")
-            
-            kpi_e1, kpi_e2, kpi_e3, kpi_e4, kpi_e5 = st.columns(5)
-            kpi_e1.metric("1. Entradas Bonificadas", f"R$ {fmt_ptbr(v_tot_bonf, 2)}", help="Valor total obtido diretamente com fornecedores")
-            kpi_e2.metric("2. Transferências", f"R$ {fmt_ptbr(v_tot_transf, 2)}", help="Valor total redistribuído entre lojas da rede")
-            kpi_e3.metric("3. Perdas Evitadas (Avarias)", f"R$ {fmt_ptbr(v_tot_avarias_salvas, 2)}", delta=f"{fmt_ptbr(v_tot_avarias_salvas, 2)} Salvos", delta_color="normal", help="Valor de perdas físicas amortizadas por saldo de bonificação")
-            kpi_e4.metric("4. Taxa de Cobertura", f"{fmt_ptbr(taxa_cobertura, 2)}%", help="Porcentagem de bonificações convertida em amortização de perdas")
-            kpi_e5.metric("5. Saldo Remanescente", f"R$ {fmt_ptbr(v_saldo_remanescente, 2)}", help="Saldo de bonificação ainda disponível para compensação")
-
-            st.markdown("""
-            <div style="background: rgba(46, 125, 50, 0.25); border: 1px solid #4CAF50; border-radius: 8px; padding: 12px 18px; margin: 15px 0;">
-                <span style="color: #81C784; font-weight: bold; font-size: 15px;">🛡️ Mensagem para a Liderança:</span>
-                <span style="color: #FFFFFF; font-size: 14px;"> O processo de acompanhamento de bonificações já garantiu uma <b>recuperação direta de R$ </span>
-                <span style="color: #FFF; font-weight: bold;">{}</span>
-                <span style="color: #FFFFFF;"> em avarias que seriam registradas como prejuízo líquido direto para a empresa.</span>
-            </div>
-            """.format(fmt_ptbr(v_tot_avarias_salvas, 2)), unsafe_allow_html=True)
-
-            st.markdown("---")
-            st.markdown("### 📊 Gráficos Analíticos de Desempenho")
-            
-            bg_bi1, bg_bi2 = st.columns(2)
-            with bg_bi1:
-                st.markdown("#### Entradas por Tipo e Loja (R$)")
-                if not df_b_sub.empty:
-                    fig_lojas = px.bar(
-                        df_b_sub, x="loja", y="valor_bonificacao", color="tipo_bonificacao",
-                        barmode="group", text_auto=".2f",
-                        color_discrete_map={"Bonificação": "#4CAF50", "Transferência de Bonificação": "#2196F3"}
-                    )
-                    fig_lojas.update_layout(xaxis_title="Loja", yaxis_title="Valor (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_lojas, use_container_width=True)
-                else:
-                    st.info("Sem dados para a combinação de filtros.")
-
-            with bg_bi2:
-                st.markdown("#### Avarias Bonificadas por Loja (Economia Gerada)")
-                if not df_bx_sub.empty:
-                    df_bx_grp = df_bx_sub.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index()
-                    fig_avarias = px.bar(df_bx_grp, x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Purples")
-                    fig_avarias.update_layout(xaxis_title="Loja da Baixa", yaxis_title="Avaria Coberta (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_avarias, use_container_width=True)
-                else:
-                    st.info("Sem dados de baixas para os filtros.")
-
-            bg_bi3, bg_bi4 = st.columns(2)
-            with bg_bi3:
-                st.markdown("#### Top Produtos Beneficiados por Bonificação")
-                if not df_b_sub.empty:
-                    df_p_bonf = df_b_sub.groupby("produto_hortifruti")["valor_bonificacao"].sum().nlargest(7).reset_index()
-                    fig_prod_b = px.bar(df_p_bonf, y="produto_hortifruti", x="valor_bonificacao", orientation="h", text_auto=".2f", color="valor_bonificacao", color_continuous_scale="Teal")
-                    fig_prod_b.update_layout(xaxis_title="Total (R$)", yaxis_title="Produto", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_prod_b, use_container_width=True)
-                else:
-                    st.info("Sem dados de produtos.")
-
-            with bg_bi4:
-                st.markdown("#### Distribuição do Status de Notas de Bonificação")
-                if not df_b_sub.empty:
-                    fig_st_pie = px.pie(df_b_sub, names="status", values="valor_bonificacao", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                    fig_st_pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_st_pie, use_container_width=True)
-                else:
-                    st.info("Sem status para exibir.")
-
-            st.markdown("---")
-            st.markdown("### 📄 Geração de Relatório Executivo em PDF")
-            
-            metrics_dict = {
-                "tot_bonf": v_tot_bonf,
-                "tot_transf": v_tot_transf,
-                "tot_avaria": v_tot_avarias_salvas,
-                "taxa_cobertura": taxa_cobertura,
-                "saldo_restante": v_saldo_remanescente
-            }
-            pdf_bi_bytes = gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_b_sub, df_bx_sub)
-            
-            col_pdf_bi1, col_pdf_bi2 = st.columns([3, 1])
-            with col_pdf_bi1:
-                st.markdown("Gere um relatório em PDF para apresentações de resultados em reuniões com a diretoria.")
-            with col_pdf_bi2:
-                st.download_button(
-                    label="📥 Baixar PDF Executivo",
-                    data=pdf_bi_bytes,
-                    file_name=f"Relatorio_Executivo_Lideranca_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d_%H%M')}.pdf",
-                    mime="application/pdf",
-                    type="primary",
-                    key="btn_download_executivo_bi"
-                )
-
-    elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("📦🚚 Gerenciamento e Cadastro (Produtos & Fornecedores)")
-        tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🚚 Cadastro de Fornecedores"])
-        
-        with tab_prod:
-            with st.expander("➕ Cadastrar Novo Produto", expanded=False):
-                with st.form("cad_prod_form", clear_on_submit=True):
-                    col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="", placeholder="Cód...")
-                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="", placeholder="Código de barras...")
-                    with col_cp3: nome_p = st.text_input("Nome do Produto *", value="", placeholder="Nome do produto...")
-                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
-                    if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
-                        if not nome_p.strip(): st.error("O Nome é obrigatório.")
-                        else:
-                            spinner_supernova("Cadastrando produto...")
-                            conn, db_type = get_db_connection()
-                            cursor = conn.cursor()
-                            try:
-                                cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
-                                conn.commit()
-                                st.success("Cadastrado com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro: {e}")
-                            finally: conn.close()
-                            
-            st.markdown("---")
-            conn, db_type = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
-            produtos_cadastrados = cursor.fetchall()
-            conn.close()
-            
-            if produtos_cadastrados:
-                produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
-                df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
-                st.download_button(label="📥 Descarregar Relatório de Produtos em PDF", data=gerar_pdf_produtos(produtos_cadastrados), file_name=f"Relatorio_Produtos_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf", mime="application/pdf", type="primary")
-                st.markdown("")
-                st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=250)
-                
-                st.markdown("### ✏️ Editar ou Excluir Produto")
-                opcoes_edit_prod = [(p[5], f"{p[3]} (Cód: {p[2] or 'S/Cód'})") for p in produtos_com_id_ajustado]
-                prod_sel_ed = st.selectbox("Selecione o produto para editar ou excluir", options=opcoes_edit_prod, format_func=lambda x: x[1], key="sel_prod_editar")
-                if prod_sel_ed:
-                    id_p_ed = prod_sel_ed[0]
-                    conn_p_det, db_tp_det = get_db_connection()
-                    cur_pd = conn_p_det.cursor()
-                    cur_pd.execute("SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos WHERE id = %s" if db_tp_det == "postgres" else "SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos WHERE id = ?", (int(id_p_ed) if db_tp_det == "postgres" else id_p_ed,))
-                    dados_p_atual = cur_pd.fetchone()
-                    conn_p_det.close()
-                    
-                    if dados_p_atual:
-                        with st.form("form_edit_produto"):
-                            ep_cod_bar = st.text_input("Código de Barras", value=dados_p_atual[0] or "")
-                            ep_cod_prod = st.text_input("Código do Produto", value=dados_p_atual[1] or "")
-                            ep_nome = st.text_input("Nome do Produto", value=dados_p_atual[2] or "")
-                            lista_unds = ["KG", "UNID", "GRM", "CX"]
-                            idx_u = lista_unds.index(dados_p_atual[3]) if dados_p_atual[3] in lista_unds else 0
-                            ep_und = st.selectbox("Unidade", lista_unds, index=idx_u)
-                            
-                            col_bp1, col_bp2 = st.columns(2)
-                            with col_bp1: btn_salvar_prod = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                            with col_bp2: btn_excluir_prod = st.form_submit_button("🗑️ Excluir Produto", type="secondary")
-                            
-                            if btn_salvar_prod:
-                                spinner_supernova("Atualizando produto...")
-                                try:
-                                    conn_up_p, db_tup = get_db_connection()
-                                    cur_upp = conn_up_p.cursor()
-                                    cur_upp.execute(
-                                        "UPDATE produtos SET codigo_barras = %s, codigo_produto = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
-                                        (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), ep_und, int(id_p_ed) if db_tup == "postgres" else id_p_ed)
-                                    )
-                                    conn_up_p.commit()
-                                    conn_up_p.close()
-                                    st.success("Produto atualizado com sucesso!")
-                                    st.rerun()
-                                except Exception as e: st.error(f"Erro ao atualizar: {e}")
-                                
-                            if btn_excluir_prod:
-                                spinner_supernova("Excluindo produto...")
-                                try:
-                                    conn_del_p, db_tdp = get_db_connection()
-                                    cur_delp = conn_del_p.cursor()
-                                    cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
-                                    conn_del_p.commit()
-                                    conn_del_p.close()
-                                    st.success("Produto excluído com sucesso!")
-                                    st.rerun()
-                                except Exception as e: st.error(f"Erro ao excluir: {e}")
-            else: st.info("Nenhum produto cadastrado.")
-
-        with tab_forn:
-            with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
-                with st.form("cad_forn_form", clear_on_submit=True):
-                    col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                    with col_fc1: f_cod_input = st.text_input("Código", value="", placeholder="Código...")
-                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="", placeholder="00.000.000/0000-00")
-                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="", placeholder="Razão social...")
-                    
-                    if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
-                        if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
-                        else:
-                            spinner_supernova("Cadastrando fornecedor...")
-                            conn, db_type = get_db_connection()
-                            cursor = conn.cursor()
-                            try:
-                                cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper()))
-                                conn.commit()
-                                st.success("Cadastrado com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro: {e}")
-                            finally: conn.close()
-                            
-            st.markdown("---")
-            conn, db_type = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome FROM fornecedores ORDER BY nome")
-            fornecedores_cadastrados = cursor.fetchall()
-            conn.close()
-            
-            if fornecedores_cadastrados:
-                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
-                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "ID_Real"])
-                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor"]], use_container_width=True, hide_index=True, height=250)
-                
-                st.markdown("### ✏️ Editar ou Excluir Fornecedor")
-                opcoes_edit_forn = [(f[4], f"{f[3]} (Cód: {f[1] or 'S/Cód'})") for f in forn_com_id_ajustado]
-                forn_sel_ed = st.selectbox("Selecione o fornecedor para editar ou excluir", options=opcoes_edit_forn, format_func=lambda x: x[1], key="sel_forn_editar")
-                if forn_sel_ed:
-                    id_f_ed = forn_sel_ed[0]
-                    conn_f_det, db_tf_det = get_db_connection()
-                    cur_fd = conn_f_det.cursor()
-                    cur_fd.execute("SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = %s" if db_tf_det == "postgres" else "SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tf_det == "postgres" else id_f_ed,))
-                    dados_f_atual = cur_fd.fetchone()
-                    conn_f_det.close()
-                    
-                    if dados_f_atual:
-                        with st.form("form_edit_fornecedor"):
-                            ef_cod = st.text_input("Código do Fornecedor", value=dados_f_atual[0] or "")
-                            ef_cnpj = st.text_input("CNPJ", value=dados_f_atual[1] or "")
-                            ef_nome = st.text_input("Nome / Razão Social", value=dados_f_atual[2] or "")
-                            
-                            col_bf1, col_bf2 = st.columns(2)
-                            with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                            with col_bf2: btn_excluir_forn = st.form_submit_button("🗑️ Excluir Fornecedor", type="secondary")
-                            
-                            if btn_salvar_forn:
-                                spinner_supernova("Atualizando fornecedor...")
-                                try:
-                                    conn_up_f, db_tupf = get_db_connection()
-                                    cur_upf = conn_up_f.cursor()
-                                    cur_upf.execute(
-                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s WHERE id = %s" if db_tupf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ? WHERE id = ?",
-                                        (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), int(id_f_ed) if db_tupf == "postgres" else id_f_ed)
-                                    )
-                                    conn_up_f.commit()
-                                    conn_up_f.close()
-                                    st.success("Fornecedor atualizado com sucesso!")
-                                    st.rerun()
-                                except Exception as e: st.error(f"Erro ao atualizar: {e}")
-                                
-                            if btn_excluir_forn:
-                                spinner_supernova("Excluindo fornecedor...")
-                                try:
-                                    conn_del_f, db_tdf = get_db_connection()
-                                    cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
-                                    conn_del_f.commit()
-                                    conn_del_f.close()
-                                    st.success("Fornecedor excluído com sucesso!")
-                                    st.rerun()
-                                except Exception as e: st.error(f"Erro ao excluir: {e}")
-            else: st.info("Nenhum fornecedor cadastrado.")
-
-    elif menu == "Gerenciar Usuários & Permissões" and is_admin:
-        st.title("👥 Gerenciamento de Usuários e Permissões")
-        with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
-            with st.form("cad_usuario_form", clear_on_submit=True):
-                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
-                with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
-                with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
-                with col_u3: nova_senha = st.text_input("Senha", type="password", value="", placeholder="Senha...")
-                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0, placeholder="Selecione...")
-                if st.form_submit_button("➕ Cadastrar", type="primary"):
-                    if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip(): st.error("Preencha todos os campos.")
-                    else:
-                        spinner_supernova("Cadastrando usuário...")
-                        conn, db_type = get_db_connection()
-                        cursor = conn.cursor()
-                        try:
-                            cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (novo_nome.strip(), novo_login.strip(), nova_senha.strip(), novo_perfil))
-                            conn.commit()
-                            st.success("Cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e: st.error(f"Erro: {e}")
-                        finally: conn.close()
-                        
-        st.markdown("---")
-        conn, db_type = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id")
-        usuarios_cadastrados = cursor.fetchall()
-        conn.close()
-        
-        if usuarios_cadastrados:
-            usuarios_com_id_ajustado = [(i, u[1], u[2], u[3], u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
-            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha", "Perfil", "ID_Real"])
-            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha", "Perfil"]], use_container_width=True, hide_index=True, height=250)
-            
-            st.markdown("### ✏️ Editar ou Excluir Utilizador")
-            opcoes_edit_usr = [(u[5], f"{u[1]} (Login: {u[2]})") for u in usuarios_com_id_ajustado]
-            usr_sel_ed = st.selectbox("Selecione o utilizador para editar ou excluir", options=opcoes_edit_usr, format_func=lambda x: x[1], key="sel_usr_editar")
-            if usr_sel_ed:
-                id_u_ed = usr_sel_ed[0]
-                conn_u_det, db_tu_det = get_db_connection()
-                cur_ud = conn_u_det.cursor()
-                cur_ud.execute("SELECT nome, login, senha, perfil FROM usuarios WHERE id = %s" if db_tu_det == "postgres" else "SELECT nome, login, senha, perfil FROM usuarios WHERE id = ?", (int(id_u_ed) if db_tu_det == "postgres" else id_u_ed,))
-                dados_u_atual = cur_ud.fetchone()
-                conn_u_det.close()
-                
-                if dados_u_atual:
-                    with st.form("form_edit_usuario"):
-                        eu_nome = st.text_input("Nome Completo", value=dados_u_atual[0] or "")
-                        eu_login = st.text_input("Login", value=dados_u_atual[1] or "")
-                        eu_senha = st.text_input("Senha", type="password", value=dados_u_atual[2] or "")
-                        perfis_lst = ["Conferente", "Gestor"]
-                        idx_per = perfis_lst.index(dados_u_atual[3]) if dados_u_atual[3] in perfis_lst else 0
-                        eu_perfil = st.selectbox("Perfil", perfis_lst, index=idx_per)
-                        
-                        col_bu1, col_bu2 = st.columns(2)
-                        with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                        with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Utilizador", type="secondary")
-                        
-                        if btn_salvar_usr:
-                            spinner_supernova("Atualizando utilizador...")
-                            try:
-                                conn_up_u, db_tupu = get_db_connection()
-                                cur_upu = conn_up_u.cursor()
-                                cur_upu.execute(
-                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ?",
-                                    (eu_nome.strip(), eu_login.strip(), eu_senha.strip(), eu_perfil, int(id_u_ed) if db_tupu == "postgres" else id_u_ed)
-                                )
-                                conn_up_u.commit()
-                                conn_up_u.close()
-                                st.success("Utilizador atualizado com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro ao atualizar: {e}")
-                            
-                        if btn_excluir_usr:
-                            spinner_supernova("Excluindo utilizador...")
-                            try:
-                                conn_del_u, db_tdu = get_db_connection()
-                                cur_delu = conn_del_u.cursor()
-                                cur_delu.execute("DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?", (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,))
-                                conn_del_u.commit()
-                                conn_del_u.close()
-                                st.success("Utilizador excluído com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro ao excluir: {e}")
-        else: st.info("Nenhum usuário cadastrado.")
+        else: st.info(f"Nenhum romaneio encontrado na pasta '{filtro_loja_sel}'.")
