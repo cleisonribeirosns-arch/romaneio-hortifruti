@@ -51,7 +51,7 @@ logo_icon = nome
 break
 st.set_page_config(
 page_title=&quot;HortiControl Supernova - Recebimento Hortifrúti&quot;,
-page_icon=logo_icon if logo_icon else &quot;��&quot;,
+page_icon=logo_icon if logo_icon else "📦",
 layout=&quot;wide&quot;,
 )
 if not os.path.exists(&quot;uploads&quot;):
