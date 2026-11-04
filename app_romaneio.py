@@ -1447,7 +1447,7 @@ else:
                                             icone_status = "🔴 Pendente"
 
                                         # CHAVE ÚNICA CORRIGIDA AQUI
-                                        chave_unica_elem = f"{tipo_op}_{row['id']}_{idx}"
+                                        chave_unica_elem = f"{loja_nome}_{tipo_op}_{row['id']}_{idx}"
 
                                         with st.expander(f"Romaneio: {row['numero_romaneio']} | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
                                             col_st1, col_st2 = st.columns([2, 3])
@@ -2668,7 +2668,7 @@ else:
                                 conn_up_u, db_tupu = get_db_connection()
                                 cur_upu = conn_up_u.cursor()
                                 cur_upu.execute(
-                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ?",
+                                    "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
                                     (eu_nome.strip(), eu_login.strip(), eu_senha.strip(), eu_perfil, int(id_u_ed) if db_tupu == "postgres" else id_u_ed)
                                 )
                                 conn_up_u.commit()
