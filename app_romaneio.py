@@ -1397,23 +1397,19 @@ else:
         if df_rom.empty:
             st.info("Nenhum romaneio registado no sistema.")
         else:
-            # Lista oficial de lojas para criar as pastas físicas/virtuais na interface
             lista_lojas_sistema = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
             
-            # Se for conferente comum, abre diretamente na pasta da sua loja de atuação; se for gestor/admin, permite escolher ou ver todas
             if not is_admin and loja_atual_usuario in lista_lojas_sistema:
                 lojas_para_exibir = [loja_atual_usuario]
             else:
                 lojas_para_exibir = lista_lojas_sistema
 
-            # Abas principais (Pastas por Loja)
             tabs_lojas = st.tabs([f"🏢 {l}" for l in lojas_para_exibir])
             
             for idx_l, loja_nome in enumerate(lojas_para_exibir):
                 with tabs_lojas[idx_l]:
                     st.markdown(f"### 📂 Pasta de Romaneios - {loja_nome}")
                     
-                    # Filtra romaneios pertencentes a esta loja (ou destino de transferência)
                     df_loja_atual = df_rom[
                         df_rom["loja"].str.contains(loja_nome, case=False, na=False) | 
                         df_rom.get("loja_destino", pd.Series(dtype=str)).str.contains(loja_nome, case=False, na=False)
@@ -1422,10 +1418,7 @@ else:
                     if df_loja_atual.empty:
                         st.info(f"Nenhum romaneio registado para a {loja_nome}.")
                     else:
-                        # Sub-pastas por Tipo de Operação (para evitar misturar as operações)
                         tipos_operacao_disponiveis = ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
-                        
-                        # Cria abas secundárias para cada tipo de operação dentro da pasta da loja
                         subtabs_tipo = st.tabs([f"📑 {t}" for t in tipos_operacao_disponiveis])
                         
                         for idx_t, tipo_op in enumerate(tipos_operacao_disponiveis):
@@ -1453,16 +1446,19 @@ else:
                                         else:
                                             icone_status = "🔴 Pendente"
 
+                                        # CHAVE ÚNICA CORRIGIDA AQUI
+                                        chave_unica_elem = f"{tipo_op}_{row['id']}_{idx}"
+
                                         with st.expander(f"Romaneio: {row['numero_romaneio']} | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
                                             col_st1, col_st2 = st.columns([2, 3])
                                             with col_st1:
                                                 opcoes_status_rom = ["Pendente", "Nota Emitida", "Trocado", "Lançado"]
                                                 idx_status_padrao = opcoes_status_rom.index(status_atual_nota) if status_atual_nota in opcoes_status_rom else 0
-                                                novo_status_nota = st.selectbox("Status do Romaneio", opcoes_status_rom, index=idx_status_padrao, key=f"status_nota_{row['id']}")
+                                                novo_status_nota = st.selectbox("Status do Romaneio", opcoes_status_rom, index=idx_status_padrao, key=f"status_nota_{chave_unica_elem}")
                                             with col_st2:
                                                 st.write("")
                                                 st.write("")
-                                                if st.button("💾 Salvar Status", key=f"btn_salvar_status_{row['id']}"):
+                                                if st.button("💾 Salvar Status", key=f"btn_salvar_status_{chave_unica_elem}"):
                                                     spinner_supernova("Atualizando status...")
                                                     try:
                                                         conn_st, db_t_st = get_db_connection()
@@ -1488,7 +1484,7 @@ else:
                                             
                                             if row.get('caminho_foto') or row.get('foto_b64'):
                                                 st.write("")
-                                                if st.button("📄 Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                                                if st.button("📄 Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{chave_unica_elem}", type="primary"): 
                                                     exibir_foto_modal(row['caminho_foto'], row.get('foto_b64'))
                                                     
                                             conn_i, db_t_i = get_db_connection()
@@ -1505,9 +1501,9 @@ else:
                                             pdf_buffer = gerar_pdf_romaneio(row.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens.iterrows()], row.get("assinatura_conferente"), row.get("assinatura_entregador"))
                                             
                                             col_dl, col_del = st.columns([4, 1])
-                                            with col_dl: st.download_button(label=f"📥 Descarregar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
+                                            with col_dl: st.download_button(label=f"📥 Descarregar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{chave_unica_elem}")
                                             with col_del:
-                                                if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
+                                                if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{chave_unica_elem}", type="secondary"):
                                                     spinner_supernova("Excluindo romaneio...")
                                                     try:
                                                         conn_del, db_t_del = get_db_connection()
