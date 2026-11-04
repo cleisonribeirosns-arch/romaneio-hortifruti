@@ -704,16 +704,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
         if logo_path:
             break
 
-    def add_watermark(canvas_obj, doc_obj):
-        if logo_path and os.path.exists(logo_path):
-            canvas_obj.saveState()
-            try:
-                canvas_obj.setFillAlpha(0.12)
-                canvas_obj.drawImage(logo_path, letter[0] / 2 - 140, letter[1] / 2 + 30, width=280, height=280, preserveAspectRatio=True, mask="auto")
-            except Exception:
-                pass
-            canvas_obj.restoreState()
-
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
@@ -784,7 +774,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     ass_table = Table([[col_conf_cell, col_ent_cell]], colWidths=[270, 270])
     ass_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     story.append(ass_table)
-    doc.build(story, onFirstPage=add_watermark, onLaterPages=add_watermark)
+    doc.build(story)
     buffer.seek(0)
     return buffer
 
@@ -1398,139 +1388,137 @@ else:
             st.download_button(label=f"📥 Descarregar PDF - {st.session_state['ultimo_num_romaneio']}", data=st.session_state["ultimo_pdf_bytes"], file_name=f"{st.session_state['ultimo_num_romaneio']}.pdf", mime="application/pdf", type="primary")
             
     elif menu == "Consultar Romaneios":
-        st.title("🔍 Consulta de Romaneios")
+        st.title("📁 Pastas de Romaneios por Loja & Tipo de Operação")
         
-        lista_lojas_filtro = ["TODAS AS LOJAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
-        idx_loja_padrao_filtro = 0
-        if not is_admin and loja_atual_usuario in lista_lojas_filtro:
-            idx_loja_padrao_filtro = lista_lojas_filtro.index(loja_atual_usuario)
-
-        lista_tipos_op_filtro = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
-
-        with st.expander("🔍 Filtrar Romaneios", expanded=True):
-            col_f0, col_f_op, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1.2, 1, 1, 1, 1])
-            with col_f0: filtro_loja_sel = st.selectbox("Filtrar por Loja", options=lista_lojas_filtro, index=idx_loja_padrao_filtro, placeholder="Selecione...")
-            with col_f_op: filtro_tipo_op_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_filtro, index=0, placeholder="Selecione...")
-            with col_f1: filtro_num = st.text_input("Número do Romaneio", value="", placeholder="Ex: ROM-...")
-            with col_f2: filtro_forn = st.text_input("Fornecedor / Entregador", value="", placeholder="Nome do fornecedor...")
-            with col_f3: filtro_cod_forn = st.text_input("Código do Fornecedor", value="", placeholder="Código...")
-            with col_f4:
-                filtro_data_val = st.date_input("Data do Recebimento", value=None, format="DD/MM/YYYY")
-                filtro_data_str = filtro_data_val.strftime("%d/%m/%Y") if filtro_data_val else ""
-                
         conn, db_type = get_db_connection()
         df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
         conn.close()
         
-        if not df_rom.empty:
-            if filtro_loja_sel != "TODAS AS LOJAS":
-                df_rom = df_rom[df_rom["loja"].str.contains(filtro_loja_sel, case=False, na=False) | df_rom.get("loja_destino", pd.Series(dtype=str)).str.contains(filtro_loja_sel, case=False, na=False)]
-            if filtro_tipo_op_sel != "TODOS OS TIPOS":
-                df_rom = df_rom[df_rom["tipo_operacao"].str.contains(filtro_tipo_op_sel, case=False, na=False)]
-            if filtro_num.strip(): df_rom = df_rom[df_rom["numero_romaneio"].str.contains(filtro_num.strip(), case=False, na=False)]
-            if filtro_forn.strip(): df_rom = df_rom[df_rom["fornecedor"].str.contains(filtro_forn.strip(), case=False, na=False)]
-            if filtro_cod_forn.strip(): df_rom = df_rom[df_rom["codigo_fornecedor"].astype(str).str.contains(filtro_cod_forn.strip(), case=False, na=False)]
-            if filtro_data_str: df_rom = df_rom[df_rom["data_recebimento"] == filtro_data_str]
-                
-        if not df_rom.empty:
-            st.markdown(f"**Total de romaneios encontrados:** {len(df_rom)}")
-            st.markdown("---")
+        if df_rom.empty:
+            st.info("Nenhum romaneio registado no sistema.")
+        else:
+            # Lista oficial de lojas para criar as pastas físicas/virtuais na interface
+            lista_lojas_sistema = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
             
-            df_rom_resumo = df_rom[["numero_romaneio", "tipo_operacao", "loja", "data_recebimento", "fornecedor", "conferente", "status_nota"]].rename(columns={
-                "numero_romaneio": "N° Romaneio",
-                "tipo_operacao": "Tipo",
-                "loja": "Loja",
-                "data_recebimento": "Data",
-                "fornecedor": "Fornecedor",
-                "conferente": "Conferente",
-                "status_nota": "Status"
-            })
-            st.dataframe(df_rom_resumo, use_container_width=True, hide_index=True, height=250)
-            st.markdown("---")
+            # Se for conferente comum, abre diretamente na pasta da sua loja de atuação; se for gestor/admin, permite escolher ou ver todas
+            if not is_admin and loja_atual_usuario in lista_lojas_sistema:
+                lojas_para_exibir = [loja_atual_usuario]
+            else:
+                lojas_para_exibir = lista_lojas_sistema
 
-            for idx, row in df_rom.iterrows():
-                fornecedor_txt = row['fornecedor'] if row['fornecedor'] else 'N/A'
-                if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip(): fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
-                
-                status_atual_nota = row.get("status_nota", "Pendente")
-                if status_atual_nota == "Nota Emitida":
-                    icone_status = "🟢 Nota Emitida"
-                elif status_atual_nota == "Trocado":
-                    icone_status = "🟠 Trocado"
-                elif status_atual_nota == "Lançado":
-                    icone_status = "🔵 Lançado"
-                else:
-                    icone_status = "🔴 Pendente"
+            # Abas principais (Pastas por Loja)
+            tabs_lojas = st.tabs([f"🏢 {l}" for l in lojas_para_exibir])
+            
+            for idx_l, loja_nome in enumerate(lojas_para_exibir):
+                with tabs_lojas[idx_l]:
+                    st.markdown(f"### 📂 Pasta de Romaneios - {loja_nome}")
+                    
+                    # Filtra romaneios pertencentes a esta loja (ou destino de transferência)
+                    df_loja_atual = df_rom[
+                        df_rom["loja"].str.contains(loja_nome, case=False, na=False) | 
+                        df_rom.get("loja_destino", pd.Series(dtype=str)).str.contains(loja_nome, case=False, na=False)
+                    ]
+                    
+                    if df_loja_atual.empty:
+                        st.info(f"Nenhum romaneio registado para a {loja_nome}.")
+                    else:
+                        # Sub-pastas por Tipo de Operação (para evitar misturar as operações)
+                        tipos_operacao_disponiveis = ["Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
+                        
+                        # Cria abas secundárias para cada tipo de operação dentro da pasta da loja
+                        subtabs_tipo = st.tabs([f"📑 {t}" for t in tipos_operacao_disponiveis])
+                        
+                        for idx_t, tipo_op in enumerate(tipos_operacao_disponiveis):
+                            with subtabs_tipo[idx_t]:
+                                df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.contains(tipo_op, case=False, na=False)]
+                                
+                                if df_tipo_atual.empty:
+                                    st.markdown(f"<p style='color: #9aa0a6; font-style: italic; padding: 10px;'>Nenhum romaneio do tipo '{tipo_op}' nesta pasta.</p>", unsafe_allow_html=True)
+                                else:
+                                    st.markdown(f"**Total de registos em {tipo_op}:** {len(df_tipo_atual)}")
+                                    st.markdown("---")
+                                    
+                                    for idx, row in df_tipo_atual.iterrows():
+                                        fornecedor_txt = row['fornecedor'] if row['fornecedor'] else 'N/A'
+                                        if row['codigo_fornecedor'] and str(row['codigo_fornecedor']).strip(): 
+                                            fornecedor_txt += f" (Cód: {row['codigo_fornecedor']})"
+                                        
+                                        status_atual_nota = row.get("status_nota", "Pendente")
+                                        if status_atual_nota == "Nota Emitida":
+                                            icone_status = "🟢 Nota Emitida"
+                                        elif status_atual_nota == "Trocado":
+                                            icone_status = "🟠 Trocado"
+                                        elif status_atual_nota == "Lançado":
+                                            icone_status = "🔵 Lançado"
+                                        else:
+                                            icone_status = "🔴 Pendente"
 
-                tipo_op_reg = row.get("tipo_operacao", "Compra")
-                
-                with st.expander(f"Romaneio: {row['numero_romaneio']} | [{tipo_op_reg.upper()}] | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
-                    col_st1, col_st2 = st.columns([2, 3])
-                    with col_st1:
-                        opcoes_status_rom = ["Pendente", "Nota Emitida", "Trocado", "Lançado"]
-                        idx_status_padrao = opcoes_status_rom.index(status_atual_nota) if status_atual_nota in opcoes_status_rom else 0
-                        novo_status_nota = st.selectbox("Status do Romaneio", opcoes_status_rom, index=idx_status_padrao, key=f"status_nota_{row['id']}")
-                    with col_st2:
-                        st.write("")
-                        st.write("")
-                        if st.button("💾 Salvar Status", key=f"btn_salvar_status_{row['id']}"):
-                            spinner_supernova("Atualizando status...")
-                            try:
-                                conn_st, db_t_st = get_db_connection()
-                                cur_st = conn_st.cursor()
-                                cur_st.execute(
-                                    "UPDATE romaneios SET status_nota = %s WHERE id = %s" if db_t_st == "postgres" else "UPDATE romaneios SET status_nota = ? WHERE id = ?",
-                                    (novo_status_nota, int(row["id"]) if db_t_st == "postgres" else row["id"])
-                                )
-                                conn_st.commit()
-                                conn_st.close()
-                                st.success("Status atualizado!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro: {e}")
-                    
-                    st.markdown("---")
-                    loja_exibicao = row['loja']
-                    if tipo_op_reg.lower() in ['transferência', 'transferência/bonificação'] and row.get('loja_origem'):
-                        loja_exibicao = f"Origem: {row['loja_origem']} -> Destino: {row['loja_destino']}"
-                    
-                    st.write(f"**Tipo:** {tipo_op_reg} | **Loja:** {loja_exibicao}")
-                    st.write(f"**Conferente:** {row['conferente']} | **Pagamento à Vista:** {row['pagamento_a_vista']}")
-                    if row.get('observacoes'): st.write(f"**Observações:** {row['observacoes']}")
-                    
-                    if row.get('caminho_foto') or row.get('foto_b64'):
-                        st.write("")
-                        if st.button("📄 Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
-                            exibir_foto_modal(row['caminho_foto'], row.get('foto_b64'))
-                            
-                    conn_i, db_t_i = get_db_connection()
-                    df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
-                    conn_i.close()
-                    
-                    df_itens_ex = df_itens.copy()
-                    df_itens_ex['Qtd / Peso'] = df_itens_ex['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
-                    df_itens_ex['Vl. Unit'] = df_itens_ex['valor_unitario'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                    df_itens_ex['Total'] = df_itens_ex['valor_total'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                    st.dataframe(df_itens_ex[['produto', 'Qtd / Peso', 'unidade', 'Vl. Unit', 'Total']], use_container_width=True, height=200)
-                    
-                    st.markdown(f"**Total do Romaneio: R$ {fmt_ptbr(df_itens['valor_total'].sum(), 2)}**")
-                    pdf_buffer = gerar_pdf_romaneio(row.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens.iterrows()], row.get("assinatura_conferente"), row.get("assinatura_entregador"))
-                    
-                    col_dl, col_del = st.columns([4, 1])
-                    with col_dl: st.download_button(label=f"📥 Descarregar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
-                    with col_del:
-                        if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
-                            spinner_supernova("Excluindo romaneio...")
-                            try:
-                                conn_del, db_t_del = get_db_connection()
-                                cursor_del = conn_del.cursor()
-                                cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s" if db_t_del == "postgres" else "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
-                                cursor_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
-                                conn_del.commit()
-                                conn_del.close()
-                                st.success("Romaneio excluído com sucesso!")
-                                st.rerun()
-                            except Exception as e: st.error(f"Erro: {e}")
-        else: st.info("Nenhum romaneio encontrado.")
+                                        with st.expander(f"Romaneio: {row['numero_romaneio']} | {icone_status} | Fornecedor: {fornecedor_txt} | Data: {row['data_recebimento']}"):
+                                            col_st1, col_st2 = st.columns([2, 3])
+                                            with col_st1:
+                                                opcoes_status_rom = ["Pendente", "Nota Emitida", "Trocado", "Lançado"]
+                                                idx_status_padrao = opcoes_status_rom.index(status_atual_nota) if status_atual_nota in opcoes_status_rom else 0
+                                                novo_status_nota = st.selectbox("Status do Romaneio", opcoes_status_rom, index=idx_status_padrao, key=f"status_nota_{row['id']}")
+                                            with col_st2:
+                                                st.write("")
+                                                st.write("")
+                                                if st.button("💾 Salvar Status", key=f"btn_salvar_status_{row['id']}"):
+                                                    spinner_supernova("Atualizando status...")
+                                                    try:
+                                                        conn_st, db_t_st = get_db_connection()
+                                                        cur_st = conn_st.cursor()
+                                                        cur_st.execute(
+                                                            "UPDATE romaneios SET status_nota = %s WHERE id = %s" if db_t_st == "postgres" else "UPDATE romaneios SET status_nota = ? WHERE id = ?",
+                                                            (novo_status_nota, int(row["id"]) if db_t_st == "postgres" else row["id"])
+                                                        )
+                                                        conn_st.commit()
+                                                        conn_st.close()
+                                                        st.success("Status atualizado!")
+                                                        st.rerun()
+                                                    except Exception as e: st.error(f"Erro: {e}")
+                                            
+                                            st.markdown("---")
+                                            loja_exibicao = row['loja']
+                                            if tipo_op.lower() in ['transferência', 'transferência/bonificação'] and row.get('loja_origem'):
+                                                loja_exibicao = f"Origem: {row['loja_origem']} -> Destino: {row['loja_destino']}"
+                                            
+                                            st.write(f"**Tipo:** {tipo_op} | **Loja:** {loja_exibicao}")
+                                            st.write(f"**Conferente:** {row['conferente']} | **Pagamento à Vista:** {row['pagamento_a_vista']}")
+                                            if row.get('observacoes'): st.write(f"**Observações:** {row['observacoes']}")
+                                            
+                                            if row.get('caminho_foto') or row.get('foto_b64'):
+                                                st.write("")
+                                                if st.button("📄 Visualizar Nota / Anexo", key=f"btn_ampliar_foto_{row['id']}", type="primary"): 
+                                                    exibir_foto_modal(row['caminho_foto'], row.get('foto_b64'))
+                                                    
+                                            conn_i, db_t_i = get_db_connection()
+                                            df_itens = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(int(row["id"]) if db_t_i == "postgres" else row["id"],))
+                                            conn_i.close()
+                                            
+                                            df_itens_ex = df_itens.copy()
+                                            df_itens_ex['Qtd / Peso'] = df_itens_ex['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
+                                            df_itens_ex['Vl. Unit'] = df_itens_ex['valor_unitario'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                                            df_itens_ex['Total'] = df_itens_ex['valor_total'].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                                            st.dataframe(df_itens_ex[['produto', 'Qtd / Peso', 'unidade', 'Vl. Unit', 'Total']], use_container_width=True, height=200)
+                                            
+                                            st.markdown(f"**Total do Romaneio: R$ {fmt_ptbr(df_itens['valor_total'].sum(), 2)}**")
+                                            pdf_buffer = gerar_pdf_romaneio(row.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens.iterrows()], row.get("assinatura_conferente"), row.get("assinatura_entregador"))
+                                            
+                                            col_dl, col_del = st.columns([4, 1])
+                                            with col_dl: st.download_button(label=f"📥 Descarregar PDF - {row['numero_romaneio']}", data=pdf_buffer, file_name=f"{row['numero_romaneio']}.pdf", mime="application/pdf", key=f"pdf_btn_cons_{row['id']}")
+                                            with col_del:
+                                                if st.button("🗑️ Excluir", key=f"btn_excluir_rom_{row['id']}", type="secondary"):
+                                                    spinner_supernova("Excluindo romaneio...")
+                                                    try:
+                                                        conn_del, db_t_del = get_db_connection()
+                                                        cursor_del = conn_del.cursor()
+                                                        cursor_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s" if db_t_del == "postgres" else "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
+                                                        cursor_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (int(row["id"]) if db_t_del == "postgres" else row["id"],))
+                                                        conn_del.commit()
+                                                        conn_del.close()
+                                                        st.success("Romaneio excluído com sucesso!")
+                                                        st.rerun()
+                                                    except Exception as e: st.error(f"Erro: {e}")
 
     # ---------------------------------------------------------
     # 6. CONTROLE DE BONIFICAÇÃO
@@ -1779,12 +1767,10 @@ else:
         st.title("📉 Registro de Baixas das Avarias")
         loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
         
-        # Gerador de sufixo para limpar o formulário ao salvar
         if "baixa_form_suffix" not in st.session_state:
             st.session_state["baixa_form_suffix"] = 0
         bx_suf = st.session_state["baixa_form_suffix"]
         
-        # 1. Carregar histórico de baixas
         conn_bx_chk, db_tbx_chk = get_db_connection()
         df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
         conn_bx_chk.close()
@@ -1795,7 +1781,6 @@ else:
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
-        # 2. Carregar todas as bonificações e recalcular/atualizar status automaticamente no banco
         conn_b_all, db_tb_all = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
         
@@ -1822,18 +1807,15 @@ else:
             conn_b_all.commit()
         conn_b_all.close()
 
-        # Recarregar bonificações atualizadas
         conn_b_all2, db_tb_all2 = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
         conn_b_all2.close()
 
-        # Dicionário mapeando NF de Entrada -> Valor Original da Nota
         dict_valor_orig_por_nf = {}
         if not df_todas_bonf.empty:
             for _, r_b in df_todas_bonf.iterrows():
                 dict_valor_orig_por_nf[str(r_b["numero_nota"])] = float(r_b["valor_bonificacao"])
 
-        # Apenas notas da LOJA 02 contabilizam como saldo para baixar as avarias
         if not df_todas_bonf.empty:
             df_bonf_loja02 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02|NOVA CIDADE", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
         else:
@@ -1858,7 +1840,6 @@ else:
                         "saldo_restante": saldo_restante_nota
                     })
 
-        # PAINEL DO TOPO (LÂMPADA) COM O SALDO GLOBAL DA LOJA 02
         st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
             <span style="font-size: 20px;">💡</span>
@@ -1980,7 +1961,6 @@ else:
                                 conn_ins.commit()
                                 conn_ins.close()
                                 
-                                # Incrementa o sufixo para limpar e reiniciar o formulário perfeitamente
                                 st.session_state["baixa_form_suffix"] += 1
                                 st.success("Baixa registrada com sucesso!")
                                 st.rerun()
@@ -2394,7 +2374,6 @@ else:
                 else:
                     st.info("Sem dados de baixas para os filtros.")
 
-            # ADIÇÃO DO GRÁFICO DE QUANTIDADES DE PERDAS EVITADAS POR PRODUTO (EX: CHEIRO VERDE, ETC.)
             st.markdown("#### 📦 Quantidade (Kg / Unidades / Caixas) de Produtos com Perdas Evitadas por Baixas")
             if not df_bx_sub.empty:
                 df_bx_qtd_prod = df_bx_sub.groupby("produto_hortifruti")["quantidade_kg_cx"].sum().reset_index()
