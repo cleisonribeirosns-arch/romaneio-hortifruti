@@ -2188,8 +2188,12 @@ else:
             else:
                 df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
                 df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
+                
                 st.markdown("### 🔍 Filtros da Análise Gerencial")
-                col_f1, col_f2, col_f3, col_f4 = st.columns([1, 1, 1, 1])
+                col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1, 1, 1, 1])
+                with col_f0:
+                    lista_tipos_op_bi = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
+                    tipo_op_bi_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_bi, index=0, key="rel_filter_tipo_op")
                 with col_f1: loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + list(df_roms["loja"].unique()), placeholder="Selecione...", key="rel_filter_loja")
                 with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
                 with col_f3:
@@ -2200,33 +2204,81 @@ else:
                     dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
                     
                 df_filtrado = df_full.copy()
-                if loja_sel != "TODAS AS LOJAS": df_filtrado = df_filtrado[df_filtrado["loja"] == loja_sel]
-                if prod_sel != "TODOS OS PRODUTOS": df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
-                if dt_inicio and dt_fim: df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
+                if tipo_op_bi_sel != "TODOS OS TIPOS":
+                    df_filtrado = df_filtrado[df_filtrado["tipo_operacao"].str.contains(tipo_op_bi_sel, case=False, na=False)]
+                if loja_sel != "TODAS AS LOJAS": 
+                    df_filtrado = df_filtrado[df_filtrado["loja"].str.contains(loja_sel, case=False, na=False) | df_filtrado.get("loja_destino", pd.Series(dtype=str)).str.contains(loja_sel, case=False, na=False)]
+                if prod_sel != "TODOS OS PRODUTOS": 
+                    df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
+                if dt_inicio and dt_fim: 
+                    df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
                     
-                if df_filtrado.empty: st.info("Nenhum registo encontrado.")
+                if df_filtrado.empty: 
+                    st.info("Nenhum registo encontrado para os filtros selecionados.")
                 else:
                     st.markdown("---")
-                    st.subheader("📈 Indicadores Principais (KPIs)")
-                    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
-                    kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(df_filtrado['valor_total'].sum(), 2)}")
-                    kpi2.metric("Total de Romaneios", f"{df_filtrado['numero_romaneio'].nunique()} romaneios")
-                    kpi3.metric("Qtd / Peso Total", f"{fmt_ptbr(df_filtrado['quantidade'].sum(), 3)}")
-                    kpi4.metric("Principal Fornecedor", str(df_filtrado.groupby("fornecedor")["valor_total"].sum().idxmax() if not df_filtrado.empty else "N/A"))
+                    st.subheader("📈 Indicadores Principais & Análise por Operação (KPIs no Período)")
+                    
+                    # Cálculos específicos para o período e filtros
+                    tot_recebido = df_filtrado['valor_total'].sum()
+                    num_roms = df_filtrado['numero_romaneio'].nunique()
+                    qtd_total = df_filtrado['quantidade'].sum()
+                    
+                    # Totais específicos solicitados
+                    val_troca = df_filtrado[df_filtrado['tipo_operacao'].str.contains("Troca por Troca", case=False, na=False)]['valor_total'].sum()
+                    val_transf = df_filtrado[df_filtrado['tipo_operacao'].str.contains("Transferência", case=False, na=False)]['valor_total'].sum()
+                    
+                    # Perdas evitadas (baixas de avarias filtradas por data/loja no período)
+                    df_bx_periodo = df_baixas_rel.copy()
+                    if not df_bx_periodo.empty:
+                        df_bx_periodo['data_dt'] = pd.to_datetime(df_bx_periodo['data_baixa'].str.split(' ').str[0], format='%d/%m/%Y', errors='coerce')
+                        if loja_sel != "TODAS AS LOJAS":
+                            df_bx_periodo = df_bx_periodo[df_bx_periodo['loja_baixa'].str.contains(loja_sel, case=False, na=False)]
+                        if prod_sel != "TODOS OS PRODUTOS":
+                            df_bx_periodo = df_bx_periodo[df_bx_periodo['produto_hortifruti'] == prod_sel]
+                        if dt_inicio and dt_fim:
+                            df_bx_periodo = df_bx_periodo[(df_bx_periodo['data_dt'] >= pd.to_datetime(dt_inicio)) & (df_bx_periodo['data_dt'] <= pd.to_datetime(dt_fim))]
+                    
+                    val_perdas_evitadas = df_bx_periodo['valor_total_avaria'].sum() if not df_bx_periodo.empty else 0.0
+
+                    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+                    kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(tot_recebido, 2)}")
+                    kpi2.metric("Entradas no Período", f"{num_roms} romaneios")
+                    kpi3.metric("Total Transferências", f"R$ {fmt_ptbr(val_transf, 2)}")
+                    kpi4.metric("Total Troca por Troca", f"R$ {fmt_ptbr(val_troca, 2)}")
+                    kpi5.metric("Perdas Evitadas", f"R$ {fmt_ptbr(val_perdas_evitadas, 2)}", delta="Economia", delta_color="normal")
+                    
                     st.markdown("---")
                     
                     col_g1, col_g2 = st.columns(2)
                     with col_g1:
+                        st.markdown("#### Top Produtos por Valor no Período (R$)")
                         top_prods_val = df_filtrado.groupby("produto")["valor_total"].sum().nlargest(10).reset_index()
                         fig_val = px.bar(top_prods_val, x="produto", y="valor_total", text_auto=".2f", color="valor_total", color_continuous_scale="Greens")
                         fig_val.update_layout(xaxis_title="Produto", yaxis_title="Total (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_val, use_container_width=True)
                     with col_g2:
+                        st.markdown("#### Top Produtos por Quantidade/Peso no Período")
                         top_prods_qtd = df_filtrado.groupby("produto")["quantidade"].sum().nlargest(10).reset_index()
                         fig_qtd = px.bar(top_prods_qtd, x="produto", y="quantidade", text_auto=".2f", color="quantidade", color_continuous_scale="Reds")
                         fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_qtd, use_container_width=True)
+
+                    st.markdown("---")
+                    st.subheader("🛡️ Gráfico de Perdas Evitadas (Avarias Compensadas por Loja/Produto)")
+                    if not df_bx_periodo.empty:
+                        df_bx_grp_loja = df_bx_periodo.groupby("loja_baixa")["valor_total_avaria"].sum().reset_index()
+                        fig_perdas = px.bar(
+                            df_bx_grp_loja, x="loja_baixa", y="valor_total_avaria", text_auto=".2f",
+                            color="valor_total_avaria", color_continuous_scale="Purples",
+                            labels={"loja_baixa": "Loja", "valor_total_avaria": "Valor Evitado (R$)"}
+                        )
+                        fig_perdas.update_layout(xaxis_title="Loja", yaxis_title="Perdas Evitadas (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                        st.plotly_chart(fig_perdas, use_container_width=True)
+                    else:
+                        st.info("Nenhum registo de perdas evitadas/avarias encontrado para o período e filtros selecionados.")
                     
+                    st.markdown("---")
                     st.download_button(label="📥 Descarregar Relatório Consolidado (Excel / CSV)", data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'), file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv", mime="text/csv", type="primary", key="btn_download_csv_relatorio")
 
         with tab_bi_bonf_avaria:
@@ -2537,7 +2589,7 @@ else:
                                     conn_up_f.close()
                                     st.success("Fornecedor atualizado com sucesso!")
                                     st.rerun()
-                                me: st.error(f"Erro ao atualizar: {e}")
+                                except Exception as e: st.error(f"Erro ao atualizar: {e}")
                                 
                             if btn_excluir_forn:
                                 spinner_supernova("Excluindo fornecedor...")
