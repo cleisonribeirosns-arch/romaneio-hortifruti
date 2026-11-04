@@ -2219,16 +2219,12 @@ else:
                     st.markdown("---")
                     st.subheader("📈 Indicadores Principais & Análise por Operação (KPIs no Período)")
                     
-                    # Cálculos específicos para o período e filtros
                     tot_recebido = df_filtrado['valor_total'].sum()
                     num_roms = df_filtrado['numero_romaneio'].nunique()
-                    qtd_total = df_filtrado['quantidade'].sum()
                     
-                    # Totais específicos solicitados
                     val_troca = df_filtrado[df_filtrado['tipo_operacao'].str.contains("Troca por Troca", case=False, na=False)]['valor_total'].sum()
                     val_transf = df_filtrado[df_filtrado['tipo_operacao'].str.contains("Transferência", case=False, na=False)]['valor_total'].sum()
                     
-                    # Perdas evitadas (baixas de avarias filtradas por data/loja no período)
                     df_bx_periodo = df_baixas_rel.copy()
                     if not df_bx_periodo.empty:
                         df_bx_periodo['data_dt'] = pd.to_datetime(df_bx_periodo['data_baixa'].str.split(' ').str[0], format='%d/%m/%Y', errors='coerce')
@@ -2263,6 +2259,20 @@ else:
                         fig_qtd = px.bar(top_prods_qtd, x="produto", y="quantidade", text_auto=".2f", color="quantidade", color_continuous_scale="Reds")
                         fig_qtd.update_layout(xaxis_title="Produto", yaxis_title="Qtd / Peso", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_qtd, use_container_width=True)
+
+                    st.markdown("---")
+                    st.subheader("📊 Gráfico de Quantidades Movimentadas por Tipo de Operação no Período")
+                    if not df_filtrado.empty:
+                        df_qtd_op = df_filtrado.groupby(["produto", "tipo_operacao"])["quantidade"].sum().reset_index()
+                        fig_qtd_op = px.bar(
+                            df_qtd_op, x="produto", y="quantidade", color="tipo_operacao",
+                            barmode="group", text_auto=".2f",
+                            labels={"produto": "Produto", "quantidade": "Quantidade / Peso Total", "tipo_operacao": "Tipo de Operação"}
+                        )
+                        fig_qtd_op.update_layout(xaxis_title="Produto", yaxis_title="Quantidade Movimentada", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                        st.plotly_chart(fig_qtd_op, use_container_width=True)
+                    else:
+                        st.info("Sem dados de quantidade por operação para o período.")
 
                     st.markdown("---")
                     st.subheader("🛡️ Gráfico de Perdas Evitadas (Avarias Compensadas por Loja/Produto)")
@@ -2358,7 +2368,7 @@ else:
             """.format(fmt_ptbr(v_tot_avarias_salvas, 2)), unsafe_allow_html=True)
 
             st.markdown("---")
-            st.markdown("### 📊 Gráficos Analíticos de Desempenho")
+            st.markdown("### 📊 Gráficos Analíticos de Desempenho & Quantidades Evitadas")
             
             bg_bi1, bg_bi2 = st.columns(2)
             with bg_bi1:
@@ -2383,6 +2393,20 @@ else:
                     st.plotly_chart(fig_avarias, use_container_width=True)
                 else:
                     st.info("Sem dados de baixas para os filtros.")
+
+            # ADIÇÃO DO GRÁFICO DE QUANTIDADES DE PERDAS EVITADAS POR PRODUTO (EX: CHEIRO VERDE, ETC.)
+            st.markdown("#### 📦 Quantidade (Kg / Unidades / Caixas) de Produtos com Perdas Evitadas por Baixas")
+            if not df_bx_sub.empty:
+                df_bx_qtd_prod = df_bx_sub.groupby("produto_hortifruti")["quantidade_kg_cx"].sum().reset_index()
+                fig_qtd_avarias = px.bar(
+                    df_bx_qtd_prod, x="produto_hortifruti", y="quantidade_kg_cx", text_auto=".3f",
+                    color="quantidade_kg_cx", color_continuous_scale="Greens",
+                    labels={"produto_hortifruti": "Produto", "quantidade_kg_cx": "Quantidade Total (Kg/Unid/Cx)"}
+                )
+                fig_qtd_avarias.update_layout(xaxis_title="Produto", yaxis_title="Volume Salvo (Qtd/Peso)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
+                st.plotly_chart(fig_qtd_avarias, use_container_width=True)
+            else:
+                st.info("Sem dados de quantidades de avarias para o período.")
 
             bg_bi3, bg_bi4 = st.columns(2)
             with bg_bi3:
