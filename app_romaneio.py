@@ -1022,15 +1022,15 @@ else:
             st.rerun()
             
     opcoes_menu_map = {
-        "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+        "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
         "🔍 Consultar Romaneios": "Consultar Romaneios",
-        "🏷️ Controle de Bonificação": "Controle de Bonificação",
+        "🛒 Controle de Bonificação": "Controle de Bonificação",
         "📉 Baixa de Avarias": "Controle de Baixa de Avarias"
     }
     if is_admin:
         opcoes_menu_map.update({
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)",
+            "⚙️ Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         })
     menu_selecionado_label = st.radio(
@@ -1043,7 +1043,7 @@ else:
     st.markdown("---")
     
     if menu == "Romaneio de Recebimento - Hortifrúti":
-        st.title("📦 Romaneio de Recebimento - Hortifrúti")
+        st.title("📋 Romaneio de Recebimento - Hortifrúti")
         if "form_key_suffix" not in st.session_state: st.session_state["form_key_suffix"] = 0
         if "item_key_suffix" not in st.session_state: st.session_state["item_key_suffix"] = 0
         k_suffix = st.session_state["form_key_suffix"]
@@ -1241,7 +1241,7 @@ else:
                     if not os.path.exists("uploads"): os.makedirs("uploads")
                     path_ass_conf = ""
                     b64_conf = ""
-                    if canvas_conf.image_data is not None:
+                    if canvas_conf.image_data is not None and canvas_conf.image_data.sum() > 0:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
                         img_c.save(path_ass_conf)
@@ -1250,7 +1250,7 @@ else:
 
                     path_ass_ent = ""
                     b64_ent = ""
-                    if canvas_ent.image_data is not None:
+                    if canvas_ent.image_data is not None and canvas_ent.image_data.sum() > 0:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
                         img_e.save(path_ass_ent)
@@ -1384,7 +1384,6 @@ else:
                                 else:
                                     st.markdown(f"**Total de registros em '{tipo_op}':** {len(df_tipo_atual)}")
                                     df_planilha = df_tipo_atual.copy()
-                                    df_planilha["Anexo"] = df_planilha.apply(lambda r: "📎 Disponível" if (r.get("caminho_foto") and os.path.exists(str(r["caminho_foto"]))) or r.get("foto_b64") else "Sem Anexo", axis=1)
                                     df_planilha["Valor Total"] = df_planilha["valor_total_rom"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
 
                                     df_planilha_show = df_planilha.rename(columns={
@@ -1396,7 +1395,7 @@ else:
                                         "conferente": "Conferente",
                                         "status_nota": "Status Atual"
                                     })
-                                    cols_view = df_planilha_show[["N° Romaneio", "Tipo Operação", "Loja", "Data Recebimento", "Fornecedor", "Conferente", "Valor Total", "Status Atual", "Anexo"]]
+                                    cols_view = df_planilha_show[["N° Romaneio", "Tipo Operação", "Loja", "Data Recebimento", "Fornecedor", "Conferente", "Valor Total", "Status Atual"]]
                                     cols_view.index = range(1, len(cols_view) + 1)
                                     st.dataframe(cols_view, use_container_width=True, height=280)
 
@@ -1533,7 +1532,7 @@ else:
                                                         except Exception as e: st.error(f"Erro ao editar romaneio: {e}")
 
     elif menu == "Controle de Bonificação":
-        st.title("🏷️ Controle de Bonificação Hortifrúti")
+        st.title("🛒 Controle de Bonificação Hortifrúti")
         conn_prod, db_p = get_db_connection()
         cursor_p = conn_prod.cursor()
         cursor_p.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
@@ -2280,7 +2279,7 @@ else:
             st.markdown(f"""
             <div style="background: rgba(46, 125, 50, 0.25); border: 1px solid #4CAF50; border-radius: 8px; padding: 12px 18px; margin: 15px 0;">
                 <span style="color: #81C784; font-weight: bold; font-size: 15px;">🛡️ Mensagem para Liderança:</span>
-                <span style="color: #FFFFFF; font-size: 14px;"> O processo de acompanhamento de bonificações já garantiu uma <b>recuperação direta de R$ <span style="color: #FFF; font-weight: bold;">{fmt_ptbr(v_tot_avarias_salvas, 2)}</span> em avarias que seriam registradas como prejuízo líquido direto para a empresa.</span>
+                <span style="color: #FFFFFF; font-size: 14px;"> O processo de acompanhamento de bonificações já garantiu uma <b>recuperação direta de R$ <span style="color: #FFF; font-weight: bold;">{fmt_ptbr(v_tot_avarias_salvas, 2)}</span> em avarias que seriam registradas como prejuízo líquido direto para a empresa.</b></span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -2362,7 +2361,7 @@ else:
                 )
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("🛠️ Gerenciamento e Cadastro (Produtos & Fornecedores)")
+        st.title("⚙️ Gerenciamento e Cadastro (Produtos & Fornecedores)")
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🏢 Cadastro de Fornecedores"])
         with tab_prod:
             with st.expander("➕ Cadastrar Novo Produto", expanded=False):
