@@ -878,7 +878,7 @@ def gerar_pdf_baixas(df_baixas_data):
     for _, r in df_baixas_data.iterrows():
         v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
         tot_val_avarias += v_av
-        s_nota = float(r["saldo_restante_nota"]) if r["saldo_restante_nota"] else 0.0
+        s_nota = float(r.get("saldo_restante_calculado", r["saldo_restante_nota"])) if r["saldo_restante_nota"] else 0.0
         s_util = float(r.get("saldo_total_utilizado", 0.0))
         qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
         table_content.append([
@@ -1819,7 +1819,7 @@ else:
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
-        # CORREÇÃO APLICADA: Incluído 'produto_hortifruti' na consulta SQL das bonificações
+        # CORREÇÃO: Incluído 'produto_hortifruti' na consulta SQL das bonificações
         conn_b_all, db_tb_all = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti FROM bonificacoes", conn_b_all)
         if not df_todas_bonf.empty:
@@ -2011,18 +2011,26 @@ else:
             if not df_bx_table.empty:
                 df_display_plan = df_bx_table.copy()
                 total_utilizado_por_nf = total_baixado_por_nota
+                
+                # LÓGICA CORRIGIDA: Calcula o saldo global atual da nota e repete em todas as linhas correspondentes
+                saldo_atual_por_nf = {}
+                utilizado_total_por_nf = {}
+                
+                for nf_ent_key, val_orig in dict_valor_orig_por_nf.items():
+                    v_bx_total = total_utilizado_por_nf.get(str(nf_ent_key), 0.0)
+                    utilizado_total_por_nf[str(nf_ent_key)] = v_bx_total
+                    saldo_atual_por_nf[str(nf_ent_key)] = max(0.0, float(val_orig) - v_bx_total)
+
                 saldo_calculado_list = []
                 utilizado_calculado_list = []
+                
                 for _, row_bx in df_display_plan.iterrows():
                     nf_ent_item = str(row_bx["nf_b_entrada"])
-                    v_utilizado = float(total_utilizado_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"])))
+                    v_utilizado = utilizado_total_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"]))
                     utilizado_calculado_list.append(v_utilizado)
-                    v_original = float(dict_valor_orig_por_nf.get(nf_ent_item, 0.0))
-                    if v_original > 0:
-                        v_saldo_restante = max(0.0, float(v_original - v_utilizado))
-                    else:
-                        v_saldo_restante = float(row_bx["saldo_restante_nota"])
-                    saldo_calculado_list.append(v_saldo_restante)
+                    
+                    v_saldo_atual_nota = saldo_atual_por_nf.get(nf_ent_item, float(row_bx["saldo_restante_nota"]))
+                    saldo_calculado_list.append(v_saldo_atual_nota)
 
                 df_display_plan["saldo_restante_calculado"] = saldo_calculado_list
                 df_display_plan["saldo_total_utilizado"] = utilizado_calculado_list
@@ -2041,6 +2049,10 @@ else:
                 # PREPARAÇÃO DA PLANILHA TRADICIONAL PADRÃO DO STREAMLIT
                 df_tabela_exibicao = df_display_plan.copy()
                 df_tabela_exibicao["Anexo"] = df_tabela_exibicao["nf_baixa"].apply(lambda x: "📎 Disponível" if (x and os.path.exists(str(x))) else "Sem Anexo")
+                df_tabela_exibicao["Saldo"] = df_tabela_exibicao["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tabela_exibicao["Saldo Total Utilizado"] = df_tabela_exibicao["saldo_total_utilizado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tabela_exibicao["Valor Total Avaria (R$)"] = df_tabela_exibicao["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tabela_exibicao["Qtd (kg/cx)"] = df_tabela_exibicao["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
                 
                 df_tabela_final = df_tabela_exibicao.rename(columns={
                     "loja_baixa": "LOJAS",
@@ -2048,10 +2060,6 @@ else:
                     "ref_bon_transferen": "Ref. Bon.",
                     "nf_b_entrada": "NF de B. ENTRADA",
                     "produto_hortifruti": "Produto Hortifrúti",
-                    "quantidade_kg_cx": "Qtd (kg/cx)",
-                    "valor_total_avaria": "Valor Total Avaria (R$)",
-                    "saldo_restante_nota": "Saldo",
-                    "saldo_total_utilizado": "Saldo Total Utilizado"
                 })
 
                 cols_para_mostrar = ["LOJAS", "Data Baixa", "Ref. Bon.", "Anexo", "NF de B. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total Utilizado"]
@@ -2617,7 +2625,7 @@ else:
                                     conn_del_f, db_tdf = get_db_connection()
                                     cur_delf = conn_del_f.cursor()
                                     r_id_delf = int(id_f_ed) if db_tdf == "postgres" else id_f_ed
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (r_id_delf,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_td_f == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (r_id_delf,))
                                     conn_del_f.commit()
                                     conn_del_f.close()
                                     carregar_fornecedores_cached.clear()
