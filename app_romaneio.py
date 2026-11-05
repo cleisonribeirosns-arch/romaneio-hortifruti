@@ -76,6 +76,27 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
+# CACHE DE DADOS (MELHORIA DE DESEMPENHO)
+# ---------------------------------------------------------
+@st.cache_data(ttl=60)
+def carregar_produtos_cached():
+    conn, db_type = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY nome")
+    prods = cursor.fetchall()
+    conn.close()
+    return prods
+
+@st.cache_data(ttl=60)
+def carregar_fornecedores_cached():
+    conn, db_type = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY nome")
+    forns = cursor.fetchall()
+    conn.close()
+    return forns
+
+# ---------------------------------------------------------
 # FUNÇÃO DE SPINNER / FEEDBACK COM LOGOTIPO DO SUPERNOVA
 # ---------------------------------------------------------
 def spinner_supernova(mensagem="A carregar dados do Supernova..."):
@@ -1049,20 +1070,15 @@ else:
         k_suffix = st.session_state["form_key_suffix"]
         i_suffix = st.session_state["item_key_suffix"]
 
-        conn, db_type = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT nome, unidade_padrao, codigo_produto, codigo_barras FROM produtos ORDER BY nome")
-        produtos_lista = cursor.fetchall()
-        cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY nome")
-        fornecedores_lista = cursor.fetchall()
-        conn.close()
+        produtos_lista = carregar_produtos_cached()
+        fornecedores_lista = carregar_fornecedores_cached()
 
         prod_dict = {}
         for p in produtos_lista:
-            c_prod = p[2] if p[2] and str(p[2]).strip() else "S/Cód"
-            c_bar = p[3] if p[3] and str(p[3]).strip() else "S/Barras"
-            label = f"{c_prod} | Barras: {c_bar} | {p[0]}"
-            prod_dict[label] = (p[0], p[1] if p[1] else "KG")
+            c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
+            c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
+            label = f"{c_prod} | Barras: {c_bar} | {p[2]}"
+            prod_dict[label] = (p[2], p[3] if p[3] else "KG")
         prod_nomes_keys = list(prod_dict.keys())
 
         forn_por_nome = {}
@@ -1344,7 +1360,7 @@ else:
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
-        df_rom = pd.read_sql_query("SELECT * FROM romaneios ORDER BY id DESC", conn)
+        df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
         df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
         conn.close()
 
@@ -1389,7 +1405,7 @@ else:
                                 else:
                                     st.markdown(f"**Total de registros em '{tipo_op}':** {len(df_tipo_atual)}")
                                     df_planilha = df_tipo_atual.copy()
-                                    df_planilha["Anexo"] = df_planilha.apply(lambda r: "📎 Disponível" if (r.get("caminho_foto") and os.path.exists(str(r["caminho_foto"]))) or r.get("foto_b64") else "Sem Anexo", axis=1)
+                                    df_planilha["Anexo"] = df_planilha.apply(lambda r: "📎 Disponível" if (r.get("caminho_foto") and os.path.exists(str(r["caminho_foto"]))) else "Sem Anexo", axis=1)
                                     df_planilha["Valor Total"] = df_planilha["valor_total_rom"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
 
                                     df_planilha_show = df_planilha.rename(columns={
@@ -1424,10 +1440,15 @@ else:
                                         with col_anx:
                                             st.markdown("**📎 Coluna de Anexo**")
                                             cam_foto = row_sel.get('caminho_foto', '')
-                                            b64_foto_rom = row_sel.get('foto_b64', '')
-                                            if cam_foto or b64_foto_rom:
+                                            if cam_foto:
                                                 if st.button("🖼️ Visualizar Nota / Anexo", key=f"btn_ver_anx_grid_{chv_elem}", type="primary"):
-                                                    exibir_foto_modal(cam_foto, b64_foto_rom)
+                                                    conn_b64, _ = get_db_connection()
+                                                    cur_b64 = conn_b64.cursor()
+                                                    cur_b64.execute("SELECT foto_b64 FROM romaneios WHERE id = %s" if HAS_POSTGRES else "SELECT foto_b64 FROM romaneios WHERE id = ?", (id_rom_sel,))
+                                                    res_b64 = cur_b64.fetchone()
+                                                    conn_b64.close()
+                                                    b64_val = res_b64[0] if res_b64 else None
+                                                    exibir_foto_modal(cam_foto, b64_val)
                                             else:
                                                 st.info("Sem anexo anexado.")
 
@@ -1461,9 +1482,16 @@ else:
                                             conn_i, db_t_i = get_db_connection()
                                             r_id_i = int(id_rom_sel) if db_t_i == "postgres" else id_rom_sel
                                             df_itens_r = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(r_id_i,))
+                                            
+                                            cur_ass = conn_i.cursor()
+                                            cur_ass.execute("SELECT assinatura_conferente, assinatura_entregador FROM romaneios WHERE id = %s" if db_t_i == "postgres" else "SELECT assinatura_conferente, assinatura_entregador FROM romaneios WHERE id = ?", (r_id_i,))
+                                            ass_dados = cur_ass.fetchone()
                                             conn_i.close()
 
-                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], row_sel.get("assinatura_conferente"), row_sel.get("assinatura_entregador"))
+                                            ass_conf_p = ass_dados[0] if ass_dados else None
+                                            ass_ent_p = ass_dados[1] if ass_dados else None
+
+                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], ass_conf_p, ass_ent_p)
                                             col_dl_p, col_del_p = st.columns([2, 1])
                                             with col_dl_p:
                                                 st.download_button(
@@ -1521,7 +1549,7 @@ else:
                                                         spinner_supernova("Salvando alterações do romaneio...")
                                                         try:
                                                             path_foto_ed = row_sel.get("caminho_foto", "")
-                                                            b64_foto_ed = row_sel.get("foto_b64", "")
+                                                            b64_foto_ed = ""
                                                             if novo_anexo_rom_up:
                                                                 path_foto_ed = os.path.join("uploads", f"ROM_EDIT_{row_sel['numero_romaneio']}_{novo_anexo_rom_up.name}")
                                                                 b_up_rom = novo_anexo_rom_up.getbuffer()
@@ -1531,10 +1559,16 @@ else:
                                                             conn_urom, db_turom = get_db_connection()
                                                             cur_urom = conn_urom.cursor()
                                                             r_id_urom = int(id_rom_sel) if db_turom == "postgres" else id_rom_sel
-                                                            cur_urom.execute(
-                                                                "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s, caminho_foto = %s, foto_b64 = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ?, caminho_foto = ?, foto_b64 = ? WHERE id = ?",
-                                                                (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), path_foto_ed, b64_foto_ed, r_id_urom)
-                                                            )
+                                                            if novo_anexo_rom_up:
+                                                                cur_urom.execute(
+                                                                    "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s, caminho_foto = %s, foto_b64 = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ?, caminho_foto = ?, foto_b64 = ? WHERE id = ?",
+                                                                    (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), path_foto_ed, b64_foto_ed, r_id_urom)
+                                                                )
+                                                            else:
+                                                                cur_urom.execute(
+                                                                    "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ? WHERE id = ?",
+                                                                    (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), r_id_urom)
+                                                                )
                                                             conn_urom.commit()
                                                             conn_urom.close()
                                                             st.success("Romaneio atualizado com sucesso pelo administrador!")
@@ -1543,11 +1577,7 @@ else:
 
     elif menu == "Controle de Bonificação":
         st.title("🏷️ Controle de Bonificação Hortifrúti")
-        conn_prod, db_p = get_db_connection()
-        cursor_p = conn_prod.cursor()
-        cursor_p.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
-        prods_cad = cursor_p.fetchall()
-        conn_prod.close()
+        prods_cad = carregar_produtos_cached()
 
         lista_opcoes_prod = []
         for p in prods_cad:
@@ -1622,7 +1652,7 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
 
         conn_b_sel, db_tb_sel = get_db_connection()
-        df_bonf = pd.read_sql_query("SELECT * FROM bonificacoes ORDER BY id DESC", conn_b_sel)
+        df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn_b_sel)
         conn_b_sel.close()
 
         if not df_bonf.empty:
@@ -1657,7 +1687,7 @@ else:
 
                 df_bonf_tabela = df_bonf.copy()
                 df_bonf_tabela["Valor (R$)"] = df_bonf_tabela["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_bonf_tabela["Anexo"] = df_bonf_tabela.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) or r.get("anexo_b64") else "Sem Anexo", axis=1)
+                df_bonf_tabela["Anexo"] = df_bonf_tabela.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
                 df_bonf_tabela = df_bonf_tabela.rename(columns={
                     "numero_nota": "N° Nota",
                     "tipo_bonificacao": "Tipo",
@@ -1682,10 +1712,15 @@ else:
                     id_reg_atual = nota_selecionada_edicao[0]
                     reg_obj_atual = df_bonf[df_bonf["id"] == id_reg_atual].iloc[0]
                     caminho_nota_alvo = reg_obj_atual.get("caminho_anexo", "")
-                    b64_anexo_reg = reg_obj_atual.get("anexo_b64", "")
-                    if caminho_nota_alvo or b64_anexo_reg:
+                    if caminho_nota_alvo:
                         if st.button("🖼️ Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
-                            exibir_foto_modal(caminho_nota_alvo, b64_anexo_reg)
+                            conn_b64, _ = get_db_connection()
+                            cur_b64 = conn_b64.cursor()
+                            cur_b64.execute("SELECT anexo_b64 FROM bonificacoes WHERE id = %s" if HAS_POSTGRES else "SELECT anexo_b64 FROM bonificacoes WHERE id = ?", (id_reg_atual,))
+                            res_b64 = cur_b64.fetchone()
+                            conn_b64.close()
+                            b64_val = res_b64[0] if res_b64 else None
+                            exibir_foto_modal(caminho_nota_alvo, b64_val)
                     else:
                         st.warning("Este registo não possui ficheiro de nota anexado.")
 
@@ -1723,7 +1758,7 @@ else:
                             nova_data_str = f"{nova_data_input.strftime('%d/%m/%Y')} {hora_antiga}"
 
                             path_novo_arq = reg_obj_atual["caminho_anexo"]
-                            b64_novo_arq = reg_obj_atual.get("anexo_b64", "")
+                            b64_novo_arq = ""
                             if novo_anexo_up:
                                 path_novo_arq = os.path.join("uploads", f"NF_EDIT_{reg_obj_atual['numero_nota']}_{novo_anexo_up.name}")
                                 bytes_up = novo_anexo_up.getbuffer()
@@ -1733,10 +1768,16 @@ else:
                             conn_up_dir, db_t_upd = get_db_connection()
                             cursor_upd = conn_up_dir.cursor()
                             reg_id_b = int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual
-                            cursor_upd.execute(
-                                "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
-                                (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, reg_id_b)
-                            )
+                            if novo_anexo_up:
+                                cursor_upd.execute(
+                                    "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
+                                    (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, reg_id_b)
+                                )
+                            else:
+                                cursor_upd.execute(
+                                    "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, WHERE id = ?",
+                                    (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, reg_id_b)
+                                )
                             conn_up_dir.commit()
                             conn_up_dir.close()
                             st.success("Registo atualizado com sucesso!")
@@ -1769,7 +1810,7 @@ else:
         bx_suf = st.session_state["baixa_form_suffix"]
 
         conn_bx_chk, db_tbx_chk = get_db_connection()
-        df_baixar_hist = pd.read_sql_query("SELECT * FROM baixas_avarias", conn_bx_chk)
+        df_baixar_hist = pd.read_sql_query("SELECT nf_b_entrada, valor_total_avaria FROM baixas_avarias", conn_bx_chk)
         conn_bx_chk.close()
 
         total_baixado_por_nota = {}
@@ -1779,7 +1820,7 @@ else:
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
         conn_b_all, db_tb_all = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all)
+        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja FROM bonificacoes", conn_b_all)
         if not df_todas_bonf.empty:
             cur_st_up = conn_b_all.cursor()
             for _, r_b in df_todas_bonf.iterrows():
@@ -1798,10 +1839,6 @@ else:
                     )
             conn_b_all.commit()
         conn_b_all.close()
-
-        conn_b_all2, db_tb_all2 = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT * FROM bonificacoes", conn_b_all2)
-        conn_b_all2.close()
 
         dict_valor_orig_por_nf = {}
         if not df_todas_bonf.empty:
@@ -1825,7 +1862,7 @@ else:
                     saldo_geral_somado_loja02 += saldo_restante_nota
                     notas_com_saldo_loja02.append({
                         "nf_entrada": num_nf_ent,
-                        "produto": r_bonf["produto_hortifruti"],
+                        "produto": r_bonf.get("produto_hortifruti", "N/A"),
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
                     })
@@ -1845,11 +1882,7 @@ else:
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=200)
 
-        conn_prod_v, db_pv = get_db_connection()
-        cursor_pv = conn_prod_v.cursor()
-        cursor_pv.execute("SELECT codigo_produto, codigo_barras, nome FROM produtos ORDER BY nome")
-        prods_cad_v = cursor_pv.fetchall()
-        conn_prod_v.close()
+        prods_cad_v = carregar_produtos_cached()
         lista_opcoes_prod_v = []
         for p in prods_cad_v:
             c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
@@ -1966,7 +1999,8 @@ else:
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
         conn_bx_view, db_tbx_v = get_db_connection()
-        df_bx_table = pd.read_sql_query("SELECT * FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
+        # Seleção otimizada sem carregar colunas pesadas de base64 na montagem inicial
+        df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
         conn_bx_view.close()
 
         if not df_bx_table.empty:
@@ -2004,26 +2038,41 @@ else:
                 )
                 st.markdown("")
 
-                for _, r_bx in df_bx_table.iterrows():
-                    if r_bx.get("nf_baixa_b64") and r_bx.get("nf_baixa"):
-                        salvar_arquivo_fisico_do_b64(r_bx["nf_baixa"], r_bx["nf_baixa_b64"])
+                # EXIBIÇÃO INTERATIVA LINHA A LINHA COM BOTÃO DIRETO DE ANEXO
+                st.markdown("**Lista Interativa de Registros com Botão de Anexo:**")
+                hdr_c1, hdr_c2, hdr_c3, hdr_c4, hdr_c5, hdr_c6, hdr_c7 = st.columns([1.5, 1.2, 1.2, 1.2, 2.2, 1.2, 1.2])
+                hdr_c1.markdown("**LOJAS**")
+                hdr_c2.markdown("**Data Baixa**")
+                hdr_c3.markdown("**Ref. Bon.**")
+                hdr_c4.markdown("**Anexo**")
+                hdr_c5.markdown("**Produto**")
+                hdr_c6.markdown("**Qtd (kg/cx)**")
+                hdr_c7.markdown("**Valor Avaria**")
+                st.markdown("---")
 
-                df_display_plan["Qtd (kg/cx)"] = df_display_plan["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
-                df_display_plan["Valor Total Avaria (R$)"] = df_display_plan["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_display_plan["Saldo"] = df_display_plan["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_display_plan["Saldo Total Utilizado"] = df_display_plan["saldo_total_utilizado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_display_plan["NF da baixa"] = df_display_plan.apply(lambda r: "Ver Anexo" if (r.get("nf_baixa") and os.path.exists(str(r["nf_baixa"]))) or r.get("nf_baixa_b64") else "S/Anexo", axis=1)
+                for idx, r_bx in df_display_plan.iterrows():
+                    c1, c2, c3, c4, c5, c6, c7 = st.columns([1.5, 1.2, 1.2, 1.2, 2.2, 1.2, 1.2])
+                    c1.write(r_bx["loja_baixa"])
+                    c2.write(r_bx["data_baixa"])
+                    c3.write(r_bx["ref_bon_transferen"])
+                    
+                    cam_anx_ln = r_bx.get("nf_baixa", "")
+                    if cam_anx_ln:
+                        if c4.button("📎 Ver Anexo", key=f"btn_anx_linha_bx_{r_bx['id']}"):
+                            # Busca o base64 do anexo sob demanda no momento do clique
+                            conn_b64, _ = get_db_connection()
+                            cur_b64 = conn_b64.cursor()
+                            cur_b64.execute("SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = %s" if HAS_POSTGRES else "SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = ?", (r_bx['id'],))
+                            res_b64 = cur_b64.fetchone()
+                            conn_b64.close()
+                            b64_val = res_b64[0] if res_b64 else None
+                            exibir_foto_modal(cam_anx_ln, b64_val)
+                    else:
+                        c4.caption("S/ Anexo")
 
-                df_display_plan = df_display_plan.rename(columns={
-                    "loja_baixa": "LOJAS",
-                    "data_baixa": "Data Baixa",
-                    "ref_bon_transferen": "Ref. Bon. transferen",
-                    "nf_b_entrada": "NF da b. ENTRADA",
-                    "produto_hortifruti": "Produto Hortifrúti"
-                })
-                df_final_show = df_display_plan[["LOJAS", "Data Baixa", "Ref. Bon. transferen", "NF da baixa", "NF da b. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total Utilizado"]]
-                df_final_show.index = range(1, len(df_final_show) + 1)
-                st.dataframe(df_final_show, use_container_width=True, height=400)
+                    c5.write(r_bx["produto_hortifruti"])
+                    c6.write(fmt_ptbr(r_bx["quantidade_kg_cx"], 3))
+                    c7.write(f"R$ {fmt_ptbr(r_bx['valor_total_avaria'], 2)}")
 
                 st.markdown("---")
                 st.subheader("⚙️ Gerenciamento: Editar ou Excluir Registro de Baixa")
@@ -2061,12 +2110,11 @@ else:
                             if salvar_alt_bx:
                                 spinner_supernova("Atualizando baixa...")
                                 try:
-                                    # Conversão explícita para float nativo do Python (evita np.float64)
                                     q_f_ed = float(str(novo_qtd_bx_str).replace(".", "").replace(",", ".")) if novo_qtd_bx_str else float(reg_bx_atual["quantidade_kg_cx"])
                                     v_f_ed = float(str(novo_val_bx_str).replace(".", "").replace(",", ".")) if novo_val_bx_str else float(reg_bx_atual["valor_total_avaria"])
                                     
                                     path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
-                                    b64_nf_bx_ed = reg_bx_atual.get("nf_baixa_b64", "")
+                                    b64_nf_bx_ed = ""
                                     if novo_anexo_bx_up:
                                         path_nf_bx_ed = os.path.join("uploads", f"NF_BAIXA_EDIT_{novo_ref_bx}_{novo_anexo_bx_up.name}")
                                         bytes_bx_up = novo_anexo_bx_up.getbuffer()
@@ -2080,10 +2128,16 @@ else:
                                     conn_up_bx, db_t_upbx = get_db_connection()
                                     cur_upbx = conn_up_bx.cursor()
                                     reg_id_bx = int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual
-                                    cur_upbx.execute(
-                                        "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
-                                        (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), str(path_nf_bx_ed), str(b64_nf_bx_ed), reg_id_bx)
-                                    )
+                                    if novo_anexo_bx_up:
+                                        cur_upbx.execute(
+                                            "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
+                                            (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), str(path_nf_bx_ed), str(b64_nf_bx_ed), reg_id_bx)
+                                        )
+                                    else:
+                                        cur_upbx.execute(
+                                            "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ? WHERE id = ?",
+                                            (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), reg_id_bx)
+                                        )
                                     conn_up_bx.commit()
                                     conn_up_bx.close()
                                     st.success("Baixa atualizada com sucesso!")
@@ -2105,18 +2159,6 @@ else:
                                     st.success("Baixa excluída com sucesso!")
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro ao excluir baixa: {e}")
-
-                st.markdown("---")
-                st.subheader("🖼️ Visualizar Anexo de Baixa")
-                opcoes_baixas_ver = [(row["id"], f"Loja: {row['loja_baixa']} | Ref: {row['ref_bon_transferen']} | NF Entrada: {row['nf_b_entrada']}") for _, row in df_bx_table.iterrows() if row.get("nf_baixa") or row.get("nf_baixa_b64")]
-                if opcoes_baixas_ver:
-                    escolha_bx_ver = st.selectbox("Selecione a baixa para abrir o comprovativo/anexo", options=opcoes_baixas_ver, format_func=lambda x: x[1], placeholder="Selecione...")
-                    if escolha_bx_ver:
-                        reg_bx_escolhido = df_bx_table[df_bx_table["id"] == escolha_bx_ver[0]].iloc[0]
-                        if st.button("🖼️ Abrir Anexo da Baixa Selecionada", type="primary"):
-                            exibir_foto_modal(reg_bx_escolhido.get("nf_baixa", ""), reg_bx_escolhido.get("nf_baixa_b64", ""))
-                else:
-                    st.info("Nenhuma baixa com anexo disponível.")
         else:
             st.info("Nenhum registo de baixa encontrado.")
 
@@ -2127,10 +2169,10 @@ else:
             "🏷️ BI Bonificações, Transferências & Prevenção de Perdas"
         ])
         conn, db_type = get_db_connection()
-        df_roms = pd.read_sql_query("SELECT * FROM romaneios", conn)
-        df_itens = pd.read_sql_query("SELECT * FROM romaneio_itens", conn)
-        df_bonf_rel = pd.read_sql_query("SELECT * FROM bonificacoes", conn)
-        df_baixas_rel = pd.read_sql_query("SELECT * FROM baixas_avarias", conn)
+        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios", conn)
+        df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, valor_total FROM romaneio_itens", conn)
+        df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes", conn)
+        df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias", conn)
         conn.close()
 
         with tab_bi_receb:
@@ -2397,23 +2439,27 @@ else:
                             try:
                                 cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
                                 conn.commit()
+                                carregar_produtos_cached.clear()
                                 st.success("Cadastrado com sucesso!")
                                 st.rerun()
                             except Exception as e: st.error(f"Erro: {e}")
                             finally: conn.close()
             st.markdown("---")
-            conn, db_type = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
-            produtos_cadastrados = cursor.fetchall()
-            conn.close()
+            produtos_cadastrados = carregar_produtos_cached()
 
             if produtos_cadastrados:
-                produtos_com_id_ajustado = [(i, p[1], p[2], p[3], p[4], p[0]) for i, p in enumerate(produtos_cadastrados, 1)]
-                df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão", "ID_Real"])
+                produtos_com_id_ajustado = [(i, p[1], p[0], p[2], p[3]) for i, p in enumerate(produtos_cadastrados, 1)]
+                df_produtos = pd.DataFrame(produtos_com_id_ajustado, columns=["ID", "Código de Barras", "Código do Produto", "Nome do Produto", "Unidade Padrão"])
+                
+                conn_p_pdf, _ = get_db_connection()
+                cur_pp = conn_p_pdf.cursor()
+                cur_pp.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
+                prods_full_pdf = cur_pp.fetchall()
+                conn_p_pdf.close()
+
                 st.download_button(
                     label="📥 Descarregar Relatório de Produtos em PDF",
-                    data=gerar_pdf_produtos(produtos_cadastrados),
+                    data=gerar_pdf_produtos(prods_full_pdf),
                     file_name=f"Relatorio_Produtos_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
                     type="primary"
@@ -2422,7 +2468,13 @@ else:
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=250)
 
                 st.markdown("### ✏️ Editar ou Excluir Produto")
-                opcoes_edit_prod = [(p[5], f"{p[3]} (Cód: {p[2] or 'S/Cód'})") for p in produtos_com_id_ajustado]
+                conn_p_ed, db_tped = get_db_connection()
+                cur_pe = conn_p_ed.cursor()
+                cur_pe.execute("SELECT id, nome, codigo_produto FROM produtos ORDER BY nome")
+                prods_para_edit = cur_pe.fetchall()
+                conn_p_ed.close()
+
+                opcoes_edit_prod = [(p[0], f"{p[1]} (Cód: {p[2] or 'S/Cód'})") for p in prods_para_edit]
                 prod_sel_ed = st.selectbox("Selecione o produto para editar ou excluir", options=opcoes_edit_prod, format_func=lambda x: x[1], key="sel_prod_editar")
                 if prod_sel_ed:
                     id_p_ed = prod_sel_ed[0]
@@ -2456,6 +2508,7 @@ else:
                                     )
                                     conn_up_p.commit()
                                     conn_up_p.close()
+                                    carregar_produtos_cached.clear()
                                     st.success("Produto atualizado com sucesso!")
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro ao atualizar: {e}")
@@ -2469,6 +2522,7 @@ else:
                                     cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (r_id_delp,))
                                     conn_del_p.commit()
                                     conn_del_p.close()
+                                    carregar_produtos_cached.clear()
                                     st.success("Produto excluído com sucesso!")
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro ao excluir: {e}")
@@ -2490,24 +2544,27 @@ else:
                             try:
                                 cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper()))
                                 conn.commit()
+                                carregar_fornecedores_cached.clear()
                                 st.success("Cadastrado com sucesso!")
                                 st.rerun()
                             except Exception as e: st.error(f"Erro: {e}")
                             finally: conn.close()
             st.markdown("---")
-            conn, db_type = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, codigo_fornecedor, cnpj, nome FROM fornecedores ORDER BY nome")
-            fornecedores_cadastrados = cursor.fetchall()
-            conn.close()
+            fornecedores_cadastrados = carregar_fornecedores_cached()
 
             if fornecedores_cadastrados:
-                forn_com_id_ajustado = [(i, f[1], f[2], f[3], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
-                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "CNPJ", "Nome do Fornecedor", "ID_Real"])
-                st.dataframe(df_forn_show[["ID", "Código", "CNPJ", "Nome do Fornecedor"]], use_container_width=True, hide_index=True, height=250)
+                forn_com_id_ajustado = [(i, f[1], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
+                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "Nome do Fornecedor"])
+                st.dataframe(df_forn_show[["ID", "Código", "Nome do Fornecedor"]], use_container_width=True, hide_index=True, height=250)
 
                 st.markdown("### ✏️ Editar ou Excluir Fornecedor")
-                opcoes_edit_forn = [(f[4], f"{f[3]} (Cód: {f[1] or 'S/Cód'})") for f in forn_com_id_ajustado]
+                conn_f_ed, db_tfed = get_db_connection()
+                cur_fe = conn_f_ed.cursor()
+                cur_fe.execute("SELECT id, nome, codigo_fornecedor FROM fornecedores ORDER BY nome")
+                forns_para_edit = cur_fe.fetchall()
+                conn_f_ed.close()
+
+                opcoes_edit_forn = [(f[0], f"{f[1]} (Cód: {f[2] or 'S/Cód'})") for f in forns_para_edit]
                 forn_sel_ed = st.selectbox("Selecione o fornecedor para editar ou excluir", options=opcoes_edit_forn, format_func=lambda x: x[1], key="sel_forn_editar")
                 if forn_sel_ed:
                     id_f_ed = forn_sel_ed[0]
@@ -2538,6 +2595,7 @@ else:
                                     )
                                     conn_up_f.commit()
                                     conn_up_f.close()
+                                    carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor atualizado com sucesso!")
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro ao atualizar: {e}")
@@ -2551,6 +2609,7 @@ else:
                                     cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (r_id_delf,))
                                     conn_del_f.commit()
                                     conn_del_f.close()
+                                    carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
                                     st.rerun()
                                 except Exception as e: st.error(f"Erro ao excluir: {e}")
