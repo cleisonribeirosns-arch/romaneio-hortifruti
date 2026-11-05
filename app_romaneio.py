@@ -76,13 +76,13 @@ def get_db_connection():
     return conn, "sqlite"
 
 # ---------------------------------------------------------
-# CACHE DE DADOS (MELHORIA DE DESEMPENHO)
+# CACHE DE DADOS (MELHORIA DE DESEMPENHO - ORDEM DESC: MAIS ANTIGO NO FINAL)
 # ---------------------------------------------------------
 @st.cache_data(ttl=60)
 def carregar_produtos_cached():
     conn, db_type = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY nome")
+    cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY id DESC")
     prods = cursor.fetchall()
     conn.close()
     return prods
@@ -91,7 +91,7 @@ def carregar_produtos_cached():
 def carregar_fornecedores_cached():
     conn, db_type = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY nome")
+    cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
     forns = cursor.fetchall()
     conn.close()
     return forns
@@ -671,7 +671,7 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_imagem
 
 # ---------------------------------------------------------
-# GERADORES DE PDF (Ordem: mais antigo no final / padrão ID ASC)
+# GERADORES DE PDF (ORDEM: MAIS ANTIGO NO FINAL / ID DESC)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
     buffer = io.BytesIO()
@@ -1360,8 +1360,8 @@ else:
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
-        # ORDEM: Mais antigo no final da tabela (ID ASC)
-        df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id ASC", conn)
+        # ORDEM: Mais antigo no final da tabela (ID DESC invertido no pandas ou ORDER BY id DESC para manter a lógica exigida)
+        df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
         df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
         conn.close()
 
@@ -1653,8 +1653,8 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
 
         conn_b_sel, db_tb_sel = get_db_connection()
-        # ORDEM: Mais antigo no final da tabela (ID ASC)
-        df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id ASC", conn_b_sel)
+        # ORDEM: Mais antigo no final da tabela (ID DESC invertido via pandas ou ordenação de exibição)
+        df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn_b_sel)
         conn_b_sel.close()
 
         if not df_bonf.empty:
@@ -1822,7 +1822,7 @@ else:
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
         conn_b_all, db_tb_all = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id ASC", conn_b_all)
+        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn_b_all)
         if not df_todas_bonf.empty:
             cur_st_up = conn_b_all.cursor()
             for _, r_b in df_todas_bonf.iterrows():
@@ -2020,8 +2020,8 @@ else:
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
         conn_bx_view, db_tbx_v = get_db_connection()
-        # ORDEM: Mais antigo no final da tabela (ID ASC)
-        df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id ASC", conn_bx_view)
+        # ORDEM: Mais antigo no final da tabela (ID DESC invertido no pandas para exibir ID ASC / mais antigo embaixo)
+        df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
         conn_bx_view.close()
 
         if not df_bx_table.empty:
@@ -2205,10 +2205,10 @@ else:
             "🏷️ BI Bonificações, Transferências & Prevenção de Perdas"
         ])
         conn, db_type = get_db_connection()
-        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios ORDER BY id ASC", conn)
+        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios ORDER BY id DESC", conn)
         df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, valor_total FROM romaneio_itens", conn)
-        df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id ASC", conn)
-        df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id ASC", conn)
+        df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn)
+        df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id DESC", conn)
         conn.close()
 
         with tab_bi_receb:
@@ -2489,7 +2489,7 @@ else:
                 
                 conn_p_pdf, _ = get_db_connection()
                 cur_pp = conn_p_pdf.cursor()
-                cur_pp.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY nome")
+                cur_pp.execute("SELECT id, codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos ORDER BY id DESC")
                 prods_full_pdf = cur_pp.fetchall()
                 conn_p_pdf.close()
 
@@ -2506,7 +2506,7 @@ else:
                 st.markdown("### ✏️ Editar ou Excluir Produto")
                 conn_p_ed, db_tped = get_db_connection()
                 cur_pe = conn_p_ed.cursor()
-                cur_pe.execute("SELECT id, nome, codigo_produto FROM produtos ORDER BY nome")
+                cur_pe.execute("SELECT id, nome, codigo_produto FROM produtos ORDER BY id DESC")
                 prods_para_edit = cur_pe.fetchall()
                 conn_p_ed.close()
 
@@ -2596,7 +2596,7 @@ else:
                 st.markdown("### ✏️ Editar ou Excluir Fornecedor")
                 conn_f_ed, db_tfed = get_db_connection()
                 cur_fe = conn_f_ed.cursor()
-                cur_fe.execute("SELECT id, nome, codigo_fornecedor FROM fornecedores ORDER BY nome")
+                cur_fe.execute("SELECT id, nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
                 forns_para_edit = cur_fe.fetchall()
                 conn_f_ed.close()
 
@@ -2677,7 +2677,7 @@ else:
         st.markdown("---")
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id ASC")
+        cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id DESC")
         usuarios_cadastrados = cursor.fetchall()
         conn.close()
 
