@@ -1819,8 +1819,9 @@ else:
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
+        # CORREÇÃO APLICADA: Incluído 'produto_hortifruti' na consulta SQL das bonificações
         conn_b_all, db_tb_all = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja FROM bonificacoes", conn_b_all)
+        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti FROM bonificacoes", conn_b_all)
         if not df_todas_bonf.empty:
             cur_st_up = conn_b_all.cursor()
             for _, r_b in df_todas_bonf.iterrows():
