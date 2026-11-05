@@ -1070,30 +1070,49 @@ if st.session_state["usuario_logado"] is None:
 else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
-    is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db)
+    
+    # Mapeamento de perfis e níveis de permissão
+    is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
+    is_auxiliar = ("auxiliar" in perfil_db)
+    is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
+    
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
     with col_info_usr:
-        tipo_perfil_txt = "👑 Gestor / Administrador" if is_admin else f"👤 Conferente ({loja_atual_usuario})"
+        tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_logout:
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    opcoes_menu_map = {
-        "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
-        "🔍 Consultar Romaneios": "Consultar Romaneios",
-        "🏷️ Controle de Bonificação": "Controle de Bonificação",
-        "📉 Baixa de Avarias": "Controle de Baixa de Avarias"
-    }
-    if is_admin:
-        opcoes_menu_map.update({
+    # Definição das abas permitidas de acordo com o perfil
+    if is_conferente:
+        # Conferente só enxerga o preenchimento do Romaneio
+        opcoes_menu_map = {
+            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
+        }
+    elif is_auxiliar:
+        # Auxiliar de Logística enxerga: Romaneio, Consulta, Bonificação e Cadastros
+        opcoes_menu_map = {
+            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🔍 Consultar Romaneios": "Consultar Romaneios",
+            "🏷️ Controle de Bonificação": "Controle de Bonificação",
+            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)"
+        }
+    else:
+        # Assistente de Logística, Administrador e Gestor enxergam TODAS as abas
+        opcoes_menu_map = {
+            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🔍 Consultar Romaneios": "Consultar Romaneios",
+            "🏷️ Controle de Bonificação": "Controle de Bonificação",
+            "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
             "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
-        })
+        }
+
     menu_selecionado_label = st.radio(
         "Menu de Navegação Principal",
         list(opcoes_menu_map.keys()),
@@ -2699,11 +2718,11 @@ else:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
             with st.form("cad_usuario_form", clear_on_submit=True):
-                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
+                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 2])
                 with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
                 with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
                 with col_u3: nova_senha = st.text_input("Senha", type="password", value="", placeholder="Senha...")
-                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0, placeholder="Selecione...")
+                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"], index=0, placeholder="Selecione...")
                 if st.form_submit_button("➕ Cadastrar", type="primary"):
                     if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
                         st.error("Preencha todos os campos.")
@@ -2746,7 +2765,7 @@ else:
                         eu_nome = st.text_input("Nome Completo", value=dados_u_atual[0] or "")
                         eu_login = st.text_input("Login", value=dados_u_atual[1] or "")
                         eu_senha = st.text_input("Senha", type="password", value=dados_u_atual[2] or "")
-                        perfis_lst = ["Conferente", "Gestor"]
+                        perfis_lst = ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"]
                         idx_per = perfis_lst.index(dados_u_atual[3]) if dados_u_atual[3] in perfis_lst else 0
                         eu_perfil = st.selectbox("Perfil", perfis_lst, index=idx_per)
                         col_bu1, col_bu2 = st.columns(2)
