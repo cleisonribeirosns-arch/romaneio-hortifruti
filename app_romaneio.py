@@ -2738,12 +2738,3 @@ else:
                                 st.rerun()
                             except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum usuário cadastrado.")
-from plyer import notification
-
-def mostrar_notificacao_tela(numero_romaneio, loja):
-    notification.notify(
-        title="📦 Novo Romaneio Cadastrado!",
-        message=f"O romaneio #{numero_romaneio} foi gerado para a {loja}.",
-        app_name="HortiControl Supernova",
-        timeout=10 # Tempo em segundos que a notificação fica visível na tela
-    )
