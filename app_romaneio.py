@@ -1999,7 +1999,6 @@ else:
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
         conn_bx_view, db_tbx_v = get_db_connection()
-        # Seleção otimizada sem carregar colunas pesadas de base64 na montagem inicial
         df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
         conn_bx_view.close()
 
@@ -2038,41 +2037,52 @@ else:
                 )
                 st.markdown("")
 
-                # EXIBIÇÃO INTERATIVA LINHA A LINHA COM BOTÃO DIRETO DE ANEXO
-                st.markdown("**Lista Interativa de Registros com Botão de Anexo:**")
-                hdr_c1, hdr_c2, hdr_c3, hdr_c4, hdr_c5, hdr_c6, hdr_c7 = st.columns([1.5, 1.2, 1.2, 1.2, 2.2, 1.2, 1.2])
-                hdr_c1.markdown("**LOJAS**")
-                hdr_c2.markdown("**Data Baixa**")
-                hdr_c3.markdown("**Ref. Bon.**")
-                hdr_c4.markdown("**Anexo**")
-                hdr_c5.markdown("**Produto**")
-                hdr_c6.markdown("**Qtd (kg/cx)**")
-                hdr_c7.markdown("**Valor Avaria**")
-                st.markdown("---")
+                # PREPARAÇÃO DA PLANILHA TRADICIONAL PADRÃO DO STREAMLIT
+                df_tabela_exibicao = df_display_plan.copy()
+                df_tabela_exibicao["Anexo"] = df_tabela_exibicao["nf_baixa"].apply(lambda x: "📎 Disponível" if (x and os.path.exists(str(x))) else "Sem Anexo")
+                
+                df_tabela_final = df_tabela_exibicao.rename(columns={
+                    "loja_baixa": "LOJAS",
+                    "data_baixa": "Data Baixa",
+                    "ref_bon_transferen": "Ref. Bon.",
+                    "nf_b_entrada": "NF de B. ENTRADA",
+                    "produto_hortifruti": "Produto Hortifrúti",
+                    "quantidade_kg_cx": "Qtd (kg/cx)",
+                    "valor_total_avaria": "Valor Total Avaria (R$)",
+                    "saldo_restante_nota": "Saldo",
+                    "saldo_total_utilizado": "Saldo Total Utilizado"
+                })
 
-                for idx, r_bx in df_display_plan.iterrows():
-                    c1, c2, c3, c4, c5, c6, c7 = st.columns([1.5, 1.2, 1.2, 1.2, 2.2, 1.2, 1.2])
-                    c1.write(r_bx["loja_baixa"])
-                    c2.write(r_bx["data_baixa"])
-                    c3.write(r_bx["ref_bon_transferen"])
+                cols_para_mostrar = ["LOJAS", "Data Baixa", "Ref. Bon.", "Anexo", "NF de B. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total Utilizado"]
+
+                st.markdown("**Clique em qualquer linha da planilha abaixo para abrir instantaneamente o anexo correspondente:**")
+                
+                # PLANILHA PADRÃO COM SELEÇÃO DE LINHA INTERATIVA (NATIVO STREAMLIT)
+                evento_selecao = st.dataframe(
+                    df_tabela_final[cols_para_mostrar], 
+                    use_container_width=True, 
+                    hide_index=True, 
+                    height=320,
+                    on_select="rerun",
+                    selection_mode="single-row"
+                )
+
+                # ABERTURA AUTOMÁTICA DO MODAL AO CLICAR NA LINHA DA PLANILHA
+                linhas_selecionadas = evento_selecao.get("selection", {}).get("rows", [])
+                if linhas_selecionadas:
+                    idx_selecionado = linhas_selecionadas[0]
+                    reg_clicado = df_display_plan.iloc[idx_selecionado]
+                    caminho_anexo_clicado = reg_clicado.get("nf_baixa", "")
                     
-                    cam_anx_ln = r_bx.get("nf_baixa", "")
-                    if cam_anx_ln:
-                        if c4.button("📎 Ver Anexo", key=f"btn_anx_linha_bx_{r_bx['id']}"):
-                            # Busca o base64 do anexo sob demanda no momento do clique
-                            conn_b64, _ = get_db_connection()
-                            cur_b64 = conn_b64.cursor()
-                            cur_b64.execute("SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = %s" if HAS_POSTGRES else "SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = ?", (r_bx['id'],))
-                            res_b64 = cur_b64.fetchone()
-                            conn_b64.close()
-                            b64_val = res_b64[0] if res_b64 else None
-                            exibir_foto_modal(cam_anx_ln, b64_val)
-                    else:
-                        c4.caption("S/ Anexo")
-
-                    c5.write(r_bx["produto_hortifruti"])
-                    c6.write(fmt_ptbr(r_bx["quantidade_kg_cx"], 3))
-                    c7.write(f"R$ {fmt_ptbr(r_bx['valor_total_avaria'], 2)}")
+                    if caminho_anexo_clicado and os.path.exists(str(caminho_anexo_clicado)):
+                        conn_b64_l, _ = get_db_connection()
+                        cur_b64_l = conn_b64_l.cursor()
+                        cur_b64_l.execute("SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = %s" if HAS_POSTGRES else "SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = ?", (int(reg_clicado['id']),))
+                        res_b64_l = cur_b64_l.fetchone()
+                        conn_b64_l.close()
+                        b64_conteudo_linha = res_b64_l[0] if res_b64_l else None
+                        
+                        exibir_foto_modal(caminho_anexo_clicado, b64_conteudo_linha)
 
                 st.markdown("---")
                 st.subheader("⚙️ Gerenciamento: Editar ou Excluir Registro de Baixa")
