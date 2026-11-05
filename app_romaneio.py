@@ -1819,7 +1819,6 @@ else:
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
-        # CORREÇÃO: Incluído 'produto_hortifruti' na consulta SQL das bonificações
         conn_b_all, db_tb_all = get_db_connection()
         df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti FROM bonificacoes", conn_b_all)
         if not df_todas_bonf.empty:
@@ -1930,7 +1929,7 @@ else:
                         nota_selecionada_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada inválida.")
-                        elif val_avaria_f > nota_selecionada_dict["saldo_restante"]:
+                        elif round(val_avaria_f, 2) > round(nota_selecionada_dict["saldo_restante"], 2):
                             st.error("❌ O valor da avaria ultrapassa o saldo restante da nota da Loja 02!")
                         else:
                             path_nf_baixa = ""
@@ -2012,7 +2011,6 @@ else:
                 df_display_plan = df_bx_table.copy()
                 total_utilizado_por_nf = total_baixado_por_nota
                 
-                # LÓGICA CORRIGIDA: Calcula o saldo global atual da nota e repete em todas as linhas correspondentes
                 saldo_atual_por_nf = {}
                 utilizado_total_por_nf = {}
                 
@@ -2046,7 +2044,6 @@ else:
                 )
                 st.markdown("")
 
-                # PREPARAÇÃO DA PLANILHA TRADICIONAL PADRÃO DO STREAMLIT
                 df_tabela_exibicao = df_display_plan.copy()
                 df_tabela_exibicao["Anexo"] = df_tabela_exibicao["nf_baixa"].apply(lambda x: "📎 Disponível" if (x and os.path.exists(str(x))) else "Sem Anexo")
                 df_tabela_exibicao["Saldo"] = df_tabela_exibicao["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
@@ -2066,7 +2063,6 @@ else:
 
                 st.markdown("**Clique em qualquer linha da planilha abaixo para abrir instantaneamente o anexo correspondente:**")
                 
-                # PLANILHA PADRÃO COM SELEÇÃO DE LINHA INTERATIVA (NATIVO STREAMLIT)
                 evento_selecao = st.dataframe(
                     df_tabela_final[cols_para_mostrar], 
                     use_container_width=True, 
@@ -2076,7 +2072,6 @@ else:
                     selection_mode="single-row"
                 )
 
-                # ABERTURA AUTOMÁTICA DO MODAL AO CLICAR NA LINHA DA PLANILHA
                 linhas_selecionadas = evento_selecao.get("selection", {}).get("rows", [])
                 if linhas_selecionadas:
                     idx_selecionado = linhas_selecionadas[0]
@@ -2625,7 +2620,7 @@ else:
                                     conn_del_f, db_tdf = get_db_connection()
                                     cur_delf = conn_del_f.cursor()
                                     r_id_delf = int(id_f_ed) if db_tdf == "postgres" else id_f_ed
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_td_f == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (r_id_delf,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (r_id_delf,))
                                     conn_del_f.commit()
                                     conn_del_f.close()
                                     carregar_fornecedores_cached.clear()
