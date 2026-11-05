@@ -671,7 +671,7 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_imagem
 
 # ---------------------------------------------------------
-# GERADORES DE PDF
+# GERADORES DE PDF (Ordem: mais antigo no final / padrão ID ASC)
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
     buffer = io.BytesIO()
@@ -1360,7 +1360,8 @@ else:
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
-        df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
+        # ORDEM: Mais antigo no final da tabela (ID ASC)
+        df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id ASC", conn)
         df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
         conn.close()
 
@@ -1609,8 +1610,8 @@ else:
 
                 dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
                 if st.form_submit_button("✅ Salvar Bonificação", type="primary"):
-                    if not num_nota_bonf.strip() or not loja_bonf or not prod_bonf or not status_bonf:
-                        st.error("Preencha todos os campos obrigatórios.")
+                    if not num_nota_bonf.strip() or not loja_bonf or not prod_bonf or not status_bonf or not tipo_bonf_sel:
+                        st.error("Preencha todos os campos obrigatórios, incluindo o Tipo de Bonificação.")
                     else:
                         spinner_supernova("Salvando bonificação...")
                         try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
@@ -1652,7 +1653,8 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
 
         conn_b_sel, db_tb_sel = get_db_connection()
-        df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn_b_sel)
+        # ORDEM: Mais antigo no final da tabela (ID ASC)
+        df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id ASC", conn_b_sel)
         conn_b_sel.close()
 
         if not df_bonf.empty:
@@ -1775,7 +1777,7 @@ else:
                                 )
                             else:
                                 cursor_upd.execute(
-                                    "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, WHERE id = ?",
+                                    "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ? WHERE id = ?",
                                     (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, reg_id_b)
                                 )
                             conn_up_dir.commit()
@@ -1820,7 +1822,7 @@ else:
                 total_baixado_por_nota[str(nf_e)] = float(val_bx)
 
         conn_b_all, db_tb_all = get_db_connection()
-        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti FROM bonificacoes", conn_b_all)
+        df_todas_bonf = pd.read_sql_query("SELECT id, numero_nota, valor_bonificacao, status, loja, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id ASC", conn_b_all)
         if not df_todas_bonf.empty:
             cur_st_up = conn_b_all.cursor()
             for _, r_b in df_todas_bonf.iterrows():
@@ -1850,8 +1852,11 @@ else:
         else:
             df_bonf_loja02 = pd.DataFrame()
 
+        # SEPARANDO AS NOTAS EM DOIS GRUPOS: Bonificação Comum vs Transferência de Bonificação
         notas_com_saldo_loja02 = []
+        notas_transf_loja02 = []
         saldo_geral_somado_loja02 = 0.0
+
         if not df_bonf_loja02.empty:
             for _, r_bonf in df_bonf_loja02.iterrows():
                 num_nf_ent = str(r_bonf["numero_nota"])
@@ -1860,12 +1865,17 @@ else:
                 saldo_restante_nota = max(0.0, val_original - ja_baixado)
                 if saldo_restante_nota > 0:
                     saldo_geral_somado_loja02 += saldo_restante_nota
-                    notas_com_saldo_loja02.append({
+                    tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
+                    item_dict = {
                         "nf_entrada": num_nf_ent,
                         "produto": r_bonf.get("produto_hortifruti", "N/A"),
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
-                    })
+                    }
+                    if "Transferência" in tipo_b_reg:
+                        notas_transf_loja02.append(item_dict)
+                    else:
+                        notas_com_saldo_loja02.append(item_dict)
 
         st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
@@ -1874,13 +1884,23 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
+        # TABELA 1: Notas de Bonificação Comuns Disponíveis
         if notas_com_saldo_loja02:
-            with st.expander("📌 Notas com Saldo Disponível (Loja 02 - Base para Baixas)", expanded=True):
+            with st.expander("📌 Notas de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
                 df_ns_show = pd.DataFrame(notas_com_saldo_loja02)
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
-                st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=200)
+                st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
+
+        # TABELA 2 SEPARADA: Notas de Transferência de Bonificação Disponíveis
+        if notas_transf_loja02:
+            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
+                df_tr_show = pd.DataFrame(notas_transf_loja02)
+                df_tr_show["Valor Original (R$)"] = df_tr_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tr_show["Saldo Disponível (R$)"] = df_tr_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tr_show = df_tr_show.rename(columns={"nf_entrada": "N° Nota de Transferência", "produto": "Produto Hortifrúti"})
+                st.dataframe(df_tr_show[["N° Nota de Transferência", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
         prods_cad_v = carregar_produtos_cached()
         lista_opcoes_prod_v = []
@@ -1898,7 +1918,8 @@ else:
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...", key=f"bx_ref_{bx_suf}")
                 with col_m2:
-                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
+                    todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
+                    opcoes_nf_entrada = [item["nf_entrada"] for item in todas_as_notas_com_saldo] if todas_as_notas_com_saldo else ["Nenhuma Nota Disponível"]
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
                     prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
                 with col_m3:
@@ -1926,7 +1947,7 @@ else:
                         except ValueError:
                             qtd_val_f, val_avaria_f = 0.0, 0.0
 
-                        nota_selecionada_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nf_b_entrada_sel), None)
+                        nota_selecionada_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada inválida.")
                         elif round(val_avaria_f, 2) > round(nota_selecionada_dict["saldo_restante"], 2):
@@ -1999,7 +2020,8 @@ else:
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
         conn_bx_view, db_tbx_v = get_db_connection()
-        df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
+        # ORDEM: Mais antigo no final da tabela (ID ASC)
+        df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id ASC", conn_bx_view)
         conn_bx_view.close()
 
         if not df_bx_table.empty:
@@ -2104,7 +2126,7 @@ else:
                                 lista_lojas_eb = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                                 idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                                 nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
-                                notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
+                                notas_disponiveis_edicao = [item["nf_entrada"] for item in (notas_com_saldo_loja02 + notas_transf_loja02)]
                                 if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
                                     notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
                                 idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
@@ -2135,7 +2157,7 @@ else:
                                         with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
                                         b64_nf_bx_ed = base64.b64encode(bytes_bx_up).decode('utf-8')
 
-                                    nota_edit_dict = next((item for item in notas_com_saldo_loja02 if item["nf_entrada"] == nova_nf_b_entrada), None)
+                                    nota_edit_dict = next((item for item in (notas_com_saldo_loja02 + notas_transf_loja02) if item["nf_entrada"] == nova_nf_b_entrada), None)
                                     saldo_disp_edit = float(nota_edit_dict["saldo_restante"]) if nota_edit_dict else float(reg_bx_atual["saldo_total_disponivel"])
                                     novo_saldo_restante_ed = float(saldo_disp_edit - v_f_ed)
 
@@ -2183,10 +2205,10 @@ else:
             "🏷️ BI Bonificações, Transferências & Prevenção de Perdas"
         ])
         conn, db_type = get_db_connection()
-        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios", conn)
+        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios ORDER BY id ASC", conn)
         df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, valor_total FROM romaneio_itens", conn)
-        df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes", conn)
-        df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias", conn)
+        df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id ASC", conn)
+        df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id ASC", conn)
         conn.close()
 
         with tab_bi_receb:
@@ -2655,7 +2677,7 @@ else:
         st.markdown("---")
         conn, db_type = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id")
+        cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id ASC")
         usuarios_cadastrados = cursor.fetchall()
         conn.close()
 
