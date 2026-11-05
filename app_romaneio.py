@@ -45,222 +45,18 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# FUNÇÃO DE NOTIFICAÇÃO NATIVA NA TELA (WINDOWS)
-# ---------------------------------------------------------
-def disparar_notificacao_tela(romaneio_dados, itens_lista):
-    """
-    Exibe um alerta nativo flutuante na tela do computador (Windows)
-    assim que um novo romaneio é salvo no sistema.
-    """
-    if not HAS_PLYER:
-        print("Biblioteca 'plyer' não instalada. Instale com: pip install plyer")
-        return
-    try:
-        total_itens = len(itens_lista)
-        primeiro_item = itens_lista[0]['produto'] if total_itens > 0 else "Diversos"
-        loja_exibida = romaneio_dados.get('loja', '')
-        fornecedor_exibido = romaneio_dados.get('fornecedor', '')
-        num_rom = romaneio_dados.get('numero_romaneio', '')
-        
-        mensagem_detalhes = (
-            f"Loja: {loja_exibida}\n"
-            f"Fornecedor: {fornecedor_exibido}\n"
-            f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
-        )
-
-        notification.notify(
-            title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
-            message=mensagem_detalhes,
-            app_name="HortiControl Supernova",
-            timeout=10
-        )
-    except Exception as e:
-        print(f"Erro ao disparar notificação na tela: {e}")
-
-# ---------------------------------------------------------
-# 1. CONFIGURAÇÃO DA PÁGINA
-# ---------------------------------------------------------
-logo_icon = None
-for nome in [
-    "logo_romaneio.png.jpg",
-    "logo_romaneio.png",
-    "logo.png",
-    "Tela de login.jpeg",
-    "tela_de_login.jpeg",
-]:
-    if os.path.exists(nome):
-        logo_icon = nome
-        break
-
-st.set_page_config(
-    page_title="HortiControl Supernova - Recebimento Hortifrúti",
-    page_icon=logo_icon if logo_icon else "📦",
-    layout="wide",
-)
-
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
-
-# ---------------------------------------------------------
-# CONEXÃO SEGURA COM BANCO DE DADOS
-# ---------------------------------------------------------
-def get_db_connection():
-    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
-        try:
-            conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
-            return conn, "postgres"
-        except Exception as e:
-            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {e}")
-            raise e
-    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
-    return conn, "sqlite"
-
-# ---------------------------------------------------------
-# CACHE DE DADOS (MELHORIA DE DESEMPENHO - ORDEM DESC: MAIS ANTIGO NO FINAL)
-# ---------------------------------------------------------
-@st.cache_data(ttl=60)
-def carregar_produtos_cached():
-    conn, db_type = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY id DESC")
-    prods = cursor.fetchall()
-    conn.close()
-    return prods
-
-@st.cache_data(ttl=60)
-def carregar_fornecedores_cached():
-    conn, db_type = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
-    forns = cursor.fetchall()
-    conn.close()
-    return forns
-
-# ---------------------------------------------------------
-# FUNÇÃO DE SPINNER / FEEDBACK COM LOGOTIPO DO SUPERNOVA
-# ---------------------------------------------------------
-def spinner_supernova(mensagem="A carregar dados do Supernova..."):
-    logo_path_spin = None
-    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
-        if os.path.exists(nome):
-            logo_path_spin = nome
-            break
-    if logo_path_spin:
-        with open(logo_path_spin, "rb") as img_f:
-            b64_spin = base64.b64encode(img_f.read()).decode()
-        return st.markdown(f"""
-        <div style="display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(20, 24, 30, 0.95); padding: 15px 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); margin: 15px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
-            <img src="data:image/jpeg;base64,{b64_spin}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; animation: pulse 1.5s infinite;" />
-            <span style="color: #FFFFFF; font-weight: 800; font-size: 15px; letter-spacing: 0.5px;">{mensagem}</span>
-        </div>
-        <style>
-        @keyframes pulse {{
-            0% {{ transform: scale(0.95); opacity: 0.8; }}
-            50% {{ transform: scale(1.05); opacity: 1; filter: drop-shadow(0 0 8px #4CAF50); }}
-            100% {{ transform: scale(0.95); opacity: 0.8; }}
-        }}
-        </style>
-        """, unsafe_allow_html=True)
-    else:
-        return st.spinner(mensagem)
-
-# ---------------------------------------------------------
-# FUNÇÃO DE PERSISTÊNCIA DE ANEXOS (BASE64 NO BANCO)
-# ---------------------------------------------------------
-def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
-    if not caminho_alvo or not b64_str:
-        return
-    try:
-        if not os.path.exists(caminho_alvo) or os.path.getsize(caminho_alvo) == 0:
-            diretorio = os.path.dirname(caminho_alvo)
-            if diretorio and not os.path.exists(diretorio):
-                os.makedirs(diretorio)
-            with open(caminho_alvo, "wb") as f_out:
-                f_out.write(base64.b64decode(b64_str))
-    except Exception:
-        pass
-
-# ---------------------------------------------------------
-# MODAL DE VISUALIZAÇÃO DE ANEXOS
-# ---------------------------------------------------------
-@st.dialog("🖼️ Visualizador de Documentos", width="large")
-def exibir_foto_modal(caminho_foto, b64_dados=None):
-    if not caminho_foto and b64_dados:
-        caminho_foto = os.path.join("uploads", "documento_anexado.pdf")
-    if b64_dados:
-        salvar_arquivo_fisico_do_b64(caminho_foto, b64_dados)
-    if caminho_foto and os.path.exists(caminho_foto) and os.path.getsize(caminho_foto) > 0:
-        nome_arquivo = os.path.basename(caminho_foto)
-        is_pdf = caminho_foto.lower().endswith(".pdf")
-        ext_tag = "PDF" if is_pdf else "IMG"
-        bg_tag_color = "#EA4335" if is_pdf else "#4285F4"
-        st.markdown(f"""
-        <div style="background-color: #202124; padding: 12px 18px; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3c4043; margin-bottom: 15px;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-                <span style="background-color: {bg_tag_color}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">{ext_tag}</span>
-                <span style="color: #ffffff; font-weight: 600; font-size: 15px;">{nome_arquivo}</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        if is_pdf:
-            pdf_renderizado = False
-            if HAS_PYMUPDF:
-                try:
-                    doc_pdf = fitz.open(caminho_foto)
-                    total_paginas = len(doc_pdf)
-                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>PDF convertido visualmente • {total_paginas} página(s)</p>", unsafe_allow_html=True)
-                    for page_index in range(total_paginas):
-                        page = doc_pdf[page_index]
-                        pix = page.get_pixmap(dpi=150)
-                        img_bytes = pix.tobytes("png")
-                        st.markdown(f"""
-                        <div style="background-color: #2d2e30; padding: 6px; border-radius: 6px; margin-bottom: 6px; text-align: center; border: 1px solid #3c4043;">
-                            <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        st.image(img_bytes, use_container_width=True)
-                    pdf_renderizado = True
-                except Exception as e:
-                    st.warning(f"Erro ao processar páginas do PDF: {e}")
-            if not pdf_renderizado:
-                st.markdown("""
-                <div style="background-color: #2d2e30; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #3c4043; margin-bottom: 15px;">
-                    <p style="color: #ffffff; font-size: 15px; font-weight: bold; margin-bottom: 8px;">Visualização direta de PDF restrita pelo navegador</p>
-                </div>
-                """, unsafe_allow_html=True)
-                st.markdown("---")
-                with open(caminho_foto, "rb") as f_pdf:
-                    st.download_button(
-                        label=f"📥 Descarregar Ficheiro PDF Original ({nome_arquivo})",
-                        data=f_pdf.read(),
-                        file_name=nome_arquivo,
-                        mime="application/pdf",
-                        type="primary"
-                    )
-        else:
-            st.image(caminho_foto, use_container_width=True, caption="Documento Anexado")
-            with open(caminho_foto, "rb") as f_img:
-                img_bytes = f_img.read()
-                st.download_button(
-                    label=f"📥 Descarregar Imagem ({nome_arquivo})",
-                    data=img_bytes,
-                    file_name=nome_arquivo,
-                    mime="application/jpeg",
-                    type="primary"
-                )
-    else:
-        st.error("Ficheiro de anexo não encontrado no servidor ou o registo não possui conteúdo binário válido.")
-
-# ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL
+# 2. ESTILOS E PADRÃO VISUAL (CORES OFICIAIS SUPERNOVA)
 # ---------------------------------------------------------
 bg_login_path = None
 for nome_bg in [
+    "logo_romaneio.png.jpg",
+    "logo_romaneio.png",
     "Tela-de-login.jpeg.ico",
     "Tela-de-login.jpeg",
     "Tela de login.jpeg",
     "Tela de login.jpeg.jpeg",
     "tela_de_login.jpeg",
+    "logo.png"
 ]:
     if os.path.exists(nome_bg):
         bg_login_path = nome_bg
@@ -268,13 +64,16 @@ for nome_bg in [
 
 b64_img = ""
 if bg_login_path:
-    with open(bg_login_path, "rb") as img_f:
-        b64_img = base64.b64encode(img_f.read()).decode()
+    try:
+        with open(bg_login_path, "rb") as img_f:
+            b64_img = base64.b64encode(img_f.read()).decode()
+    except Exception:
+        b64_img = ""
 
 if b64_img:
     css_fundo = f"""
     .stApp {{
-        background-image: linear-gradient(rgba(10,12,10,0.92), rgba(10,12,10,0.92)), url("data:image/jpeg;base64,{b64_img}") !important;
+        background-image: linear-gradient(rgba(14, 20, 16, 0.90), rgba(14, 20, 16, 0.94)), url("data:image/jpeg;base64,{b64_img}") !important;
         background-size: cover !important;
         background-position: center !important;
         background-repeat: no-repeat !important;
@@ -284,7 +83,7 @@ if b64_img:
 else:
     css_fundo = """
     .stApp {
-        background: linear-gradient(135deg, #121417 0%, #1A1D24 100%) !important;
+        background: linear-gradient(135deg, #0A140C 0%, #142318 50%, #1A202C 100%) !important;
         background-attachment: fixed !important;
     }
     """
@@ -301,68 +100,72 @@ st.markdown(
     }}
     h1, h2, h3, h4, h5, h6, p, span, div, label {{
         color: #FFFFFF !important;
-        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8) !important;
+        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8) !important;
     }}
     .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p {{
         font-size: 14px !important;
         font-weight: 700 !important;
         color: #FFFFFF !important;
     }}
+    
+    /* MENU RADIO COM CORES PADRÃO SUPERNOVA */
     div[data-testid="stRadio"] > div {{
         background: transparent !important;
         padding: 0px !important;
         border: none !important;
         box-shadow: none !important;
-        gap: 12px !important;
+        gap: 10px !important;
         flex-wrap: wrap !important;
         display: flex !important;
     }}
     div[data-testid="stRadio"] label {{
-        background: linear-gradient(135deg, rgba(28, 32, 38, 0.95), rgba(18, 21, 26, 0.98)) !important;
-        padding: 14px 20px !important;
+        background: linear-gradient(135deg, rgba(20, 35, 25, 0.95), rgba(15, 25, 20, 0.98)) !important;
+        padding: 12px 18px !important;
         border-radius: 10px !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border: 1px solid rgba(76, 175, 80, 0.4) !important;
         box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.4) !important;
         margin-bottom: 6px !important;
-        transition: all 0.2s ease-in-out !important;
+        transition: all 0.25s ease-in-out !important;
         cursor: pointer !important;
         flex: 1 1 auto !important;
-        min-width: 210px !important;
+        min-width: 180px !important;
         justify-content: center !important;
     }}
     div[data-testid="stRadio"] label:hover {{
-        background: linear-gradient(135deg, rgba(38, 44, 52, 0.98), rgba(24, 28, 34, 1)) !important;
-        border-color: rgba(255, 255, 255, 0.35) !important;
+        background: linear-gradient(135deg, rgba(40, 75, 50, 0.95), rgba(25, 50, 35, 0.98)) !important;
+        border-color: #4CAF50 !important;
         transform: translateY(-2px) !important;
     }}
     div[data-testid="stRadio"] label[data-checked="true"] {{
-        background: linear-gradient(135deg, #2D3748, #1A202C) !important;
-        border: 1px solid rgba(255, 255, 255, 0.8) !important;
-        box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.6) !important;
+        background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
+        border: 2px solid #81C784 !important;
+        box-shadow: 0px 6px 16px rgba(76, 175, 80, 0.4) !important;
     }}
     div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
         font-size: 14px !important;
         font-weight: 800 !important;
     }}
+    
+    /* EXPANDERS E CARDS COM BORDA E DESTAQUE VERDE SUPERNOVA */
     div[data-testid="stExpander"] {{
-        background: rgba(20, 24, 30, 0.9) !important;
-        border: 1px solid rgba(255, 255, 255, 0.15) !important;
-        border-radius: 8px !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.4) !important;
+        background: rgba(18, 28, 22, 0.92) !important;
+        border: 1px solid rgba(76, 175, 80, 0.3) !important;
+        border-radius: 10px !important;
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.5) !important;
     }}
+    
     img[data-testid="stImage"] {{
         background: transparent !important;
-        mix-blend-mode: multiply !important;
-        filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
-        max-width: 85px !important;
+        filter: drop-shadow(2px 2px 6px rgba(0,0,0,0.6)) !important;
+        max-width: 95px !important;
         width: 100% !important;
         height: auto !important;
         margin: 0 auto !important;
         display: block !important;
     }}
     .titulo-logo {{
-        font-size: 2rem !important;
+        font-size: 2.1rem !important;
         font-weight: 900 !important;
         line-height: 1.1 !important;
         margin-bottom: 0px !important;
@@ -370,7 +173,7 @@ st.markdown(
     }}
     .palavra-sup-mercado {{
         color: #4CAF50 !important;
-        font-size: 1.2rem !important;
+        font-size: 1.25rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
     }}
@@ -386,7 +189,7 @@ st.markdown(
         color: #FFFFFF !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.5rem !important;
+        font-size: 2.6rem !important;
     }}
     div[data-baseweb="input"] input,
     div[data-baseweb="base-input"] input,
@@ -405,7 +208,7 @@ st.markdown(
     div[data-baseweb="select"] {{
         background-color: #F8F9FA !important;
         border-radius: 6px !important;
-        border: 2px solid #4A5568 !important;
+        border: 2px solid #2E7D32 !important;
     }}
     div[data-baseweb="select"] span {{
         color: #111111 !important;
@@ -413,23 +216,37 @@ st.markdown(
     }}
     div[data-testid="stFileUploader"],
     div[data-testid="stFileUploader"] section {{
-        background: rgba(30, 35, 42, 0.85) !important;
-        border: 2px solid rgba(255, 255, 255, 0.4) !important;
+        background: rgba(22, 35, 26, 0.9) !important;
+        border: 2px solid rgba(76, 175, 80, 0.5) !important;
         border-radius: 8px !important;
     }}
+    
+    /* BOTÕES COM AS CORES DA EMPRESA (VERDE E DESTAQUES EM VERMELHO/DARK) */
     button[kind="primary"], .stButton > button[kind="primary"] {{
-        background-color: #2D3748 !important;
+        background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
         color: #FFFFFF !important;
-        border: 2px solid #FFFFFF !important;
+        border: 2px solid #81C784 !important;
         font-weight: bold !important;
         font-size: 15px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 8px rgba(0,0,0,0.5) !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.5) !important;
+        transition: all 0.2s ease-in-out !important;
     }}
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
-        background-color: #4A5568 !important;
-        border-color: #FFFFFF !important;
+        background: linear-gradient(135deg, #388E3C, #2E7D32) !important;
+        border-color: #A5D6A7 !important;
+        transform: scale(1.01) !important;
+    }}
+    button[kind="secondary"], .stButton > button[kind="secondary"] {{
+        background: linear-gradient(135deg, #C62828, #8E0000) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #FF8A80 !important;
+        font-weight: bold !important;
+        border-radius: 8px !important;
+    }}
+    button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
+        background: linear-gradient(135deg, #D32F2F, #B71C1C) !important;
     }}
     {css_fundo}
     </style>
