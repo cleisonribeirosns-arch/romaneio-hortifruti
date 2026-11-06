@@ -721,7 +721,6 @@ def fazer_login(login_ou_nome, senha):
         if usr:
             senha_banco = usr[4]
             if verificar_senha(senha, senha_banco):
-                # Se a senha no banco for antiga (texto puro), migra automaticamente para hash
                 if senha_banco == senha:
                     hash_novo = gerar_hash_senha(senha)
                     cursor.execute(
@@ -1349,13 +1348,13 @@ else:
                 conn, db_type = get_db_connection()
                 try:
                     if not os.path.exists("uploads"): os.makedirs("uploads")
-                    path_ass_conf, b64_conf = "", ""
+                    path_ass_conf = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
                         img_c.save(path_ass_conf)
 
-                    path_ass_ent, b64_ent = "", ""
+                    path_ass_ent = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
@@ -2586,9 +2585,9 @@ else:
                                     carregar_produtos_cached.clear()
                                     st.success("Produto atualizado com sucesso!")
                                     st.rerun()
-                                me:
+                                except Exception as e:
                                     conn_up_p.rollback()
-                                    st.error("Erro ao atualizar o produto.")
+                                    st.error(f"Erro ao atualizar o produto: {e}")
                                 finally:
                                     conn_up_p.close()
 
@@ -2697,7 +2696,7 @@ else:
                                 conn_del_f, db_tdf = get_db_connection()
                                 try:
                                     cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdp == "postgres" else id_f_ed,))
                                     conn_del_f.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
