@@ -22,6 +22,13 @@ import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 
+# Tenta importar plyer para notificação nativa na tela do computador (Windows)
+try:
+    from plyer import notification
+    HAS_PLYER = True
+except ImportError:
+    HAS_PLYER = False
+
 # Tenta importar fitz (PyMuPDF) para conversão visual e renderização de PDF em imagem
 try:
     import fitz  # PyMuPDF
@@ -36,6 +43,39 @@ try:
     HAS_POSTGRES = True
 except ImportError:
     HAS_POSTGRES = False
+
+# ---------------------------------------------------------
+# FUNÇÃO DE NOTIFICAÇÃO NATIVA NA TELA (WINDOWS)
+# ---------------------------------------------------------
+def disparar_notificacao_tela(romaneio_dados, itens_lista):
+    """
+    Exibe um alerta nativo flutuante na tela do computador (Windows)
+    assim que um novo romaneio é salvo no sistema.
+    """
+    if not HAS_PLYER:
+        print("Biblioteca 'plyer' não instalada. Instale com: pip install plyer")
+        return
+    try:
+        total_itens = len(itens_lista)
+        primeiro_item = itens_lista[0]['produto'] if total_itens > 0 else "Diversos"
+        loja_exibida = romaneio_dados.get('loja', '')
+        fornecedor_exibido = romaneio_dados.get('fornecedor', '')
+        num_rom = romaneio_dados.get('numero_romaneio', '')
+        
+        mensagem_detalhes = (
+            f"Loja: {loja_exibida}\n"
+            f"Fornecedor: {fornecedor_exibido}\n"
+            f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
+        )
+
+        notification.notify(
+            title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
+            message=mensagem_detalhes,
+            app_name="HortiControl Supernova",
+            timeout=10
+        )
+    except Exception as e:
+        print(f"Erro ao disparar notificação na tela: {e}")
 
 # ---------------------------------------------------------
 # 1. CONFIGURAÇÃO DA PÁGINA
@@ -1335,13 +1375,17 @@ else:
                         "tipo_operacao": tipo_operacao,
                         "observacoes": observacoes_romaneio
                     }
+
+                    # DISPARA NOTIFICAÇÃO NATIVA FLUTUANTE NA TELA DO WINDOWS
+                    disparar_notificacao_tela(romaneio_dict_atual, st.session_state["itens_romaneio"])
+
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_rom_final
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso!")
+                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso! Notificação enviada para a tela.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
@@ -2738,12 +2782,3 @@ else:
                                 st.rerun()
                             except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum usuário cadastrado.")
-from plyer import notification
-
-def mostrar_notificacao_tela(numero_romaneio, loja):
-    notification.notify(
-        title="📦 Novo Romaneio Cadastrado!",
-        message=f"O romaneio #{numero_romaneio} foi gerado para a {loja}.",
-        app_name="HortiControl Supernova",
-        timeout=10 # Tempo em segundos que a notificação fica visível na tela
-    )
