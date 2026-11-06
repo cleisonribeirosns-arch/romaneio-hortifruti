@@ -45,22 +45,130 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
+# FUNÇÕES DE CONEXÃO E AUXILIARES
+# ---------------------------------------------------------
+def get_db_connection():
+    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
+        try:
+            conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
+            return conn, "postgres"
+        except Exception as e:
+            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {e}")
+            raise e
+    conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
+    return conn, "sqlite"
+
+def disparar_notificacao_tela(romaneio_dados, itens_lista):
+    if not HAS_PLYER:
+        return
+    try:
+        total_itens = len(itens_lista)
+        primeiro_item = itens_lista[0]['produto'] if total_itens > 0 else "Diversos"
+        loja_exibida = romaneio_dados.get('loja', '')
+        fornecedor_exibido = romaneio_dados.get('fornecedor', '')
+        num_rom = romaneio_dados.get('numero_romaneio', '')
+        
+        mensagem_detalhes = (
+            f"Loja: {loja_exibida}\n"
+            f"Fornecedor: {fornecedor_exibido}\n"
+            f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
+        )
+        notification.notify(
+            title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
+            message=mensagem_detalhes,
+            app_name="HortiControl Supernova",
+            timeout=10
+        )
+    except Exception as e:
+        print(f"Erro ao disparar notificação: {e}")
+
+def spinner_supernova(mensagem="Carregando dados..."):
+    with st.spinner(mensagem):
+        pass
+
+@st.cache_data(ttl=60)
+def carregar_produtos_cached():
+    conn, db_type = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY id DESC")
+    prods = cursor.fetchall()
+    conn.close()
+    return prods
+
+@st.cache_data(ttl=60)
+def carregar_fornecedores_cached():
+    conn, db_type = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
+    forns = cursor.fetchall()
+    conn.close()
+    return forns
+
+def remover_fundo_branco(caminho_imagem):
+    """ Torna transparente qualquer fundo branco/claro nas assinaturas no PDF """
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return caminho_imagem
+    try:
+        img = Image.open(caminho_imagem).convert("RGBA")
+        datas = img.getdata()
+        newData = []
+        for item in datas:
+            if item[0] > 180 and item[1] > 180 and item[2] > 180:
+                newData.append((255, 255, 255, 0))
+            else:
+                newData.append(item)
+        img.putdata(newData)
+        caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
+        img.save(caminho_transparente, "PNG")
+        return caminho_transparente
+    except Exception:
+        return caminho_imagem
+
+def exibir_foto_modal(caminho_foto, b64_foto=None):
+    if b64_foto:
+        try:
+            img_data = base64.b64decode(b64_foto)
+            st.image(img_data, use_container_width=True)
+            return
+        except Exception:
+            pass
+    if caminho_foto and os.path.exists(caminho_foto):
+        st.image(caminho_foto, use_container_width=True)
+    else:
+        st.warning("Arquivo de anexo não encontrado no servidor.")
+
+# ---------------------------------------------------------
+# FUNÇÃO PARA MARCA D'ÁGUA NO FUNDO DO PDF GERADO
+# ---------------------------------------------------------
+def buscar_caminho_logo():
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                return pos_p
+    return None
+
+def desenhar_fundo_pdf(canvas_doc, doc_obj):
+    """ Desenha a marca d'água da logo no centro da página no fundo do PDF do Romaneio """
+    logo_p = buscar_caminho_logo()
+    if logo_p and os.path.exists(logo_p):
+        try:
+            canvas_doc.saveState()
+            canvas_doc.setFillAlpha(0.12)  # Suave opacidade no fundo
+            # Desenha centralizada na folha
+            w_pg, h_pg = doc_obj.pagesize
+            w_img, h_img = 340, 260
+            x = (w_pg - w_img) / 2
+            y = (h_pg - h_img) / 2
+            canvas_doc.drawImage(logo_p, x, y, width=w_img, height=h_img, mask='auto', preserveAspectRatio=True)
+            canvas_doc.restoreState()
+        except Exception:
+            canvas_doc.restoreState()
+
+# ---------------------------------------------------------
 # 2. ESTILOS E PADRÃO VISUAL (CORES OFICIAIS SUPERNOVA)
 # ---------------------------------------------------------
-bg_login_path = None
-for nome_bg in [
-    "logo_romaneio.png.jpg",
-    "logo_romaneio.png",
-    "Tela-de-login.jpeg.ico",
-    "Tela-de-login.jpeg",
-    "Tela de login.jpeg",
-    "Tela de login.jpeg.jpeg",
-    "tela_de_login.jpeg",
-    "logo.png"
-]:
-    if os.path.exists(nome_bg):
-        bg_login_path = nome_bg
-        break
+bg_login_path = buscar_caminho_logo()
 
 b64_img = ""
 if bg_login_path:
@@ -540,15 +648,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
     style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
     
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path:
-            break
+    logo_path = buscar_caminho_logo()
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
@@ -614,7 +714,194 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     ass_table = Table([[col_conf_cell, col_ent_cell]], colWidths=[270, 270])
     ass_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     story.append(ass_table)
-    doc.build(story)
+    
+    # Aplica o desenho da logo como marca d'água de fundo em todas as páginas do PDF
+    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_produtos(produtos_data):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    styles = getSampleStyleSheet()
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
+    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
+    
+    logo_path = buscar_caminho_logo()
+    if logo_path and os.path.exists(logo_path):
+        logo_img_header = RLImage(logo_path, width=70, height=50)
+    else:
+        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
+    story.append(header_table)
+    story.append(Spacer(1, 15))
+    table_content = [[Paragraph("Item", style_header_center), Paragraph("Cód. Produto", style_header_center), Paragraph("Código de Barras", style_header_center), Paragraph("Nome do Produto", style_header_left), Paragraph("UND", style_header_center)]]
+    for idx, p in enumerate(produtos_data, 1):
+        table_content.append([Paragraph(str(idx), style_center), Paragraph(str(p[2] or "S/N"), style_center), Paragraph(str(p[1] or "S/N"), style_center), Paragraph(str(p[3]), style_left), Paragraph(str(p[4]), style_center)])
+    prod_table = Table(table_content, colWidths=[35, 95, 125, 235, 50])
+    prod_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+    story.append(prod_table)
+    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_bonificacoes(df_bonf_data):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
+    story = []
+    styles = getSampleStyleSheet()
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
+    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
+    
+    logo_path = buscar_caminho_logo()
+    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Controle de Bonificação", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
+    story.append(header_table)
+    story.append(Spacer(1, 15))
+    table_content = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data Entrada", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Status", style_header_center), Paragraph("Produto Hortifrúti", style_header_left)]]
+    tot_val = 0.0
+    for _, r in df_bonf_data.iterrows():
+        v_b = float(r["valor_bonificacao"]) if r["valor_bonificacao"] else 0.0
+        tot_val += v_b
+        t_bonf = r.get("tipo_bonificacao", "Bonificação")
+        table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
+    bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
+    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+    story.append(bonf_table)
+    story.append(Spacer(1, 10))
+    total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
+    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
+    story.append(total_table)
+    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_baixas(df_baixas_data):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    story = []
+    styles = getSampleStyleSheet()
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
+    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
+    
+    logo_path = buscar_caminho_logo()
+    logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Registro de Baixas de Avarias", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
+    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
+    story.append(header_table)
+    story.append(Spacer(1, 12))
+    table_content = [[
+        Paragraph("LOJAS", style_header_center),
+        Paragraph("Data Baixa", style_header_center),
+        Paragraph("Ref. Bon. transferen", style_header_center),
+        Paragraph("NF da baixa", style_header_center),
+        Paragraph("NF de B. ENTRADA", style_header_center),
+        Paragraph("Produto Hortifrúti", style_header_left),
+        Paragraph("Qtd (kg/cx)", style_header_center),
+        Paragraph("Valor Total Avaria (R$)", style_header_left),
+        Paragraph("Saldo", style_header_left),
+        Paragraph("Saldo Total Utilizado", style_header_left)
+    ]]
+    tot_val_avarias = 0.0
+    for _, r in df_baixas_data.iterrows():
+        v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
+        tot_val_avarias += v_av
+        s_nota = float(r.get("saldo_restante_calculado", r["saldo_restante_nota"])) if r["saldo_restante_nota"] else 0.0
+        s_util = float(r.get("saldo_total_utilizado", 0.0))
+        qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
+        table_content.append([
+            Paragraph(str(r["loja_baixa"]), style_center),
+            Paragraph(str(r["data_baixa"]), style_center),
+            Paragraph(str(r["ref_bon_transferen"]), style_center),
+            Paragraph(str(r["nf_baixa"] if r["nf_baixa"] else "S/Anexo"), style_center),
+            Paragraph(str(r["nf_b_entrada"]), style_center),
+            Paragraph(str(r["produto_hortifruti"]), style_left),
+            Paragraph(fmt_ptbr(qtd_val, 3), style_center),
+            Paragraph(f"R$ {fmt_ptbr(v_av, 2)}", style_left),
+            Paragraph(f"R$ {fmt_ptbr(s_nota, 2)}", style_left),
+            Paragraph(f"R$ {fmt_ptbr(s_util, 2)}", style_left),
+        ])
+    baixas_table = Table(table_content, colWidths=[70, 95, 85, 75, 85, 120, 60, 85, 65, 52])
+    baixas_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+    story.append(baixas_table)
+    story.append(Spacer(1, 10))
+    total_table = Table([[f"VALOR TOTAL DAS AVARIAS: R$ {fmt_ptbr(tot_val_avarias, 2)}"]], colWidths=[792])
+    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
+    story.append(total_table)
+    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
+    buffer.seek(0)
+    return buffer
+
+def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    story = []
+    styles = getSampleStyleSheet()
+    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
+    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
+    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
+    
+    logo_path = buscar_caminho_logo()
+    logo_img = RLImage(logo_path, width=65, height=40) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA</b>", styles["Normal"])
+    header = Table([[logo_img, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório Gerencial de Bonificações, Transferências e Prevenção de Perdas (BI)", styles["Normal"]), Paragraph(f"<b>Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}", styles["Normal"])]], colWidths=[75, 530, 187])
+    header.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("BACKGROUND", (0,0), (-1,-1), colors.lightgrey)]))
+    story.append(header)
+    story.append(Spacer(1, 10))
+    kpi_summary = [
+        [Paragraph("<b>Tot. Bonificado (R$)</b>", style_header_center), Paragraph("<b>Tot. Transferido (R$)</b>", style_header_center), Paragraph("<b>Avarias Bonificadas / Salvas (R$)</b>", style_header_center), Paragraph("<b>Taxa Cobertura (%)</b>", style_header_center), Paragraph("<b>Saldo Remanescente (R$)</b>", style_header_center)],
+        [
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_bonf'], 2)}", style_center),
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_transf'], 2)}", style_center),
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_avaria'], 2)}", style_center),
+            Paragraph(f"{fmt_ptbr(metrics_dict['taxa_cobertura'], 2)}%", style_center),
+            Paragraph(f"R$ {fmt_ptbr(metrics_dict['saldo_restante'], 2)}", style_center),
+        ]
+    ]
+    t_kpi = Table(kpi_summary, colWidths=[158, 158, 160, 158, 158])
+    t_kpi.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#1A202C")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(t_kpi)
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("<b>1. Resumo Analítico de Entradas e Bonificações Filtradas</b>", styles["Heading3"]))
+    tb_b = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Valor (R$)", style_header_center), Paragraph("Status", style_header_center), Paragraph("Produto", style_header_center)]]
+    for _, r in df_bonf_sub.head(15).iterrows():
+        tb_b.append([
+            Paragraph(str(r["numero_nota"]), style_center),
+            Paragraph(str(r.get("tipo_bonificacao", "Bonificação")), style_center),
+            Paragraph(str(r["loja"]), style_center),
+            Paragraph(str(r["data_entrada"]), style_center),
+            Paragraph(f"R$ {fmt_ptbr(r['valor_bonificacao'], 2)}", style_center),
+            Paragraph(str(r["status"]), style_center),
+            Paragraph(str(r["produto_hortifruti"]), style_left)
+        ])
+    table_b = Table(tb_b, colWidths=[65, 95, 95, 95, 80, 90, 272])
+    table_b.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(table_b)
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("<b>2. Resumo de Baixas de Avarias Compensadas (Evitando Perdas Físicas e Financeiras)</b>", styles["Heading3"]))
+    tb_bx = [[Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Ref. Bon.", style_header_center), Paragraph("NF Ent.", style_header_center), Paragraph("Produto", style_header_center), Paragraph("Qtd (kg/cx)", style_header_center), Paragraph("Valor Avaria (R$)", style_header_center)]]
+    for _, r in df_baixas_sub.head(15).iterrows():
+        tb_bx.append([
+            Paragraph(str(r["loja_baixa"]), style_center),
+            Paragraph(str(r["data_baixa"]), style_center),
+            Paragraph(str(r["ref_bon_transferen"]), style_center),
+            Paragraph(str(r["nf_b_entrada"]), style_center),
+            Paragraph(str(r["produto_hortifruti"]), style_left),
+            Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
+            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_center)
+        ])
+    table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
+    table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
+    story.append(table_bx)
+    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
     buffer.seek(0)
     return buffer
 
