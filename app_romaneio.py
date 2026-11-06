@@ -4,9 +4,10 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PÁGINA (ÍCONE E TÍTULO PERSONALIZADOS)
+# CONFIGURAÇÃO DE PÁGINA (PRIMEIRO COMANDO STREAMLIT)
 # ---------------------------------------------------------
 icone_pagina = "📦"
 if os.path.exists("logo_romaneio.png"):
