@@ -45,7 +45,7 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# FUNÇÕES DE CONEXÃO E AUXILIARES
+# FUNÇÕES DE CONEXÃO E AUXILIARES / PARSING GLOBAL
 # ---------------------------------------------------------
 def get_db_connection():
     if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
@@ -57,6 +57,20 @@ def get_db_connection():
             raise e
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
+
+def parse_float_ptbr(valor_str):
+    """ Função utilitária global robusta para converter strings PT-BR (preços, pesos, quantidades) em float """
+    if not valor_str or not str(valor_str).strip():
+        return 0.0
+    try:
+        limpo = str(valor_str).replace("R$", "").strip()
+        if "." in limpo and "," in limpo:
+            limpo = limpo.replace(".", "").replace(",", ".")
+        elif "," in limpo:
+            limpo = limpo.replace(",", ".")
+        return float(limpo)
+    except Exception:
+        return 0.0
 
 def disparar_notificacao_tela(romaneio_dados, itens_lista):
     if not HAS_PLYER:
@@ -154,8 +168,7 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
     if logo_p and os.path.exists(logo_p):
         try:
             canvas_doc.saveState()
-            canvas_doc.setFillAlpha(0.12)  # Suave opacidade no fundo
-            # Desenha centralizada na folha
+            canvas_doc.setFillAlpha(0.12)
             w_pg, h_pg = doc_obj.pagesize
             w_img, h_img = 340, 260
             x = (w_pg - w_img) / 2
@@ -216,7 +229,6 @@ st.markdown(
         color: #FFFFFF !important;
     }}
     
-    /* MENU RADIO COM CORES PADRÃO SUPERNOVA */
     div[data-testid="stRadio"] > div {{
         background: transparent !important;
         padding: 0px !important;
@@ -255,7 +267,6 @@ st.markdown(
         font-weight: 800 !important;
     }}
     
-    /* EXPANDERS E CARDS COM BORDA E DESTAQUE VERDE SUPERNOVA */
     div[data-testid="stExpander"] {{
         background: rgba(18, 28, 22, 0.92) !important;
         border: 1px solid rgba(76, 175, 80, 0.3) !important;
@@ -329,7 +340,6 @@ st.markdown(
         border-radius: 8px !important;
     }}
     
-    /* BOTÕES COM AS CORES DA EMPRESA (VERDE E DESTAQUES EM VERMELHO/DARK) */
     button[kind="primary"], .stButton > button[kind="primary"] {{
         background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
         color: #FFFFFF !important;
@@ -616,27 +626,8 @@ def fmt_ptbr(val, decimais=2):
     except Exception:
         return "0,00"
 
-def remover_fundo_branco(caminho_imagem):
-    if not caminho_imagem or not os.path.exists(caminho_imagem):
-        return caminho_imagem
-    try:
-        img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
-        newData = []
-        for item in datas:
-            if item[0] > 200 and item[1] > 200 and item[2] > 200:
-                newData.append((255, 255, 255, 0))
-            else:
-                newData.append(item)
-        img.putdata(newData)
-        caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
-        img.save(caminho_transparente, "PNG")
-        return caminho_transparente
-    except Exception:
-        return caminho_imagem
-
 # ---------------------------------------------------------
-# GERADORES DE PDF (ORDEM: MAIS ANTIGO NO FINAL / ID DESC)
+# GERADORES DE PDF
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
     buffer = io.BytesIO()
@@ -715,7 +706,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     ass_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     story.append(ass_table)
     
-    # Aplica o desenho da logo como marca d'água de fundo em todas as páginas do PDF
     doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
     buffer.seek(0)
     return buffer
@@ -731,10 +721,7 @@ def gerar_pdf_produtos(produtos_data):
     style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
     
     logo_path = buscar_caminho_logo()
-    if logo_path and os.path.exists(logo_path):
-        logo_img_header = RLImage(logo_path, width=70, height=50)
-    else:
-        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
+    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
     header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
     header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
     story.append(header_table)
@@ -902,220 +889,6 @@ def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
     table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
     story.append(table_bx)
     doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_produtos(produtos_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path:
-            break
-    if logo_path and os.path.exists(logo_path):
-        logo_img_header = RLImage(logo_path, width=70, height=50)
-    else:
-        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 15))
-    table_content = [[Paragraph("Item", style_header_center), Paragraph("Cód. Produto", style_header_center), Paragraph("Código de Barras", style_header_center), Paragraph("Nome do Produto", style_header_left), Paragraph("UND", style_header_center)]]
-    for idx, p in enumerate(produtos_data, 1):
-        table_content.append([Paragraph(str(idx), style_center), Paragraph(str(p[2] or "S/N"), style_center), Paragraph(str(p[1] or "S/N"), style_center), Paragraph(str(p[3]), style_left), Paragraph(str(p[4]), style_center)])
-    prod_table = Table(table_content, colWidths=[35, 95, 125, 235, 50])
-    prod_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(prod_table)
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_bonificacoes(df_bonf_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path: break
-    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Controle de Bonificação", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 15))
-    table_content = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data Entrada", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Status", style_header_center), Paragraph("Produto Hortifrúti", style_header_left)]]
-    tot_val = 0.0
-    for _, r in df_bonf_data.iterrows():
-        v_b = float(r["valor_bonificacao"]) if r["valor_bonificacao"] else 0.0
-        tot_val += v_b
-        t_bonf = r.get("tipo_bonificacao", "Bonificação")
-        table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
-    bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
-    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(bonf_table)
-    story.append(Spacer(1, 10))
-    total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
-    story.append(total_table)
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_baixas(df_baixas_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path: break
-    logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Registro de Baixas de Avarias", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 12))
-    table_content = [[
-        Paragraph("LOJAS", style_header_center),
-        Paragraph("Data Baixa", style_header_center),
-        Paragraph("Ref. Bon. transferen", style_header_center),
-        Paragraph("NF da baixa", style_header_center),
-        Paragraph("NF de B. ENTRADA", style_header_center),
-        Paragraph("Produto Hortifrúti", style_header_left),
-        Paragraph("Qtd (kg/cx)", style_header_center),
-        Paragraph("Valor Total Avaria (R$)", style_header_left),
-        Paragraph("Saldo", style_header_left),
-        Paragraph("Saldo Total Utilizado", style_header_left)
-    ]]
-    tot_val_avarias = 0.0
-    for _, r in df_baixas_data.iterrows():
-        v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
-        tot_val_avarias += v_av
-        s_nota = float(r.get("saldo_restante_calculado", r["saldo_restante_nota"])) if r["saldo_restante_nota"] else 0.0
-        s_util = float(r.get("saldo_total_utilizado", 0.0))
-        qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
-        table_content.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_baixa"] if r["nf_baixa"] else "S/Anexo"), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(qtd_val, 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(v_av, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_nota, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_util, 2)}", style_left),
-        ])
-    baixas_table = Table(table_content, colWidths=[70, 95, 85, 75, 85, 120, 60, 85, 65, 52])
-    baixas_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(baixas_table)
-    story.append(Spacer(1, 10))
-    total_table = Table([[f"VALOR TOTAL DAS AVARIAS: R$ {fmt_ptbr(tot_val_avarias, 2)}"]], colWidths=[792])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
-    story.append(total_table)
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = None
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                logo_path = pos_p
-                break
-        if logo_path: break
-    logo_img = RLImage(logo_path, width=65, height=40) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA</b>", styles["Normal"])
-    header = Table([[logo_img, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório Gerencial de Bonificações, Transferências e Prevenção de Perdas (BI)", styles["Normal"]), Paragraph(f"<b>Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}", styles["Normal"])]], colWidths=[75, 530, 187])
-    header.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("BACKGROUND", (0,0), (-1,-1), colors.lightgrey)]))
-    story.append(header)
-    story.append(Spacer(1, 10))
-    kpi_summary = [
-        [Paragraph("<b>Tot. Bonificado (R$)</b>", style_header_center), Paragraph("<b>Tot. Transferido (R$)</b>", style_header_center), Paragraph("<b>Avarias Bonificadas / Salvas (R$)</b>", style_header_center), Paragraph("<b>Taxa Cobertura (%)</b>", style_header_center), Paragraph("<b>Saldo Remanescente (R$)</b>", style_header_center)],
-        [
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_bonf'], 2)}", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_transf'], 2)}", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_avaria'], 2)}", style_center),
-            Paragraph(f"{fmt_ptbr(metrics_dict['taxa_cobertura'], 2)}%", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['saldo_restante'], 2)}", style_center),
-        ]
-    ]
-    t_kpi = Table(kpi_summary, colWidths=[158, 158, 160, 158, 158])
-    t_kpi.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#1A202C")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(t_kpi)
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("<b>1. Resumo Analítico de Entradas e Bonificações Filtradas</b>", styles["Heading3"]))
-    tb_b = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Valor (R$)", style_header_center), Paragraph("Status", style_header_center), Paragraph("Produto", style_header_center)]]
-    for _, r in df_bonf_sub.head(15).iterrows():
-        tb_b.append([
-            Paragraph(str(r["numero_nota"]), style_center),
-            Paragraph(str(r.get("tipo_bonificacao", "Bonificação")), style_center),
-            Paragraph(str(r["loja"]), style_center),
-            Paragraph(str(r["data_entrada"]), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_bonificacao'], 2)}", style_center),
-            Paragraph(str(r["status"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left)
-        ])
-    table_b = Table(tb_b, colWidths=[65, 95, 95, 95, 80, 90, 272])
-    table_b.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(table_b)
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("<b>2. Resumo de Baixas de Avarias Compensadas (Evitando Perdas Físicas e Financeiras)</b>", styles["Heading3"]))
-    tb_bx = [[Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Ref. Bon.", style_header_center), Paragraph("NF Ent.", style_header_center), Paragraph("Produto", style_header_center), Paragraph("Qtd (kg/cx)", style_header_center), Paragraph("Valor Avaria (R$)", style_header_center)]]
-    for _, r in df_baixas_sub.head(15).iterrows():
-        tb_bx.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_center)
-        ])
-    table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
-    table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(table_bx)
-    doc.build(story)
     buffer.seek(0)
     return buffer
 
@@ -1175,7 +948,6 @@ else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     
-    # Mapeamento de perfis e níveis de permissão
     is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
     is_auxiliar = ("auxiliar" in perfil_db)
     is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
@@ -1191,14 +963,11 @@ else:
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    # Definição das abas permitidas de acordo com o perfil
     if is_conferente:
-        # Conferente só enxerga o preenchimento do Romaneio
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
         }
     elif is_auxiliar:
-        # Auxiliar de Logística enxerga: Romaneio, Consulta, Bonificação e Cadastros
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔍 Consultar Romaneios": "Consultar Romaneios",
@@ -1206,7 +975,6 @@ else:
             "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)"
         }
     else:
-        # Assistente de Logística, Administrador e Gestor enxergam TODAS as abas
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔍 Consultar Romaneios": "Consultar Romaneios",
@@ -1337,10 +1105,8 @@ else:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
-                try: qtd_input = float(qtd_str_input.replace(".", "").replace(",", ".")) if qtd_str_input else 0.0
-                except ValueError: qtd_input = 0.0
-                try: val_unit_val = float(val_unit_str_input.replace(".", "").replace(",", ".")) if val_unit_str_input else 0.0
-                except ValueError: val_unit_val = 0.0
+                qtd_input = parse_float_ptbr(qtd_str_input)
+                val_unit_val = parse_float_ptbr(val_unit_str_input)
                 if not prod_nome_real: st.warning("Selecione um produto antes de adicionar.")
                 elif qtd_input <= 0: st.warning("Informe uma quantidade maior que zero.")
                 else:
@@ -1382,26 +1148,14 @@ else:
         with col_ass1:
             st.write("**Assinatura do Conferente**")
             canvas_conf = st_canvas(
-                stroke_width=3,
-                stroke_color="#000000",
-                background_color="#FFFFFF",
-                height=120,
-                width=280,
-                drawing_mode="freedraw",
-                return_image_data=True,
-                key=f"canv_conf_{k_suffix}"
+                stroke_width=3, stroke_color="#000000", background_color="#FFFFFF",
+                height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_conf_{k_suffix}"
             )
         with col_ass2:
             st.write("**Assinatura do Entregador / Fornecedor**")
             canvas_ent = st_canvas(
-                stroke_width=3,
-                stroke_color="#000000",
-                background_color="#FFFFFF",
-                height=120,
-                width=280,
-                drawing_mode="freedraw",
-                return_image_data=True,
-                key=f"canv_ent_{k_suffix}"
+                stroke_width=3, stroke_color="#000000", background_color="#FFFFFF",
+                height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"canv_ent_{k_suffix}"
             )
 
         if st.button("✅ Salvar Romaneio", type="primary", key=f"btn_salvar_{k_suffix}"):
@@ -1418,8 +1172,7 @@ else:
                 spinner_supernova("Salvando romaneio no Supernova...")
                 try:
                     if not os.path.exists("uploads"): os.makedirs("uploads")
-                    path_ass_conf = ""
-                    b64_conf = ""
+                    path_ass_conf, b64_conf = "", ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
@@ -1427,8 +1180,7 @@ else:
                         with open(path_ass_conf, "rb") as f_ac:
                             b64_conf = base64.b64encode(f_ac.read()).decode('utf-8')
 
-                    path_ass_ent = ""
-                    b64_ent = ""
+                    path_ass_ent, b64_ent = "", ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
@@ -1436,8 +1188,7 @@ else:
                         with open(path_ass_ent, "rb") as f_ae:
                             b64_ent = base64.b64encode(f_ae.read()).decode('utf-8')
 
-                    caminho_foto_salva = ""
-                    b64_foto = ""
+                    caminho_foto_salva, b64_foto = "", ""
                     if fotos_upload:
                         for f in fotos_upload:
                             path_f = os.path.join("uploads", f.name)
@@ -1484,22 +1235,15 @@ else:
                     conn.close()
 
                     romaneio_dict_atual = {
-                        "numero_romaneio": num_rom_final,
-                        "data_recebimento": data_rec_str,
-                        "fornecedor": forn_final,
-                        "codigo_fornecedor": cod_forn_val,
-                        "telefone_fornecedor": tel_fornecedor,
-                        "loja": loja,
-                        "loja_origem": loja_origem,
-                        "loja_destino": loja_destino,
-                        "conferente": user_info["nome"],
-                        "pagamento_a_vista": pag_a_vista,
-                        "data_pagamento": data_pag_str,
-                        "tipo_operacao": tipo_operacao,
+                        "numero_romaneio": num_rom_final, "data_recebimento": data_rec_str,
+                        "fornecedor": forn_final, "codigo_fornecedor": cod_forn_val,
+                        "telefone_fornecedor": tel_fornecedor, "loja": loja,
+                        "loja_origem": loja_origem, "loja_destino": loja_destino,
+                        "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista,
+                        "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao,
                         "observacoes": observacoes_romaneio
                     }
 
-                    # DISPARA NOTIFICAÇÃO NATIVA FLUTUANTE NA TELA DO WINDOWS
                     disparar_notificacao_tela(romaneio_dict_atual, st.session_state["itens_romaneio"])
 
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
@@ -1527,7 +1271,6 @@ else:
     elif menu == "Consultar Romaneios":
         st.title("🔍 Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
-        # ORDEM: Mais antigo no final da tabela (ID DESC invertido no pandas ou ORDER BY id DESC para manter a lógica exigida)
         df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
         df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
         conn.close()
@@ -1577,13 +1320,9 @@ else:
                                     df_planilha["Valor Total"] = df_planilha["valor_total_rom"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
 
                                     df_planilha_show = df_planilha.rename(columns={
-                                        "numero_romaneio": "N° Romaneio",
-                                        "tipo_operacao": "Tipo Operação",
-                                        "loja": "Loja",
-                                        "data_recebimento": "Data Recebimento",
-                                        "fornecedor": "Fornecedor",
-                                        "conferente": "Conferente",
-                                        "status_nota": "Status Atual"
+                                        "numero_romaneio": "N° Romaneio", "tipo_operacao": "Tipo Operação",
+                                        "loja": "Loja", "data_recebimento": "Data Recebimento",
+                                        "fornecedor": "Fornecedor", "conferente": "Conferente", "status_nota": "Status Atual"
                                     })
                                     cols_view = df_planilha_show[["N° Romaneio", "Tipo Operação", "Loja", "Data Recebimento", "Fornecedor", "Conferente", "Valor Total", "Status Atual", "Anexo"]]
                                     cols_view.index = range(1, len(cols_view) + 1)
@@ -1656,18 +1395,12 @@ else:
                                             ass_dados = cur_ass.fetchone()
                                             conn_i.close()
 
-                                            ass_conf_p = ass_dados[0] if ass_dados else None
-                                            ass_ent_p = ass_dados[1] if ass_dados else None
-
-                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], ass_conf_p, ass_ent_p)
+                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], ass_dados[0] if ass_dados else None, ass_dados[1] if ass_dados else None)
                                             col_dl_p, col_del_p = st.columns([2, 1])
                                             with col_dl_p:
                                                 st.download_button(
-                                                    label="📥 Baixar PDF",
-                                                    data=pdf_buf,
-                                                    file_name=f"{row_sel['numero_romaneio']}.pdf",
-                                                    mime="application/pdf",
-                                                    key=f"btn_pdf_grid_{chv_elem}"
+                                                    label="📥 Baixar PDF", data=pdf_buf,
+                                                    file_name=f"{row_sel['numero_romaneio']}.pdf", mime="application/pdf", key=f"btn_pdf_grid_{chv_elem}"
                                                 )
                                             with col_del_p:
                                                 if is_admin:
@@ -1781,11 +1514,9 @@ else:
                         st.error("Preencha todos os campos obrigatórios, incluindo o Tipo de Bonificação.")
                     else:
                         spinner_supernova("Salvando bonificação...")
-                        try: valor_bonf_val = float(valor_bonf_str.replace(".", "").replace(",", ".")) if valor_bonf_str else 0.0
-                        except ValueError: valor_bonf_val = 0.0
+                        valor_bonf_val = parse_float_ptbr(valor_bonf_str)
 
-                        path_anexo_bonf = ""
-                        b64_anexo_bonf = ""
+                        path_anexo_bonf, b64_anexo_bonf = "", ""
                         if anexo_bonf:
                             path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
                             anexo_bytes = anexo_bonf.getbuffer()
@@ -1820,7 +1551,6 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
 
         conn_b_sel, db_tb_sel = get_db_connection()
-        # ORDEM: Mais antigo no final da tabela (ID DESC invertido via pandas ou ordenação de exibição)
         df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn_b_sel)
         conn_b_sel.close()
 
@@ -1848,9 +1578,7 @@ else:
                     label="📥 Descarregar Relatório de Bonificação em PDF",
                     data=pdf_bonf_bytes,
                     file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    type="primary",
-                    key="btn_download_pdf_bonf"
+                    mime="application/pdf", type="primary", key="btn_download_pdf_bonf"
                 )
                 st.markdown("")
 
@@ -1858,12 +1586,8 @@ else:
                 df_bonf_tabela["Valor (R$)"] = df_bonf_tabela["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_bonf_tabela["Anexo"] = df_bonf_tabela.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
                 df_bonf_tabela = df_bonf_tabela.rename(columns={
-                    "numero_nota": "N° Nota",
-                    "tipo_bonificacao": "Tipo",
-                    "loja": "Loja",
-                    "data_entrada": "Data e Hora",
-                    "status": "Status",
-                    "produto_hortifruti": "Produto Hortifrúti"
+                    "numero_nota": "N° Nota", "tipo_bonificacao": "Tipo", "loja": "Loja",
+                    "data_entrada": "Data e Hora", "status": "Status", "produto_hortifruti": "Produto Hortifrúti"
                 })
                 cols_exibidas = df_bonf_tabela[["N° Nota", "Tipo", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
                 cols_exibidas.index = range(1, len(cols_exibidas) + 1)
@@ -1888,8 +1612,7 @@ else:
                             cur_b64.execute("SELECT anexo_b64 FROM bonificacoes WHERE id = %s" if HAS_POSTGRES else "SELECT anexo_b64 FROM bonificacoes WHERE id = ?", (id_reg_atual,))
                             res_b64 = cur_b64.fetchone()
                             conn_b64.close()
-                            b64_val = res_b64[0] if res_b64 else None
-                            exibir_foto_modal(caminho_nota_alvo, b64_val)
+                            exibir_foto_modal(caminho_nota_alvo, res_b64[0] if res_b64 else None)
                     else:
                         st.warning("Este registo não possui ficheiro de nota anexado.")
 
@@ -1920,7 +1643,7 @@ else:
                     if salvar_alt_bonf:
                         spinner_supernova("Salvando alterações...")
                         try:
-                            val_f_edit = float(novo_val_nota_str.replace(".", "").replace(",", ".")) if novo_val_nota_str else float(reg_obj_atual["valor_bonificacao"])
+                            val_f_edit = parse_float_ptbr(novo_val_nota_str) if novo_val_nota_str else float(reg_obj_atual["valor_bonificacao"])
                             hora_antiga = "00:00:00"
                             if len(str(reg_obj_atual["data_entrada"]).split(" ")) > 1:
                                 hora_antiga = str(reg_obj_atual["data_entrada"]).split(" ")[1]
@@ -1958,10 +1681,9 @@ else:
                         try:
                             conn_del_b, db_td_b = get_db_connection()
                             cursor_db = conn_del_b.cursor()
-                            reg_id_b_del = int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual
                             cursor_db.execute(
                                 "DELETE FROM bonificacoes WHERE id = %s" if db_td_b == "postgres" else "DELETE FROM bonificacoes WHERE id = ?",
-                                (reg_id_b_del,)
+                                (int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual,)
                             )
                             conn_del_b.commit()
                             conn_del_b.close()
@@ -2019,7 +1741,6 @@ else:
         else:
             df_bonf_loja02 = pd.DataFrame()
 
-        # SEPARANDO AS NOTAS EM DOIS GRUPOS: Bonificação Comum vs Transferência de Bonificação
         notas_com_saldo_loja02 = []
         notas_transf_loja02 = []
         saldo_geral_somado_loja02 = 0.0
@@ -2051,7 +1772,6 @@ else:
         </div>
         """, unsafe_allow_html=True)
 
-        # TABELA 1: Notas de Bonificação Comuns Disponíveis
         if notas_com_saldo_loja02:
             with st.expander("📌 Notas de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
                 df_ns_show = pd.DataFrame(notas_com_saldo_loja02)
@@ -2060,7 +1780,6 @@ else:
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
-        # TABELA 2 SEPARADA: Notas de Transferência de Bonificação Disponíveis
         if notas_transf_loja02:
             with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
                 df_tr_show = pd.DataFrame(notas_transf_loja02)
@@ -2108,11 +1827,8 @@ else:
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
                         spinner_supernova("Registrando baixa de avaria...")
-                        try:
-                            qtd_val_f = float(qtd_kg_cx_str.replace(".", "").replace(",", ".")) if qtd_kg_cx_str else 0.0
-                            val_avaria_f = float(valor_total_avaria_str.replace(".", "").replace(",", ".")) if valor_total_avaria_str else 0.0
-                        except ValueError:
-                            qtd_val_f, val_avaria_f = 0.0, 0.0
+                        qtd_val_f = parse_float_ptbr(qtd_kg_cx_str)
+                        val_avaria_f = parse_float_ptbr(valor_total_avaria_str)
 
                         nota_selecionada_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
@@ -2120,8 +1836,7 @@ else:
                         elif round(val_avaria_f, 2) > round(nota_selecionada_dict["saldo_restante"], 2):
                             st.error("❌ O valor da avaria ultrapassa o saldo restante da nota da Loja 02!")
                         else:
-                            path_nf_baixa = ""
-                            b64_nf_baixa = ""
+                            path_nf_baixa, b64_nf_baixa = "", ""
                             if nf_baixa_file:
                                 path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
                                 bytes_baixa = nf_baixa_file.getbuffer()
@@ -2187,7 +1902,6 @@ else:
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
         conn_bx_view, db_tbx_v = get_db_connection()
-        # ORDEM: Mais antigo no final da tabela (ID DESC invertido no pandas para exibir ID ASC / mais antigo embaixo)
         df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
         conn_bx_view.close()
 
@@ -2200,22 +1914,17 @@ else:
                 df_display_plan = df_bx_table.copy()
                 total_utilizado_por_nf = total_baixado_por_nota
                 
-                saldo_atual_por_nf = {}
-                utilizado_total_por_nf = {}
-                
+                saldo_atual_por_nf, utilizado_total_por_nf = {}, {}
                 for nf_ent_key, val_orig in dict_valor_orig_por_nf.items():
                     v_bx_total = total_utilizado_por_nf.get(str(nf_ent_key), 0.0)
                     utilizado_total_por_nf[str(nf_ent_key)] = v_bx_total
                     saldo_atual_por_nf[str(nf_ent_key)] = max(0.0, float(val_orig) - v_bx_total)
 
-                saldo_calculado_list = []
-                utilizado_calculado_list = []
-                
+                saldo_calculado_list, utilizado_calculado_list = [], []
                 for _, row_bx in df_display_plan.iterrows():
                     nf_ent_item = str(row_bx["nf_b_entrada"])
                     v_utilizado = utilizado_total_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"]))
                     utilizado_calculado_list.append(v_utilizado)
-                    
                     v_saldo_atual_nota = saldo_atual_por_nf.get(nf_ent_item, float(row_bx["saldo_restante_nota"]))
                     saldo_calculado_list.append(v_saldo_atual_nota)
 
@@ -2227,9 +1936,7 @@ else:
                     label="📥 Descarregar Planilha de Baixas de Avarias em PDF",
                     data=pdf_bytes_bx,
                     file_name=f"Registro_Baixas_Avarias_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    type="primary",
-                    key="btn_download_pdf_planilha_baixas"
+                    mime="application/pdf", type="primary", key="btn_download_pdf_planilha_baixas"
                 )
                 st.markdown("")
 
@@ -2241,24 +1948,17 @@ else:
                 df_tabela_exibicao["Qtd (kg/cx)"] = df_tabela_exibicao["quantidade_kg_cx"].apply(lambda x: fmt_ptbr(x, 3))
                 
                 df_tabela_final = df_tabela_exibicao.rename(columns={
-                    "loja_baixa": "LOJAS",
-                    "data_baixa": "Data Baixa",
-                    "ref_bon_transferen": "Ref. Bon.",
-                    "nf_b_entrada": "NF de B. ENTRADA",
-                    "produto_hortifruti": "Produto Hortifrúti",
+                    "loja_baixa": "LOJAS", "data_baixa": "Data Baixa", "ref_bon_transferen": "Ref. Bon.",
+                    "nf_b_entrada": "NF de B. ENTRADA", "produto_hortifruti": "Produto Hortifrúti",
                 })
 
                 cols_para_mostrar = ["LOJAS", "Data Baixa", "Ref. Bon.", "Anexo", "NF de B. ENTRADA", "Produto Hortifrúti", "Qtd (kg/cx)", "Valor Total Avaria (R$)", "Saldo", "Saldo Total Utilizado"]
 
                 st.markdown("**Clique em qualquer linha da planilha abaixo para abrir instantaneamente o anexo correspondente:**")
-                
                 evento_selecao = st.dataframe(
                     df_tabela_final[cols_para_mostrar], 
-                    use_container_width=True, 
-                    hide_index=True, 
-                    height=320,
-                    on_select="rerun",
-                    selection_mode="single-row"
+                    use_container_width=True, hide_index=True, height=320,
+                    on_select="rerun", selection_mode="single-row"
                 )
 
                 linhas_selecionadas = evento_selecao.get("selection", {}).get("rows", [])
@@ -2273,9 +1973,7 @@ else:
                         cur_b64_l.execute("SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = %s" if HAS_POSTGRES else "SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = ?", (int(reg_clicado['id']),))
                         res_b64_l = cur_b64_l.fetchone()
                         conn_b64_l.close()
-                        b64_conteudo_linha = res_b64_l[0] if res_b64_l else None
-                        
-                        exibir_foto_modal(caminho_anexo_clicado, b64_conteudo_linha)
+                        exibir_foto_modal(caminho_anexo_clicado, res_b64_l[0] if res_b64_l else None)
 
                 st.markdown("---")
                 st.subheader("⚙️ Gerenciamento: Editar ou Excluir Registro de Baixa")
@@ -2313,8 +2011,8 @@ else:
                             if salvar_alt_bx:
                                 spinner_supernova("Atualizando baixa...")
                                 try:
-                                    q_f_ed = float(str(novo_qtd_bx_str).replace(".", "").replace(",", ".")) if novo_qtd_bx_str else float(reg_bx_atual["quantidade_kg_cx"])
-                                    v_f_ed = float(str(novo_val_bx_str).replace(".", "").replace(",", ".")) if novo_val_bx_str else float(reg_bx_atual["valor_total_avaria"])
+                                    q_f_ed = parse_float_ptbr(novo_qtd_bx_str) if novo_qtd_bx_str else float(reg_bx_atual["quantidade_kg_cx"])
+                                    v_f_ed = parse_float_ptbr(novo_val_bx_str) if novo_val_bx_str else float(reg_bx_atual["valor_total_avaria"])
                                     
                                     path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
                                     b64_nf_bx_ed = ""
@@ -2352,10 +2050,9 @@ else:
                                 try:
                                     conn_del_bx, db_td_bx = get_db_connection()
                                     cur_delbx = conn_del_bx.cursor()
-                                    reg_id_bx_del = int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual
                                     cur_delbx.execute(
                                         "DELETE FROM baixas_avarias WHERE id = %s" if db_td_bx == "postgres" else "DELETE FROM baixas_avarias WHERE id = ?",
-                                        (reg_id_bx_del,)
+                                        (int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual,)
                                     )
                                     conn_del_bx.commit()
                                     conn_del_bx.close()
@@ -2463,8 +2160,6 @@ else:
                         )
                         fig_qtd_op.update_layout(xaxis_title="Produto", yaxis_title="Quantidade Movimentada", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_qtd_op, use_container_width=True)
-                    else:
-                        st.info("Sem dados de quantidade por operação para o período.")
 
                     st.markdown("---")
                     st.subheader("🛡️ Gráfico de Perdas Evitadas (Avarias Compensadas por Loja/Produto)")
@@ -2477,17 +2172,13 @@ else:
                         )
                         fig_perdas.update_layout(xaxis_title="Loja", yaxis_title="Perdas Evitadas (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                         st.plotly_chart(fig_perdas, use_container_width=True)
-                    else:
-                        st.info("Nenhum registo de perdas evitadas/avarias encontrado para o período e filtros selecionados.")
 
                     st.markdown("---")
                     st.download_button(
                         label="📥 Descarregar Relatório Consolidado (Excel / CSV)",
                         data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'),
                         file_name=f"Relatorio_Hortifruti_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv",
-                        mime="text/csv",
-                        type="primary",
-                        key="btn_download_csv_relatorio"
+                        mime="text/csv", type="primary", key="btn_download_csv_relatorio"
                     )
 
         with tab_bi_bonf_avaria:
@@ -2532,11 +2223,11 @@ else:
             st.markdown("---")
             st.markdown("### 🏆 Painel de Impacto Executivo")
             kpi_e1, kpi_e2, kpi_e3, kpi_e4, kpi_e5 = st.columns(5)
-            kpi_e1.metric("1. Entradas Bonificadas", f"R$ {fmt_ptbr(v_tot_bonf, 2)}", help="Valor total obtido diretamente com fornecedores")
-            kpi_e2.metric("2. Transferências", f"R$ {fmt_ptbr(v_tot_transf, 2)}", help="Valor total redistribuído entre lojas da rede")
-            kpi_e3.metric("3. Perdas Evitadas (Avarias)", f"R$ {fmt_ptbr(v_tot_avarias_salvas, 2)}", delta=f"{fmt_ptbr(v_tot_avarias_salvas, 2)} Salvos", delta_color="normal", help="Valor de perdas físicas amortizadas por saldo de bonificação")
-            kpi_e4.metric("4. Taxa de Cobertura", f"{fmt_ptbr(taxa_cobertura, 2)}%", help="Porcentagem de bonificações convertida em amortização de perdas")
-            kpi_e5.metric("5. Saldo Remanescente", f"R$ {fmt_ptbr(v_saldo_remanescente, 2)}", help="Saldo de bonificação ainda disponível para compensação")
+            kpi_e1.metric("1. Entradas Bonificadas", f"R$ {fmt_ptbr(v_tot_bonf, 2)}")
+            kpi_e2.metric("2. Transferências", f"R$ {fmt_ptbr(v_tot_transf, 2)}")
+            kpi_e3.metric("3. Perdas Evitadas (Avarias)", f"R$ {fmt_ptbr(v_tot_avarias_salvas, 2)}", delta=f"{fmt_ptbr(v_tot_avarias_salvas, 2)} Salvos", delta_color="normal")
+            kpi_e4.metric("4. Taxa de Cobertura", f"{fmt_ptbr(taxa_cobertura, 2)}%")
+            kpi_e5.metric("5. Saldo Remanescente", f"R$ {fmt_ptbr(v_saldo_remanescente, 2)}")
 
             st.markdown(f"""
             <div style="background: rgba(46, 125, 50, 0.25); border: 1px solid #4CAF50; border-radius: 8px; padding: 12px 18px; margin: 15px 0;">
@@ -2558,7 +2249,6 @@ else:
                     )
                     fig_lojas.update_layout(xaxis_title="Loja", yaxis_title="Valor (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_lojas, use_container_width=True)
-                else: st.info("Sem dados para a combinação de filtros.")
 
             with bg_bi2:
                 st.markdown("#### Avarias Bonificadas por Loja (Economia Gerada)")
@@ -2567,45 +2257,11 @@ else:
                     fig_avarias = px.bar(df_bx_grp, x="loja_baixa", y="valor_total_avaria", text_auto=".2f", color="valor_total_avaria", color_continuous_scale="Purples")
                     fig_avarias.update_layout(xaxis_title="Loja da Baixa", yaxis_title="Avaria Coberta (R$)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
                     st.plotly_chart(fig_avarias, use_container_width=True)
-                else: st.info("Sem dados de baixas para os filtros.")
-
-            st.markdown("#### 📦 Quantidade (Kg / Unidades / Caixas) de Produtos com Perdas Evitadas por Baixas")
-            if not df_bx_sub.empty:
-                df_bx_qtd_prod = df_bx_sub.groupby("produto_hortifruti")["quantidade_kg_cx"].sum().reset_index()
-                fig_qtd_avarias = px.bar(
-                    df_bx_qtd_prod, x="produto_hortifruti", y="quantidade_kg_cx", text_auto=".3f",
-                    color="quantidade_kg_cx", color_continuous_scale="Greens",
-                    labels={"produto_hortifruti": "Produto", "quantidade_kg_cx": "Quantidade Total (Kg/Unid/Cx)"}
-                )
-                fig_qtd_avarias.update_layout(xaxis_title="Produto", yaxis_title="Volume Salvo (Qtd/Peso)", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                st.plotly_chart(fig_qtd_avarias, use_container_width=True)
-            else: st.info("Sem dados de quantidades de avarias para o período.")
-
-            bg_bi3, bg_bi4 = st.columns(2)
-            with bg_bi3:
-                st.markdown("#### Top Produtos Beneficiados por Bonificação")
-                if not df_b_sub.empty:
-                    df_p_bonf = df_b_sub.groupby("produto_hortifruti")["valor_bonificacao"].sum().nlargest(7).reset_index()
-                    fig_prod_b = px.bar(df_p_bonf, y="produto_hortifruti", x="valor_bonificacao", orientation="h", text_auto=".2f", color="valor_bonificacao", color_continuous_scale="Teal")
-                    fig_prod_b.update_layout(xaxis_title="Total (R$)", yaxis_title="Produto", plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_prod_b, use_container_width=True)
-                else: st.info("Sem dados de produtos.")
-
-            with bg_bi4:
-                st.markdown("#### Distribuição do Status de Notas de Bonificação")
-                if not df_b_sub.empty:
-                    fig_st_pie = px.pie(df_b_sub, names="status", values="valor_bonificacao", hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
-                    fig_st_pie.update_layout(plot_bgcolor="rgba(0,0,0,0)", paper_bgcolor="rgba(0,0,0,0)", font_color="#FFFFFF")
-                    st.plotly_chart(fig_st_pie, use_container_width=True)
-                else: st.info("Sem status para exibir.")
 
             st.markdown("---")
-            st.markdown("### 📄 Geração de Relatório Executivo em PDF")
             metrics_dict = {
-                "tot_bonf": v_tot_bonf,
-                "tot_transf": v_tot_transf,
-                "tot_avaria": v_tot_avarias_salvas,
-                "taxa_cobertura": taxa_cobertura,
+                "tot_bonf": v_tot_bonf, "tot_transf": v_tot_transf,
+                "tot_avaria": v_tot_avarias_salvas, "taxa_cobertura": taxa_cobertura,
                 "saldo_restante": v_saldo_remanescente
             }
             pdf_bi_bytes = gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_b_sub, df_bx_sub)
@@ -2614,12 +2270,9 @@ else:
                 st.markdown("Gere um relatório em PDF para apresentações de resultados em reuniões com a diretoria.")
             with col_pdf_bi2:
                 st.download_button(
-                    label="📥 Baixar PDF Executivo",
-                    data=pdf_bi_bytes,
+                    label="📥 Baixar PDF Executivo", data=pdf_bi_bytes,
                     file_name=f"Relatorio_Executivo_Lideranca_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d_%H%M')}.pdf",
-                    mime="application/pdf",
-                    type="primary",
-                    key="btn_download_executivo_bi"
+                    mime="application/pdf", type="primary", key="btn_download_executivo_bi"
                 )
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
@@ -2664,8 +2317,7 @@ else:
                     label="📥 Descarregar Relatório de Produtos em PDF",
                     data=gerar_pdf_produtos(prods_full_pdf),
                     file_name=f"Relatorio_Produtos_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf",
-                    type="primary"
+                    mime="application/pdf", type="primary"
                 )
                 st.markdown("")
                 st.dataframe(df_produtos[["ID", "Código do Produto", "Código de Barras", "Nome do Produto", "Unidade Padrão"]], use_container_width=True, hide_index=True, height=250)
@@ -2721,8 +2373,7 @@ else:
                                 try:
                                     conn_del_p, db_tdp = get_db_connection()
                                     cur_delp = conn_del_p.cursor()
-                                    r_id_delp = int(id_p_ed) if db_tdp == "postgres" else id_p_ed
-                                    cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (r_id_delp,))
+                                    cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
                                     conn_del_p.commit()
                                     conn_del_p.close()
                                     carregar_produtos_cached.clear()
@@ -2808,8 +2459,7 @@ else:
                                 try:
                                     conn_del_f, db_tdf = get_db_connection()
                                     cur_delf = conn_del_f.cursor()
-                                    r_id_delf = int(id_f_ed) if db_tdf == "postgres" else id_f_ed
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (r_id_delf,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
                                     conn_del_f.commit()
                                     conn_del_f.close()
                                     carregar_fornecedores_cached.clear()
@@ -2897,8 +2547,10 @@ else:
                             try:
                                 conn_del_u, db_tdu = get_db_connection()
                                 cur_delu = conn_del_u.cursor()
-                                r_id_delu = int(id_u_ed) if db_tdu == "postgres" else id_u_ed
-                                cur_delu.execute("DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?", (r_id_delu,))
+                                cur_delu.execute(
+                                    "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
+                                    (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,)
+                                )
                                 conn_del_u.commit()
                                 conn_del_u.close()
                                 st.success("Utilizador excluído com sucesso!")
