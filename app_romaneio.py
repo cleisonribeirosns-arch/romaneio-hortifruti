@@ -10,7 +10,6 @@ import streamlit as st
 # CONFIGURAÇÃO DE PÁGINA (ÍCONE E TÍTULO PERSONALIZADOS)
 # ---------------------------------------------------------
 icone_pagina = "📦"
-# Aponta para o nome exato do arquivo que está no seu GitHub
 if os.path.exists("logo_romaneio.png.jpg"):
     try:
         icone_pagina = Image.open("logo_romaneio.png.jpg")
@@ -23,6 +22,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PWA (MANIFESTO PARA ÍCONE E NOME NO TELEMÓVEL)
 # ---------------------------------------------------------
@@ -44,12 +44,7 @@ pwa_manifest_code = """
 }">
 """
 st.markdown(pwa_manifest_code, unsafe_allow_html=True)
-import base64
-from datetime import datetime, time, timedelta
-import io
-import os
-import pandas as pd
-from PIL import Image
+
 import plotly.express as px
 import plotly.graph_objects as go
 from reportlab.lib import colors
@@ -64,26 +59,22 @@ from reportlab.platypus import (
     TableStyle,
 )
 import sqlite3
-import streamlit as st
 import streamlit.components.v1 as components
 from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 
-# Tenta importar plyer para notificação nativa física no Windows (caso executado localmente via python)
 try:
     from plyer import notification
     HAS_PLYER = True
 except ImportError:
     HAS_PLYER = False
 
-# Tenta importar fitz (PyMuPDF) para conversão visual e renderização de PDF em imagem
 try:
     import fitz  # PyMuPDF
     HAS_PYMUPDF = True
 except ImportError:
     HAS_PYMUPDF = False
 
-# Tenta importar psycopg2 para suporte ao PostgreSQL permanente
 try:
     import psycopg2
     import psycopg2.extras
@@ -106,7 +97,6 @@ def get_db_connection():
     return conn, "sqlite"
 
 def parse_float_ptbr(valor_str):
-    """ Função utilitária global robusta para converter strings PT-BR (preços, pesos, quantidades) em float """
     if not valor_str or not str(valor_str).strip():
         return 0.0
     try:
@@ -120,7 +110,6 @@ def parse_float_ptbr(valor_str):
         return 0.0
 
 def emitir_notificacao_desktop_web(titulo, mensagem):
-    """ Envia uma notificação nativa flutuante no canto da tela via Web Notifications API """
     js_code = f"""
     <script>
     if ("Notification" in window) {{
@@ -139,7 +128,6 @@ def emitir_notificacao_desktop_web(titulo, mensagem):
     components.html(js_code, height=0)
 
 def disparar_notificacao_sistema(romaneio_dados, itens_lista):
-    # Notificação nativa Python (Plyer) caso disponível
     if HAS_PLYER:
         try:
             total_itens = len(itens_lista)
@@ -162,7 +150,6 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
         except Exception as e:
             print(f"Erro ao disparar notificação plyer: {e}")
 
-    # Notificação web no navegador se ativada nas configurações
     if st.session_state.get("notif_desktop_toggle", False):
         total_itens = len(itens_lista)
         num_rom = romaneio_dados.get('numero_romaneio', '')
@@ -195,7 +182,6 @@ def carregar_fornecedores_cached():
     return forns
 
 def remover_fundo_branco(caminho_imagem):
-    """ Torna transparente qualquer fundo branco/claro nas assinaturas no PDF """
     if not caminho_imagem or not os.path.exists(caminho_imagem):
         return caminho_imagem
     try:
@@ -228,7 +214,7 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
         st.warning("Arquivo de anexo não encontrado no servidor.")
 
 # ---------------------------------------------------------
-# FUNÇÃO PARA MARCA D'ÁGUA NO FUNDO DO PDF GERADO
+# FUNÇÃO PARA MARCA D'ÁGUA NO FUNDO DO PDF GERADO (AJUSTADA PARA A ÁREA DA TABELA)
 # ---------------------------------------------------------
 def buscar_caminho_logo():
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
@@ -239,27 +225,27 @@ def buscar_caminho_logo():
     return None
 
 def desenhar_fundo_pdf(canvas_doc, doc_obj):
-    """ Desenha a marca d'água da logo no centro da página no fundo do PDF do Romaneio """
+    """ Desenha a marca d'água da logo posicionada exatamente na área da tabela de itens no fundo do PDF """
     logo_p = buscar_caminho_logo()
     if logo_p and os.path.exists(logo_p):
         try:
             canvas_doc.saveState()
             canvas_doc.setFillAlpha(0.12)
             w_pg, h_pg = doc_obj.pagesize
-            w_img, h_img = 340, 260
+            w_img, h_img = 320, 220
             x = (w_pg - w_img) / 2
-            y = (h_pg - h_img) / 2
+            # Ajuste da coordenada Y para posicionar a marca d'água exatamente na parte circulada (área central/tabela de itens)
+            y = (h_pg / 2) + 40
             canvas_doc.drawImage(logo_p, x, y, width=w_img, height=h_img, mask='auto', preserveAspectRatio=True)
             canvas_doc.restoreState()
         except Exception:
             canvas_doc.restoreState()
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL (GERENCIAMENTO DINÂMICO DE PLANO DE FUNDO)
+# 2. ESTILOS E PADRÃO VISUAL
 # ---------------------------------------------------------
 bg_login_path = buscar_caminho_logo()
 
-# Suporte a Imagem de Fundo Personalizada por Upload ou Preset
 b64_img_fundo = ""
 if "custom_bg_b64" in st.session_state and st.session_state["custom_bg_b64"]:
     b64_img_fundo = st.session_state["custom_bg_b64"]
@@ -270,7 +256,6 @@ elif bg_login_path:
     except Exception:
         b64_img_fundo = ""
 
-# Estilo de Gradiente de Fundo Selecionado
 opcao_tema_bg = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
 
 if b64_img_fundo and opcao_tema_bg == "Logomarca Oficial Supernova":
@@ -1068,7 +1053,6 @@ else:
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
     st.markdown("---")
-    # NOVO CABEÇALHO COM CONFIGURAÇÃO LADO A LADO DO BOTÃO SAIR
     col_info_usr, col_botoes_topo = st.columns([2.5, 2.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
@@ -1077,7 +1061,6 @@ else:
     with col_botoes_topo:
         c_btn1, c_btn2 = st.columns([1.2, 1])
         with c_btn1:
-            # BOTÃO DE CONFIGURAÇÕES LADO A LADO COM O BOTÃO SAIR
             if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo"):
                 st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
         with c_btn2:
@@ -1085,7 +1068,6 @@ else:
                 st.session_state["usuario_logado"] = None
                 st.rerun()
 
-    # PAINEL DE CONFIGURAÇÕES & PLANO DE FUNDO
     if st.session_state.get("exibir_modal_config", False):
         with st.expander("⚙️ Configurações do Aplicativo & Plano de Fundo", expanded=True):
             st.markdown("### 🔔 Notificações Nativas")
@@ -1423,7 +1405,6 @@ else:
                         "observacoes": observacoes_romaneio
                     }
 
-                    # DISPARA NOTIFICAÇÕES (PLIER / TELA DO NAVEGADOR)
                     disparar_notificacao_sistema(romaneio_dict_atual, st.session_state["itens_romaneio"])
 
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
