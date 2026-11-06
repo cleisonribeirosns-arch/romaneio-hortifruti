@@ -209,27 +209,64 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
             canvas_doc.restoreState()
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL (CORES OFICIAIS SUPERNOVA)
+# 2. ESTILOS E PADRÃO VISUAL (GERENCIAMENTO DINÂMICO DE PLANO DE FUNDO)
 # ---------------------------------------------------------
 bg_login_path = buscar_caminho_logo()
 
-b64_img = ""
-if bg_login_path:
+# Suporte a Imagem de Fundo Personalizada por Upload ou Preset
+b64_img_fundo = ""
+if "custom_bg_b64" in st.session_state and st.session_state["custom_bg_b64"]:
+    b64_img_fundo = st.session_state["custom_bg_b64"]
+elif bg_login_path:
     try:
         with open(bg_login_path, "rb") as img_f:
-            b64_img = base64.b64encode(img_f.read()).decode()
+            b64_img_fundo = base64.b64encode(img_f.read()).decode()
     except Exception:
-        b64_img = ""
+        b64_img_fundo = ""
 
-if b64_img:
+# Estilo de Gradiente de Fundo Selecionado
+opcao_tema_bg = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
+
+if b64_img_fundo and opcao_tema_bg == "Logomarca Oficial Supernova":
     css_fundo = f"""
     .stApp {{
-        background-image: linear-gradient(rgba(14, 20, 16, 0.90), rgba(14, 20, 16, 0.94)), url("data:image/jpeg;base64,{b64_img}") !important;
+        background-image: linear-gradient(rgba(14, 20, 16, 0.90), rgba(14, 20, 16, 0.94)), url("data:image/jpeg;base64,{b64_img_fundo}") !important;
         background-size: cover !important;
         background-position: center !important;
         background-repeat: no-repeat !important;
         background-attachment: fixed !important;
     }}
+    """
+elif b64_img_fundo and opcao_tema_bg == "Imagem Personalizada (Upload)":
+    css_fundo = f"""
+    .stApp {{
+        background-image: linear-gradient(rgba(10, 15, 12, 0.85), rgba(10, 15, 12, 0.92)), url("data:image/jpeg;base64,{b64_img_fundo}") !important;
+        background-size: cover !important;
+        background-position: center !important;
+        background-repeat: no-repeat !important;
+        background-attachment: fixed !important;
+    }}
+    """
+elif opcao_tema_bg == "Verde Supernova (Escuro)":
+    css_fundo = """
+    .stApp {
+        background: linear-gradient(135deg, #0A140C 0%, #142318 50%, #1A202C 100%) !important;
+        background-attachment: fixed !important;
+    }
+    """
+elif opcao_tema_bg == "Azul Corporativo Executivo":
+    css_fundo = """
+    .stApp {
+        background: linear-gradient(135deg, #0D1B2A 0%, #1B263B 50%, #415A77 100%) !important;
+        background-attachment: fixed !important;
+    }
+    """
+elif opcao_tema_bg == "Grafite High-Tech":
+    css_fundo = """
+    .stApp {
+        background: linear-gradient(135deg, #121212 0%, #1E1E1E 50%, #2D2D2D 100%) !important;
+        background-attachment: fixed !important;
+    }
     """
 else:
     css_fundo = """
@@ -984,35 +1021,81 @@ else:
     
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
-    # CONFIGURAÇÕES NA BARRA LATERAL (INCLUINDO OPÇÃO DE NOTIFICAÇÕES NATIVAS NA TELA)
-    st.sidebar.markdown("---")
-    st.sidebar.header("⚙️ Configurações do App")
-    notif_desktop_toggle = st.sidebar.toggle(
-        "🔔 Notificações na Tela (Desktop)", 
-        value=st.session_state.get("notif_desktop_toggle", False),
-        help="Exibe alertas flutuantes no canto da tela (estilo WhatsApp) quando novos romaneios forem cadastrados."
-    )
-    st.session_state["notif_desktop_toggle"] = notif_desktop_toggle
-
-    if notif_desktop_toggle:
-        components.html("""
-        <script>
-        if ("Notification" in window && Notification.permission !== "granted") {
-            Notification.requestPermission();
-        }
-        </script>
-        """, height=0)
-
     st.markdown("---")
-    col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
+    # NOVO CABEÇALHO COM CONFIGURAÇÃO LADO A LADO DO BOTÃO SAIR
+    col_info_usr, col_botoes_topo = st.columns([2.5, 2.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
-    with col_logout:
-        if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
-            st.session_state["usuario_logado"] = None
-            st.rerun()
+    
+    with col_botoes_topo:
+        c_btn1, c_btn2 = st.columns([1.2, 1])
+        with c_btn1:
+            # BOTÃO DE CONFIGURAÇÕES LADO A LADO COM O BOTÃO SAIR
+            if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo"):
+                st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
+        with c_btn2:
+            if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
+                st.session_state["usuario_logado"] = None
+                st.rerun()
+
+    # PAINEL DE CONFIGURAÇÕES & PLANO DE FUNDO
+    if st.session_state.get("exibir_modal_config", False):
+        with st.expander("⚙️ Configurações do Aplicativo & Plano de Fundo", expanded=True):
+            st.markdown("### 🔔 Notificações Nativas")
+            notif_desktop_toggle = st.toggle(
+                "Ativar Notificações na Tela (Desktop / Navegador)", 
+                value=st.session_state.get("notif_desktop_toggle", False),
+                help="Exibe alertas flutuantes no canto da tela estilo pop-up quando novos romaneios forem cadastrados."
+            )
+            st.session_state["notif_desktop_toggle"] = notif_desktop_toggle
+
+            if notif_desktop_toggle:
+                components.html("""
+                <script>
+                if ("Notification" in window && Notification.permission !== "granted") {
+                    Notification.requestPermission();
+                }
+                </script>
+                """, height=0)
+
+            st.markdown("---")
+            st.markdown("### 🖼️ Personalizar Imagem de Fundo (Wallpaper)")
+            opcoes_temas_bg = [
+                "Logomarca Oficial Supernova",
+                "Verde Supernova (Escuro)",
+                "Azul Corporativo Executivo",
+                "Grafite High-Tech",
+                "Imagem Personalizada (Upload)"
+            ]
+            tema_atual = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
+            idx_tema = opcoes_temas_bg.index(tema_atual) if tema_atual in opcoes_temas_bg else 0
             
+            sel_tema_bg = st.selectbox(
+                "Selecione o Estilo / Papel de Parede do Sistema",
+                options=opcoes_temas_bg,
+                index=idx_tema,
+                key="sel_tema_bg_input"
+            )
+            st.session_state["tema_bg_selecionado"] = sel_tema_bg
+
+            if sel_tema_bg == "Imagem Personalizada (Upload)":
+                up_bg_file = st.file_uploader("Enviar Nova Imagem de Fundo (JPG/PNG)", type=["jpg", "jpeg", "png"], key="up_custom_bg_file")
+                if up_bg_file is not None:
+                    try:
+                        bg_bytes = up_bg_file.getbuffer()
+                        b64_new_bg = base64.b64encode(bg_bytes).decode('utf-8')
+                        st.session_state["custom_bg_b64"] = b64_new_bg
+                        st.success("Imagem de fundo personalizada aplicada com sucesso!")
+                    except Exception as e:
+                        st.error(f"Erro ao processar imagem de fundo: {e}")
+            
+            col_salv_cfg1, col_salv_cfg2 = st.columns([2, 1])
+            with col_salv_cfg1:
+                if st.button("💾 Aplicar e Fechar Configurações", type="primary", key="btn_fechar_cfg_painel"):
+                    st.session_state["exibir_modal_config"] = False
+                    st.rerun()
+
     if is_conferente:
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
