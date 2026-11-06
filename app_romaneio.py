@@ -19,10 +19,11 @@ from reportlab.platypus import (
 )
 import sqlite3
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 
-# Tenta importar plyer para notificação nativa na tela do computador (Windows)
+# Tenta importar plyer para notificação nativa física no Windows (caso executado localmente via python)
 try:
     from plyer import notification
     HAS_PLYER = True
@@ -72,29 +73,58 @@ def parse_float_ptbr(valor_str):
     except Exception:
         return 0.0
 
-def disparar_notificacao_tela(romaneio_dados, itens_lista):
-    if not HAS_PLYER:
-        return
-    try:
+def emitir_notificacao_desktop_web(titulo, mensagem):
+    """ Envia uma notificação nativa flutuante no canto da tela via Web Notifications API """
+    js_code = f"""
+    <script>
+    if ("Notification" in window) {{
+        if (Notification.permission === "granted") {{
+            new Notification("{titulo}", {{ body: "{mensagem}", icon: "https://cdn-icons-png.flaticon.com/512/3602/3602145.png" }});
+        }} else if (Notification.permission !== "denied") {{
+            Notification.requestPermission().then(function (permission) {{
+                if (permission === "granted") {{
+                    new Notification("{titulo}", {{ body: "{mensagem}" }});
+                }}
+            }});
+        }}
+    }}
+    </script>
+    """
+    components.html(js_code, height=0)
+
+def disparar_notificacao_sistema(romaneio_dados, itens_lista):
+    # Notificação nativa Python (Plyer) caso disponível
+    if HAS_PLYER:
+        try:
+            total_itens = len(itens_lista)
+            primeiro_item = itens_lista[0]['produto'] if total_itens > 0 else "Diversos"
+            loja_exibida = romaneio_dados.get('loja', '')
+            fornecedor_exibido = romaneio_dados.get('fornecedor', '')
+            num_rom = romaneio_dados.get('numero_romaneio', '')
+            
+            mensagem_detalhes = (
+                f"Loja: {loja_exibida}\n"
+                f"Fornecedor: {fornecedor_exibido}\n"
+                f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
+            )
+            notification.notify(
+                title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
+                message=mensagem_detalhes,
+                app_name="HortiControl Supernova",
+                timeout=10
+            )
+        except Exception as e:
+            print(f"Erro ao disparar notificação plyer: {e}")
+
+    # Notificação web no navegador se ativada nas configurações
+    if st.session_state.get("notif_desktop_toggle", False):
         total_itens = len(itens_lista)
-        primeiro_item = itens_lista[0]['produto'] if total_itens > 0 else "Diversos"
-        loja_exibida = romaneio_dados.get('loja', '')
-        fornecedor_exibido = romaneio_dados.get('fornecedor', '')
         num_rom = romaneio_dados.get('numero_romaneio', '')
-        
-        mensagem_detalhes = (
-            f"Loja: {loja_exibida}\n"
-            f"Fornecedor: {fornecedor_exibido}\n"
-            f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
+        forn = romaneio_dados.get('fornecedor', '')
+        emitir_notificacao_desktop_web(
+            titulo=f"📦 Novo Romaneio {num_rom}!",
+            mensagem=f"Fornecedor: {forn} | Total de itens: {total_itens}"
         )
-        notification.notify(
-            title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
-            message=mensagem_detalhes,
-            app_name="HortiControl Supernova",
-            timeout=10
-        )
-    except Exception as e:
-        print(f"Erro ao disparar notificação: {e}")
 
 def spinner_supernova(mensagem="Carregando dados..."):
     with st.spinner(mensagem):
@@ -953,6 +983,26 @@ else:
     is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
     
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
+
+    # CONFIGURAÇÕES NA BARRA LATERAL (INCLUINDO OPÇÃO DE NOTIFICAÇÕES NATIVAS NA TELA)
+    st.sidebar.markdown("---")
+    st.sidebar.header("⚙️ Configurações do App")
+    notif_desktop_toggle = st.sidebar.toggle(
+        "🔔 Notificações na Tela (Desktop)", 
+        value=st.session_state.get("notif_desktop_toggle", False),
+        help="Exibe alertas flutuantes no canto da tela (estilo WhatsApp) quando novos romaneios forem cadastrados."
+    )
+    st.session_state["notif_desktop_toggle"] = notif_desktop_toggle
+
+    if notif_desktop_toggle:
+        components.html("""
+        <script>
+        if ("Notification" in window && Notification.permission !== "granted") {
+            Notification.requestPermission();
+        }
+        </script>
+        """, height=0)
+
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
     with col_info_usr:
@@ -1244,7 +1294,8 @@ else:
                         "observacoes": observacoes_romaneio
                     }
 
-                    disparar_notificacao_tela(romaneio_dict_atual, st.session_state["itens_romaneio"])
+                    # DISPARA NOTIFICAÇÕES (PLIER / TELA DO NAVEGADOR)
+                    disparar_notificacao_sistema(romaneio_dict_atual, st.session_state["itens_romaneio"])
 
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
@@ -1252,7 +1303,7 @@ else:
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso! Notificação enviada para a tela.")
+                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso! Notificação enviada.")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
@@ -1264,8 +1315,7 @@ else:
                 label=f"📥 Descarregar PDF - {st.session_state['ultimo_num_romaneio']}",
                 data=st.session_state["ultimo_pdf_bytes"],
                 file_name=f"{st.session_state['ultimo_num_romaneio']}.pdf",
-                mime="application/pdf",
-                type="primary"
+                mime="application/pdf", type="primary"
             )
 
     elif menu == "Consultar Romaneios":
@@ -1354,8 +1404,7 @@ else:
                                                     cur_b64.execute("SELECT foto_b64 FROM romaneios WHERE id = %s" if HAS_POSTGRES else "SELECT foto_b64 FROM romaneios WHERE id = ?", (id_rom_sel,))
                                                     res_b64 = cur_b64.fetchone()
                                                     conn_b64.close()
-                                                    b64_val = res_b64[0] if res_b64 else None
-                                                    exibir_foto_modal(cam_foto, b64_val)
+                                                    exibir_foto_modal(cam_foto, res_b64[0] if res_b64 else None)
                                             else:
                                                 st.info("Sem anexo anexado.")
 
