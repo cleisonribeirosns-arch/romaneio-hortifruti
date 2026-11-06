@@ -4,6 +4,29 @@ import io
 import os
 import pandas as pd
 from PIL import Image
+
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DE PÁGINA (ÍCONE E TÍTULO PERSONALIZADOS)
+# ---------------------------------------------------------
+icone_pagina = "📦"
+if os.path.exists("logo_romaneio.png"):
+    try:
+        icone_pagina = Image.open("logo_romaneio.png")
+    except Exception:
+        icone_pagina = "📦"
+
+st.set_page_config(
+    page_title="HortiControl - Supernova",
+    page_icon=icone_pagina,
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+import base64
+from datetime import datetime, time, timedelta
+import io
+import os
+import pandas as pd
+from PIL import Image
 import plotly.express as px
 import plotly.graph_objects as go
 from reportlab.lib import colors
