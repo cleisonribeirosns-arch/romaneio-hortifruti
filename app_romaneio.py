@@ -23,6 +23,27 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+# ---------------------------------------------------------
+# CONFIGURAÇÃO DE PWA (MANIFESTO PARA ÍCONE E NOME NO TELEMÓVEL)
+# ---------------------------------------------------------
+pwa_manifest_code = """
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{
+  'name': 'HortiControl Supernova',
+  'short_name': 'HortiControl',
+  'start_url': '.',
+  'display': 'standalone',
+  'background_color': '#0E140C',
+  'theme_color': '#2E7D32',
+  'icons': [
+    {
+      'src': 'logo_romaneio.png.jpg',
+      'sizes': '512x512',
+      'type': 'image/jpeg'
+    }
+  ]
+}">
+"""
+st.markdown(pwa_manifest_code, unsafe_allow_html=True)
 import base64
 from datetime import datetime, time, timedelta
 import io
