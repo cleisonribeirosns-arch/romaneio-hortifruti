@@ -22,13 +22,6 @@ import streamlit as st
 from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 
-# Tenta importar plyer para notificação nativa na tela do computador (Windows)
-try:
-    from plyer import notification
-    HAS_PLYER = True
-except ImportError:
-    HAS_PLYER = False
-
 # Tenta importar fitz (PyMuPDF) para conversão visual e renderização de PDF em imagem
 try:
     import fitz  # PyMuPDF
@@ -45,7 +38,31 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# FUNÇÕES DE CONEXÃO E AUXILIARES
+# 1. CONFIGURAÇÃO DA PÁGINA
+# ---------------------------------------------------------
+logo_icon = None
+for nome in [
+    "logo_romaneio.png.jpg",
+    "logo_romaneio.png",
+    "logo.png",
+    "Tela de login.jpeg",
+    "tela_de_login.jpeg",
+]:
+    if os.path.exists(nome):
+        logo_icon = nome
+        break
+
+st.set_page_config(
+    page_title="HortiControl Supernova - Recebimento Hortifrúti",
+    page_icon=logo_icon if logo_icon else "📦",
+    layout="wide",
+)
+
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+
+# ---------------------------------------------------------
+# CONEXÃO SEGURA COM BANCO DE DADOS
 # ---------------------------------------------------------
 def get_db_connection():
     if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
@@ -58,34 +75,9 @@ def get_db_connection():
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
 
-def disparar_notificacao_tela(romaneio_dados, itens_lista):
-    if not HAS_PLYER:
-        return
-    try:
-        total_itens = len(itens_lista)
-        primeiro_item = itens_lista[0]['produto'] if total_itens > 0 else "Diversos"
-        loja_exibida = romaneio_dados.get('loja', '')
-        fornecedor_exibido = romaneio_dados.get('fornecedor', '')
-        num_rom = romaneio_dados.get('numero_romaneio', '')
-        
-        mensagem_detalhes = (
-            f"Loja: {loja_exibida}\n"
-            f"Fornecedor: {fornecedor_exibido}\n"
-            f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
-        )
-        notification.notify(
-            title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
-            message=mensagem_detalhes,
-            app_name="HortiControl Supernova",
-            timeout=10
-        )
-    except Exception as e:
-        print(f"Erro ao disparar notificação: {e}")
-
-def spinner_supernova(mensagem="Carregando dados..."):
-    with st.spinner(mensagem):
-        pass
-
+# ---------------------------------------------------------
+# CACHE DE DADOS (MELHORIA DE DESEMPENHO - ORDEM DESC: MAIS ANTIGO NO FINAL)
+# ---------------------------------------------------------
 @st.cache_data(ttl=60)
 def carregar_produtos_cached():
     conn, db_type = get_db_connection()
@@ -104,84 +96,145 @@ def carregar_fornecedores_cached():
     conn.close()
     return forns
 
-def remover_fundo_branco(caminho_imagem):
-    """ Torna transparente qualquer fundo branco/claro nas assinaturas no PDF """
-    if not caminho_imagem or not os.path.exists(caminho_imagem):
-        return caminho_imagem
-    try:
-        img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
-        newData = []
-        for item in datas:
-            if item[0] > 180 and item[1] > 180 and item[2] > 180:
-                newData.append((255, 255, 255, 0))
-            else:
-                newData.append(item)
-        img.putdata(newData)
-        caminho_transparente = caminho_imagem.replace(".png", "_transp.png")
-        img.save(caminho_transparente, "PNG")
-        return caminho_transparente
-    except Exception:
-        return caminho_imagem
-
-def exibir_foto_modal(caminho_foto, b64_foto=None):
-    if b64_foto:
-        try:
-            img_data = base64.b64decode(b64_foto)
-            st.image(img_data, use_container_width=True)
-            return
-        except Exception:
-            pass
-    if caminho_foto and os.path.exists(caminho_foto):
-        st.image(caminho_foto, use_container_width=True)
+# ---------------------------------------------------------
+# FUNÇÃO DE SPINNER / FEEDBACK COM LOGOTIPO DO SUPERNOVA
+# ---------------------------------------------------------
+def spinner_supernova(mensagem="A carregar dados do Supernova..."):
+    logo_path_spin = None
+    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
+        if os.path.exists(nome):
+            logo_path_spin = nome
+            break
+    if logo_path_spin:
+        with open(logo_path_spin, "rb") as img_f:
+            b64_spin = base64.b64encode(img_f.read()).decode()
+        return st.markdown(f"""
+        <div style="display: flex; align-items: center; justify-content: center; gap: 15px; background: rgba(20, 24, 30, 0.95); padding: 15px 25px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.2); margin: 15px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+            <img src="data:image/jpeg;base64,{b64_spin}" style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; animation: pulse 1.5s infinite;" />
+            <span style="color: #FFFFFF; font-weight: 800; font-size: 15px; letter-spacing: 0.5px;">{mensagem}</span>
+        </div>
+        <style>
+        @keyframes pulse {{
+            0% {{ transform: scale(0.95); opacity: 0.8; }}
+            50% {{ transform: scale(1.05); opacity: 1; filter: drop-shadow(0 0 8px #4CAF50); }}
+            100% {{ transform: scale(0.95); opacity: 0.8; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
     else:
-        st.warning("Arquivo de anexo não encontrado no servidor.")
+        return st.spinner(mensagem)
 
 # ---------------------------------------------------------
-# FUNÇÃO PARA MARCA D'ÁGUA NO FUNDO DO PDF GERADO
+# FUNÇÃO DE PERSISTÊNCIA DE ANEXOS (BASE64 NO BANCO)
 # ---------------------------------------------------------
-def buscar_caminho_logo():
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                return pos_p
-    return None
-
-def desenhar_fundo_pdf(canvas_doc, doc_obj):
-    """ Desenha a marca d'água da logo no centro da página no fundo do PDF do Romaneio """
-    logo_p = buscar_caminho_logo()
-    if logo_p and os.path.exists(logo_p):
-        try:
-            canvas_doc.saveState()
-            canvas_doc.setFillAlpha(0.12)  # Suave opacidade no fundo
-            # Desenha centralizada na folha
-            w_pg, h_pg = doc_obj.pagesize
-            w_img, h_img = 340, 260
-            x = (w_pg - w_img) / 2
-            y = (h_pg - h_img) / 2
-            canvas_doc.drawImage(logo_p, x, y, width=w_img, height=h_img, mask='auto', preserveAspectRatio=True)
-            canvas_doc.restoreState()
-        except Exception:
-            canvas_doc.restoreState()
+def salvar_arquivo_fisico_do_b64(caminho_alvo, b64_str):
+    if not caminho_alvo or not b64_str:
+        return
+    try:
+        if not os.path.exists(caminho_alvo) or os.path.getsize(caminho_alvo) == 0:
+            diretorio = os.path.dirname(caminho_alvo)
+            if diretorio and not os.path.exists(diretorio):
+                os.makedirs(diretorio)
+            with open(caminho_alvo, "wb") as f_out:
+                f_out.write(base64.b64decode(b64_str))
+    except Exception:
+        pass
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL (CORES OFICIAIS SUPERNOVA)
+# MODAL DE VISUALIZAÇÃO DE ANEXOS
 # ---------------------------------------------------------
-bg_login_path = buscar_caminho_logo()
+@st.dialog("🖼️ Visualizador de Documentos", width="large")
+def exibir_foto_modal(caminho_foto, b64_dados=None):
+    if not caminho_foto and b64_dados:
+        caminho_foto = os.path.join("uploads", "documento_anexado.pdf")
+    if b64_dados:
+        salvar_arquivo_fisico_do_b64(caminho_foto, b64_dados)
+    if caminho_foto and os.path.exists(caminho_foto) and os.path.getsize(caminho_foto) > 0:
+        nome_arquivo = os.path.basename(caminho_foto)
+        is_pdf = caminho_foto.lower().endswith(".pdf")
+        ext_tag = "PDF" if is_pdf else "IMG"
+        bg_tag_color = "#EA4335" if is_pdf else "#4285F4"
+        st.markdown(f"""
+        <div style="background-color: #202124; padding: 12px 18px; border-radius: 8px 8px 0 0; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #3c4043; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="background-color: {bg_tag_color}; color: white; padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 11px;">{ext_tag}</span>
+                <span style="color: #ffffff; font-weight: 600; font-size: 15px;">{nome_arquivo}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        if is_pdf:
+            pdf_renderizado = False
+            if HAS_PYMUPDF:
+                try:
+                    doc_pdf = fitz.open(caminho_foto)
+                    total_paginas = len(doc_pdf)
+                    st.markdown(f"<p style='text-align: center; color: #9aa0a6; font-size: 13px; margin-bottom: 12px;'>PDF convertido visualmente • {total_paginas} página(s)</p>", unsafe_allow_html=True)
+                    for page_index in range(total_paginas):
+                        page = doc_pdf[page_index]
+                        pix = page.get_pixmap(dpi=150)
+                        img_bytes = pix.tobytes("png")
+                        st.markdown(f"""
+                        <div style="background-color: #2d2e30; padding: 6px; border-radius: 6px; margin-bottom: 6px; text-align: center; border: 1px solid #3c4043;">
+                            <p style="color: #bdc1c6; font-size: 12px; margin: 0; font-weight: bold;">Página {page_index + 1} de {total_paginas}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        st.image(img_bytes, use_container_width=True)
+                    pdf_renderizado = True
+                except Exception as e:
+                    st.warning(f"Erro ao processar páginas do PDF: {e}")
+            if not pdf_renderizado:
+                st.markdown("""
+                <div style="background-color: #2d2e30; padding: 20px; border-radius: 8px; text-align: center; border: 1px solid #3c4043; margin-bottom: 15px;">
+                    <p style="color: #ffffff; font-size: 15px; font-weight: bold; margin-bottom: 8px;">Visualização direta de PDF restrita pelo navegador</p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.markdown("---")
+                with open(caminho_foto, "rb") as f_pdf:
+                    st.download_button(
+                        label=f"📥 Descarregar Ficheiro PDF Original ({nome_arquivo})",
+                        data=f_pdf.read(),
+                        file_name=nome_arquivo,
+                        mime="application/pdf",
+                        type="primary"
+                    )
+        else:
+            st.image(caminho_foto, use_container_width=True, caption="Documento Anexado")
+            with open(caminho_foto, "rb") as f_img:
+                img_bytes = f_img.read()
+                st.download_button(
+                    label=f"📥 Descarregar Imagem ({nome_arquivo})",
+                    data=img_bytes,
+                    file_name=nome_arquivo,
+                    mime="application/jpeg",
+                    type="primary"
+                )
+    else:
+        st.error("Ficheiro de anexo não encontrado no servidor ou o registo não possui conteúdo binário válido.")
+
+# ---------------------------------------------------------
+# 2. ESTILOS E PADRÃO VISUAL
+# ---------------------------------------------------------
+bg_login_path = None
+for nome_bg in [
+    "Tela-de-login.jpeg.ico",
+    "Tela-de-login.jpeg",
+    "Tela de login.jpeg",
+    "Tela de login.jpeg.jpeg",
+    "tela_de_login.jpeg",
+]:
+    if os.path.exists(nome_bg):
+        bg_login_path = nome_bg
+        break
 
 b64_img = ""
 if bg_login_path:
-    try:
-        with open(bg_login_path, "rb") as img_f:
-            b64_img = base64.b64encode(img_f.read()).decode()
-    except Exception:
-        b64_img = ""
+    with open(bg_login_path, "rb") as img_f:
+        b64_img = base64.b64encode(img_f.read()).decode()
 
 if b64_img:
     css_fundo = f"""
     .stApp {{
-        background-image: linear-gradient(rgba(14, 20, 16, 0.90), rgba(14, 20, 16, 0.94)), url("data:image/jpeg;base64,{b64_img}") !important;
+        background-image: linear-gradient(rgba(10,12,10,0.92), rgba(10,12,10,0.92)), url("data:image/jpeg;base64,{b64_img}") !important;
         background-size: cover !important;
         background-position: center !important;
         background-repeat: no-repeat !important;
@@ -191,7 +244,7 @@ if b64_img:
 else:
     css_fundo = """
     .stApp {
-        background: linear-gradient(135deg, #0A140C 0%, #142318 50%, #1A202C 100%) !important;
+        background: linear-gradient(135deg, #121417 0%, #1A1D24 100%) !important;
         background-attachment: fixed !important;
     }
     """
@@ -208,72 +261,68 @@ st.markdown(
     }}
     h1, h2, h3, h4, h5, h6, p, span, div, label {{
         color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8) !important;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8) !important;
     }}
     .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p {{
         font-size: 14px !important;
         font-weight: 700 !important;
         color: #FFFFFF !important;
     }}
-    
-    /* MENU RADIO COM CORES PADRÃO SUPERNOVA */
     div[data-testid="stRadio"] > div {{
         background: transparent !important;
         padding: 0px !important;
         border: none !important;
         box-shadow: none !important;
-        gap: 10px !important;
+        gap: 12px !important;
         flex-wrap: wrap !important;
         display: flex !important;
     }}
     div[data-testid="stRadio"] label {{
-        background: linear-gradient(135deg, rgba(20, 35, 25, 0.95), rgba(15, 25, 20, 0.98)) !important;
-        padding: 12px 18px !important;
+        background: linear-gradient(135deg, rgba(28, 32, 38, 0.95), rgba(18, 21, 26, 0.98)) !important;
+        padding: 14px 20px !important;
         border-radius: 10px !important;
-        border: 1px solid rgba(76, 175, 80, 0.4) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
         box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.4) !important;
         margin-bottom: 6px !important;
-        transition: all 0.25s ease-in-out !important;
+        transition: all 0.2s ease-in-out !important;
         cursor: pointer !important;
         flex: 1 1 auto !important;
-        min-width: 180px !important;
+        min-width: 210px !important;
         justify-content: center !important;
     }}
     div[data-testid="stRadio"] label:hover {{
-        background: linear-gradient(135deg, rgba(40, 75, 50, 0.95), rgba(25, 50, 35, 0.98)) !important;
-        border-color: #4CAF50 !important;
+        background: linear-gradient(135deg, rgba(38, 44, 52, 0.98), rgba(24, 28, 34, 1)) !important;
+        border-color: rgba(255, 255, 255, 0.35) !important;
         transform: translateY(-2px) !important;
     }}
     div[data-testid="stRadio"] label[data-checked="true"] {{
-        background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
-        border: 2px solid #81C784 !important;
-        box-shadow: 0px 6px 16px rgba(76, 175, 80, 0.4) !important;
+        background: linear-gradient(135deg, #2D3748, #1A202C) !important;
+        border: 1px solid rgba(255, 255, 255, 0.8) !important;
+        box-shadow: 0px 6px 16px rgba(0, 0, 0, 0.6) !important;
     }}
     div[data-testid="stRadio"] label p {{
         color: #FFFFFF !important;
         font-size: 14px !important;
         font-weight: 800 !important;
     }}
-    
-    /* EXPANDERS E CARDS COM BORDA E DESTAQUE VERDE SUPERNOVA */
     div[data-testid="stExpander"] {{
-        background: rgba(18, 28, 22, 0.92) !important;
-        border: 1px solid rgba(76, 175, 80, 0.3) !important;
-        border-radius: 10px !important;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.5) !important;
+        background: rgba(20, 24, 30, 0.9) !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        border-radius: 8px !important;
+        box-shadow: 0px 4px 10px rgba(0,0,0,0.4) !important;
     }}
-    
     img[data-testid="stImage"] {{
         background: transparent !important;
-        filter: drop-shadow(2px 2px 6px rgba(0,0,0,0.6)) !important;
-        max-width: 95px !important;
+        mix-blend-mode: multiply !important;
+        filter: drop-shadow(2px 2px 4px rgba(0,0,0,0.4)) !important;
+        max-width: 85px !important;
         width: 100% !important;
         height: auto !important;
         margin: 0 auto !important;
         display: block !important;
     }}
     .titulo-logo {{
-        font-size: 2.1rem !important;
+        font-size: 2rem !important;
         font-weight: 900 !important;
         line-height: 1.1 !important;
         margin-bottom: 0px !important;
@@ -281,7 +330,7 @@ st.markdown(
     }}
     .palavra-sup-mercado {{
         color: #4CAF50 !important;
-        font-size: 1.25rem !important;
+        font-size: 1.2rem !important;
         font-weight: 800 !important;
         font-style: italic !important;
     }}
@@ -297,7 +346,7 @@ st.markdown(
         color: #FFFFFF !important;
         font-style: italic !important;
         font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.6rem !important;
+        font-size: 2.5rem !important;
     }}
     div[data-baseweb="input"] input,
     div[data-baseweb="base-input"] input,
@@ -316,7 +365,7 @@ st.markdown(
     div[data-baseweb="select"] {{
         background-color: #F8F9FA !important;
         border-radius: 6px !important;
-        border: 2px solid #2E7D32 !important;
+        border: 2px solid #4A5568 !important;
     }}
     div[data-baseweb="select"] span {{
         color: #111111 !important;
@@ -324,37 +373,23 @@ st.markdown(
     }}
     div[data-testid="stFileUploader"],
     div[data-testid="stFileUploader"] section {{
-        background: rgba(22, 35, 26, 0.9) !important;
-        border: 2px solid rgba(76, 175, 80, 0.5) !important;
+        background: rgba(30, 35, 42, 0.85) !important;
+        border: 2px solid rgba(255, 255, 255, 0.4) !important;
         border-radius: 8px !important;
     }}
-    
-    /* BOTÕES COM AS CORES DA EMPRESA (VERDE E DESTAQUES EM VERMELHO/DARK) */
     button[kind="primary"], .stButton > button[kind="primary"] {{
-        background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
+        background-color: #2D3748 !important;
         color: #FFFFFF !important;
-        border: 2px solid #81C784 !important;
+        border: 2px solid #FFFFFF !important;
         font-weight: bold !important;
         font-size: 15px !important;
         border-radius: 8px !important;
         width: 100% !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.5) !important;
-        transition: all 0.2s ease-in-out !important;
+        box-shadow: 0px 4px 8px rgba(0,0,0,0.5) !important;
     }}
     button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
-        background: linear-gradient(135deg, #388E3C, #2E7D32) !important;
-        border-color: #A5D6A7 !important;
-        transform: scale(1.01) !important;
-    }}
-    button[kind="secondary"], .stButton > button[kind="secondary"] {{
-        background: linear-gradient(135deg, #C62828, #8E0000) !important;
-        color: #FFFFFF !important;
-        border: 1px solid #FF8A80 !important;
-        font-weight: bold !important;
-        border-radius: 8px !important;
-    }}
-    button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
-        background: linear-gradient(135deg, #D32F2F, #B71C1C) !important;
+        background-color: #4A5568 !important;
+        border-color: #FFFFFF !important;
     }}
     {css_fundo}
     </style>
@@ -648,7 +683,15 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
     style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
     
-    logo_path = buscar_caminho_logo()
+    logo_path = None
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                logo_path = pos_p
+                break
+        if logo_path:
+            break
     if logo_path and os.path.exists(logo_path):
         logo_img_header = RLImage(logo_path, width=70, height=50)
     else:
@@ -714,194 +757,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     ass_table = Table([[col_conf_cell, col_ent_cell]], colWidths=[270, 270])
     ass_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("VALIGN", (0, 0), (-1, -1), "BOTTOM"), ("ALIGN", (0, 0), (-1, -1), "CENTER"), ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
     story.append(ass_table)
-    
-    # Aplica o desenho da logo como marca d'água de fundo em todas as páginas do PDF
-    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_produtos(produtos_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=9)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=9)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=9, textColor=colors.whitesmoke)
-    
-    logo_path = buscar_caminho_logo()
-    if logo_path and os.path.exists(logo_path):
-        logo_img_header = RLImage(logo_path, width=70, height=50)
-    else:
-        logo_img_header = Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Produtos Cadastrados", styles["Normal"]), Paragraph(f"<b>Data:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y')}<br/><b>Total:</b> {len(produtos_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("ALIGN", (0, 0), (0, 0), "CENTER"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 15))
-    table_content = [[Paragraph("Item", style_header_center), Paragraph("Cód. Produto", style_header_center), Paragraph("Código de Barras", style_header_center), Paragraph("Nome do Produto", style_header_left), Paragraph("UND", style_header_center)]]
-    for idx, p in enumerate(produtos_data, 1):
-        table_content.append([Paragraph(str(idx), style_center), Paragraph(str(p[2] or "S/N"), style_center), Paragraph(str(p[1] or "S/N"), style_center), Paragraph(str(p[3]), style_left), Paragraph(str(p[4]), style_center)])
-    prod_table = Table(table_content, colWidths=[35, 95, 125, 235, 50])
-    prod_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("BOTTOMPADDING", (0, 0), (-1, -1), 5), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(prod_table)
-    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_bonificacoes(df_bonf_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = buscar_caminho_logo()
-    logo_img_header = RLImage(logo_path, width=70, height=50) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Relatório de Controle de Bonificação", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_bonf_data)}", styles["Normal"])]], colWidths=[80, 310, 150])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 15))
-    table_content = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data Entrada", style_header_center), Paragraph("Valor (R$)", style_header_left), Paragraph("Status", style_header_center), Paragraph("Produto Hortifrúti", style_header_left)]]
-    tot_val = 0.0
-    for _, r in df_bonf_data.iterrows():
-        v_b = float(r["valor_bonificacao"]) if r["valor_bonificacao"] else 0.0
-        tot_val += v_b
-        t_bonf = r.get("tipo_bonificacao", "Bonificação")
-        table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
-    bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
-    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(bonf_table)
-    story.append(Spacer(1, 10))
-    total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
-    story.append(total_table)
-    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_baixas(df_baixas_data):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_left = ParagraphStyle('HLeft', parent=styles['Normal'], alignment=0, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = buscar_caminho_logo()
-    logo_img_header = RLImage(logo_path, width=70, height=45) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA<br/>CIDADE</b>", styles["Normal"])
-    header_table = Table([[logo_img_header, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>HortiControl - Registro de Baixas de Avarias", styles["Normal"]), Paragraph(f"<b>Data Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}<br/><b>Total Registros:</b> {len(df_baixas_data)}", styles["Normal"])]], colWidths=[80, 520, 192])
-    header_table.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
-    story.append(header_table)
-    story.append(Spacer(1, 12))
-    table_content = [[
-        Paragraph("LOJAS", style_header_center),
-        Paragraph("Data Baixa", style_header_center),
-        Paragraph("Ref. Bon. transferen", style_header_center),
-        Paragraph("NF da baixa", style_header_center),
-        Paragraph("NF de B. ENTRADA", style_header_center),
-        Paragraph("Produto Hortifrúti", style_header_left),
-        Paragraph("Qtd (kg/cx)", style_header_center),
-        Paragraph("Valor Total Avaria (R$)", style_header_left),
-        Paragraph("Saldo", style_header_left),
-        Paragraph("Saldo Total Utilizado", style_header_left)
-    ]]
-    tot_val_avarias = 0.0
-    for _, r in df_baixas_data.iterrows():
-        v_av = float(r["valor_total_avaria"]) if r["valor_total_avaria"] else 0.0
-        tot_val_avarias += v_av
-        s_nota = float(r.get("saldo_restante_calculado", r["saldo_restante_nota"])) if r["saldo_restante_nota"] else 0.0
-        s_util = float(r.get("saldo_total_utilizado", 0.0))
-        qtd_val = float(r["quantidade_kg_cx"]) if r["quantidade_kg_cx"] else 0.0
-        table_content.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_baixa"] if r["nf_baixa"] else "S/Anexo"), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(qtd_val, 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(v_av, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_nota, 2)}", style_left),
-            Paragraph(f"R$ {fmt_ptbr(s_util, 2)}", style_left),
-        ])
-    baixas_table = Table(table_content, colWidths=[70, 95, 85, 75, 85, 120, 60, 85, 65, 52])
-    baixas_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
-    story.append(baixas_table)
-    story.append(Spacer(1, 10))
-    total_table = Table([[f"VALOR TOTAL DAS AVARIAS: R$ {fmt_ptbr(tot_val_avarias, 2)}"]], colWidths=[792])
-    total_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")), ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke), ("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"), ("FONTSIZE", (0, 0), (-1, -1), 9)]))
-    story.append(total_table)
-    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
-    buffer.seek(0)
-    return buffer
-
-def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
-    story = []
-    styles = getSampleStyleSheet()
-    style_left = ParagraphStyle('Left', parent=styles['Normal'], alignment=0, fontName='Helvetica', fontSize=8)
-    style_center = ParagraphStyle('Center', parent=styles['Normal'], alignment=1, fontName='Helvetica', fontSize=8)
-    style_header_center = ParagraphStyle('HCenter', parent=styles['Normal'], alignment=1, fontName='Helvetica-Bold', fontSize=8, textColor=colors.whitesmoke)
-    
-    logo_path = buscar_caminho_logo()
-    logo_img = RLImage(logo_path, width=65, height=40) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA</b>", styles["Normal"])
-    header = Table([[logo_img, Paragraph("<b>SUPERMERCADO SUPERNOVA CIDADE</b><br/>Relatório Gerencial de Bonificações, Transferências e Prevenção de Perdas (BI)", styles["Normal"]), Paragraph(f"<b>Emissão:</b> {datetime.now(ZoneInfo('America/Manaus')).strftime('%d/%m/%Y %H:%M')}", styles["Normal"])]], colWidths=[75, 530, 187])
-    header.setStyle(TableStyle([("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("BACKGROUND", (0,0), (-1,-1), colors.lightgrey)]))
-    story.append(header)
-    story.append(Spacer(1, 10))
-    kpi_summary = [
-        [Paragraph("<b>Tot. Bonificado (R$)</b>", style_header_center), Paragraph("<b>Tot. Transferido (R$)</b>", style_header_center), Paragraph("<b>Avarias Bonificadas / Salvas (R$)</b>", style_header_center), Paragraph("<b>Taxa Cobertura (%)</b>", style_header_center), Paragraph("<b>Saldo Remanescente (R$)</b>", style_header_center)],
-        [
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_bonf'], 2)}", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_transf'], 2)}", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['tot_avaria'], 2)}", style_center),
-            Paragraph(f"{fmt_ptbr(metrics_dict['taxa_cobertura'], 2)}%", style_center),
-            Paragraph(f"R$ {fmt_ptbr(metrics_dict['saldo_restante'], 2)}", style_center),
-        ]
-    ]
-    t_kpi = Table(kpi_summary, colWidths=[158, 158, 160, 158, 158])
-    t_kpi.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#1A202C")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(t_kpi)
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("<b>1. Resumo Analítico de Entradas e Bonificações Filtradas</b>", styles["Heading3"]))
-    tb_b = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Valor (R$)", style_header_center), Paragraph("Status", style_header_center), Paragraph("Produto", style_header_center)]]
-    for _, r in df_bonf_sub.head(15).iterrows():
-        tb_b.append([
-            Paragraph(str(r["numero_nota"]), style_center),
-            Paragraph(str(r.get("tipo_bonificacao", "Bonificação")), style_center),
-            Paragraph(str(r["loja"]), style_center),
-            Paragraph(str(r["data_entrada"]), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_bonificacao'], 2)}", style_center),
-            Paragraph(str(r["status"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left)
-        ])
-    table_b = Table(tb_b, colWidths=[65, 95, 95, 95, 80, 90, 272])
-    table_b.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(table_b)
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("<b>2. Resumo de Baixas de Avarias Compensadas (Evitando Perdas Físicas e Financeiras)</b>", styles["Heading3"]))
-    tb_bx = [[Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Ref. Bon.", style_header_center), Paragraph("NF Ent.", style_header_center), Paragraph("Produto", style_header_center), Paragraph("Qtd (kg/cx)", style_header_center), Paragraph("Valor Avaria (R$)", style_header_center)]]
-    for _, r in df_baixas_sub.head(15).iterrows():
-        tb_bx.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_center)
-        ])
-    table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
-    table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
-    story.append(table_bx)
-    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
+    doc.build(story)
     buffer.seek(0)
     return buffer
 
@@ -1174,49 +1030,30 @@ if st.session_state["usuario_logado"] is None:
 else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
-    
-    # Mapeamento de perfis e níveis de permissão
-    is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
-    is_auxiliar = ("auxiliar" in perfil_db)
-    is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
-    
+    is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db)
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
     st.markdown("---")
     col_info_usr, col_logout = st.columns([3.5, 1.5], vertical_alignment="center")
     with col_info_usr:
-        tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
+        tipo_perfil_txt = "👑 Gestor / Administrador" if is_admin else f"👤 Conferente ({loja_atual_usuario})"
         st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
     with col_logout:
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
             st.session_state["usuario_logado"] = None
             st.rerun()
             
-    # Definição das abas permitidas de acordo com o perfil
-    if is_conferente:
-        # Conferente só enxerga o preenchimento do Romaneio
-        opcoes_menu_map = {
-            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
-        }
-    elif is_auxiliar:
-        # Auxiliar de Logística enxerga: Romaneio, Consulta, Bonificação e Cadastros
-        opcoes_menu_map = {
-            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
-            "🔍 Consultar Romaneios": "Consultar Romaneios",
-            "🏷️ Controle de Bonificação": "Controle de Bonificação",
-            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)"
-        }
-    else:
-        # Assistente de Logística, Administrador e Gestor enxergam TODAS as abas
-        opcoes_menu_map = {
-            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
-            "🔍 Consultar Romaneios": "Consultar Romaneios",
-            "🏷️ Controle de Bonificação": "Controle de Bonificação",
-            "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
+    opcoes_menu_map = {
+        "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+        "🔍 Consultar Romaneios": "Consultar Romaneios",
+        "🏷️ Controle de Bonificação": "Controle de Bonificação",
+        "📉 Baixa de Avarias": "Controle de Baixa de Avarias"
+    }
+    if is_admin:
+        opcoes_menu_map.update({
             "📊 Relatórios & BI": "Relatórios & Gráficos",
             "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
-        }
-
+        })
     menu_selecionado_label = st.radio(
         "Menu de Navegação Principal",
         list(opcoes_menu_map.keys()),
@@ -1498,17 +1335,13 @@ else:
                         "tipo_operacao": tipo_operacao,
                         "observacoes": observacoes_romaneio
                     }
-
-                    # DISPARA NOTIFICAÇÃO NATIVA FLUTUANTE NA TELA DO WINDOWS
-                    disparar_notificacao_tela(romaneio_dict_atual, st.session_state["itens_romaneio"])
-
                     pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_rom_final
                     st.session_state["itens_romaneio"] = []
                     st.session_state["form_key_suffix"] += 1
                     st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso! Notificação enviada para a tela.")
+                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso!")
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao salvar romaneio: {e}")
@@ -2822,11 +2655,11 @@ else:
         st.title("👥 Gerenciamento de Usuários e Permissões")
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
             with st.form("cad_usuario_form", clear_on_submit=True):
-                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 2])
+                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 1.5])
                 with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
                 with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
                 with col_u3: nova_senha = st.text_input("Senha", type="password", value="", placeholder="Senha...")
-                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"], index=0, placeholder="Selecione...")
+                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Gestor"], index=0, placeholder="Selecione...")
                 if st.form_submit_button("➕ Cadastrar", type="primary"):
                     if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
                         st.error("Preencha todos os campos.")
@@ -2869,7 +2702,7 @@ else:
                         eu_nome = st.text_input("Nome Completo", value=dados_u_atual[0] or "")
                         eu_login = st.text_input("Login", value=dados_u_atual[1] or "")
                         eu_senha = st.text_input("Senha", type="password", value=dados_u_atual[2] or "")
-                        perfis_lst = ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"]
+                        perfis_lst = ["Conferente", "Gestor"]
                         idx_per = perfis_lst.index(dados_u_atual[3]) if dados_u_atual[3] in perfis_lst else 0
                         eu_perfil = st.selectbox("Perfil", perfis_lst, index=idx_per)
                         col_bu1, col_bu2 = st.columns(2)
@@ -2905,3 +2738,12 @@ else:
                                 st.rerun()
                             except Exception as e: st.error(f"Erro ao excluir: {e}")
         else: st.info("Nenhum usuário cadastrado.")
+from plyer import notification
+
+def mostrar_notificacao_tela(numero_romaneio, loja):
+    notification.notify(
+        title="📦 Novo Romaneio Cadastrado!",
+        message=f"O romaneio #{numero_romaneio} foi gerado para a {loja}.",
+        app_name="HortiControl Supernova",
+        timeout=10 # Tempo em segundos que a notificação fica visível na tela
+    )
