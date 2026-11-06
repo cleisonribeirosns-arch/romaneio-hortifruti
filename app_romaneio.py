@@ -7,12 +7,13 @@ from PIL import Image
 import streamlit as st
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PÁGINA (PRIMEIRO COMANDO STREAMLIT)
+# CONFIGURAÇÃO DE PÁGINA (ÍCONE E TÍTULO PERSONALIZADOS)
 # ---------------------------------------------------------
 icone_pagina = "📦"
-if os.path.exists("logo_romaneio.png"):
+# Aponta para o nome exato do arquivo que está no seu GitHub
+if os.path.exists("logo_romaneio.png.jpg"):
     try:
-        icone_pagina = Image.open("logo_romaneio.png")
+        icone_pagina = Image.open("logo_romaneio.png.jpg")
     except Exception:
         icone_pagina = "📦"
 
