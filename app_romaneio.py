@@ -376,7 +376,6 @@ def init_db():
                 custom_bg_b64 TEXT
             )
             """)
-            # Verificação de colunas caso a tabela já exista localmente
             try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova'")
             except Exception:
@@ -663,7 +662,8 @@ def gerar_pdf_bonificacoes(df_bonf_data):
         t_bonf = r.get("tipo_bonificacao", "Bonificação")
         table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
     bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
-    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), ("MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+    # Correção do erro de parêntese na linha abaixo:
+    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(bonf_table)
     story.append(Spacer(1, 10))
     total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
@@ -843,7 +843,6 @@ if st.session_state["usuario_logado"] is None:
                             "login": usuario[3],
                             "loja_atual": loja_login_sel
                         }
-                        # Carregar preferências salvas no banco para o state
                         st.session_state["tema_bg_selecionado"] = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
                         st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
                         if usuario[6]:
@@ -932,7 +931,6 @@ else:
             col_salv_cfg1, col_salv_cfg2 = st.columns([2, 1])
             with col_salv_cfg1:
                 if st.button("💾 Aplicar e Salvar Configurações", type="primary", key="btn_fechar_cfg_painel"):
-                    # Persistir alterações no banco de dados para o usuário atual
                     conn_cfg, db_t_cfg = get_db_connection()
                     try:
                         cur_cfg = conn_cfg.cursor()
@@ -955,6 +953,7 @@ else:
                     finally:
                         conn_cfg.close()
 
+    # Ícones atualizados de acordo com o tipo de operação e seção:
     if is_conferente:
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
@@ -964,7 +963,7 @@ else:
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔍 Consultar Romaneios": "Consultar Romaneios",
             "🏷️ Controle de Bonificação": "Controle de Bonificação",
-            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)"
+            "🏷️ Cadastros": "Gerenciar Cadastros (Produtos)"
         }
     else:
         opcoes_menu_map = {
@@ -973,7 +972,7 @@ else:
             "🏷️ Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)",
+            "🏷️ Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
 
@@ -1035,6 +1034,7 @@ else:
             with col2:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
+                # Removida a Loja 01 da seleção
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
                     loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione a origem...", key=f"loja_orig_{k_suffix}")
                     loja_destino = st.selectbox("Loja de Destino (Entrou)", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione o destino...", key=f"loja_dest_{k_suffix}")
@@ -1292,6 +1292,7 @@ else:
                     if df_loja_atual.empty:
                         st.info(f"Nenhum romaneio registrado para a {loja_nome}.")
                     else:
+                        # Ícones visuais de acordo com o tipo de operação nas abas
                         tipos_operacao_map = {
                             "📋 TODOS OS TIPOS": "TODOS OS TIPOS",
                             "🛒 Compra": "Compra",
@@ -1306,7 +1307,7 @@ else:
                                 if tipo_op_val == "TODOS OS TIPOS":
                                     df_tipo_atual = df_loja_atual.copy()
                                 else:
-                                    # Filtragem exata para evitar misturar Transferência pura com Transferência/Bonificação
+                                    # Isolamento estrito para evitar mistura de Transferência com Transferência/Bonificação
                                     if tipo_op_val == "Transferência":
                                         df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() == "transferência"].copy()
                                     elif tipo_op_val == "Bonificação":
@@ -1400,7 +1401,7 @@ else:
                                             finally:
                                                 conn_i.close()
 
-                                            # Recuperação correta dos caminhos das assinaturas armazenadas no registro
+                                            # Recuperação correta dos caminhos das assinaturas armazenadas no registro para reemissão do PDF
                                             path_conf_reg = row_sel.get("assinatura_conferente", "")
                                             path_ent_reg = row_sel.get("assinatura_entregador", "")
 
@@ -1577,7 +1578,7 @@ else:
             if f_status != "TODOS": df_bonf = df_bonf[df_bonf["status"] == f_status]
             if f_prod.strip(): df_bonf = df_bonf[df_bonf["produto_hortifruti"].str.contains(f_prod.strip(), case=False, na=False)]
 
-            # Separação exata solicitada entre Bonificação e Transferência de Bonificação
+            # Separação exata solicitada para evitar mistura de Bonificação com Transferência de Bonificação
             subtabs_tipo_bonf = st.tabs(["🎁 Bonificações", "🔀 Transferências de Bonificação"])
             with subtabs_tipo_bonf[0]:
                 df_bonf_puro = df_bonf[df_bonf.get("tipo_bonificacao", "Bonificação").str.strip().str.lower() == "bonificação"].copy()
