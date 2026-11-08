@@ -272,7 +272,6 @@ def init_db():
                 custom_bg_b64 TEXT
             )
             """)
-            # Migração automática segura para colunas novas no Postgres
             try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0")
@@ -768,33 +767,57 @@ def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
     story.append(t_kpi)
     story.append(Spacer(1, 12))
     story.append(Paragraph("<b>1. Resumo Analítico de Entradas e Bonificações Filtradas</b>", styles["Heading3"]))
+    
     tb_b = [[Paragraph("N° Nota", style_header_center), Paragraph("Tipo", style_header_center), Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Valor (R$)", style_header_center), Paragraph("Status", style_header_center), Paragraph("Produto", style_header_center)]]
-    for _, r in df_bonf_sub.head(15).iterrows():
-        tb_b.append([
-            Paragraph(str(r["numero_nota"]), style_center),
-            Paragraph(str(r.get("tipo_bonificacao", "Bonificação")), style_center),
-            Paragraph(str(r["loja"]), style_center),
-            Paragraph(str(r["data_entrada"]), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_bonificacao'], 2)}", style_center),
-            Paragraph(str(r["status"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left)
-        ])
+    
+    if not df_bonf_sub.empty:
+        for _, r in df_bonf_sub.head(15).iterrows():
+            num_nota_val = str(r["numero_nota"]) if "numero_nota" in r and pd.notna(r["numero_nota"]) else str(r.get("numero_romaneio", "N/A"))
+            tipo_val = str(r.get("tipo_bonificacao", "Bonificação"))
+            loja_val = str(r.get("loja", "N/A"))
+            data_val = str(r.get("data_entrada", "N/A"))
+            val_b_val = float(r["valor_bonificacao"]) if "valor_bonificacao" in r and pd.notna(r["valor_bonificacao"]) else 0.0
+            status_val = str(r.get("status", "N/A"))
+            prod_val = str(r.get("produto_hortifruti", "N/A"))
+
+            tb_b.append([
+                Paragraph(num_nota_val, style_center),
+                Paragraph(tipo_val, style_center),
+                Paragraph(loja_val, style_center),
+                Paragraph(data_val, style_center),
+                Paragraph(f"R$ {fmt_ptbr(val_b_val, 2)}", style_center),
+                Paragraph(status_val, style_center),
+                Paragraph(prod_val, style_left)
+            ])
+            
     table_b = Table(tb_b, colWidths=[65, 95, 95, 95, 80, 90, 272])
     table_b.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
     story.append(table_b)
     story.append(Spacer(1, 12))
     story.append(Paragraph("<b>2. Resumo de Baixas de Avarias Compensadas (Evitando Perdas Físicas e Financeiras)</b>", styles["Heading3"]))
+    
     tb_bx = [[Paragraph("Loja", style_header_center), Paragraph("Data", style_header_center), Paragraph("Ref. Bon.", style_header_center), Paragraph("NF Ent.", style_header_center), Paragraph("Produto", style_header_center), Paragraph("Qtd (kg/cx)", style_header_center), Paragraph("Valor Avaria (R$)", style_header_center)]]
-    for _, r in df_baixas_sub.head(15).iterrows():
-        tb_bx.append([
-            Paragraph(str(r["loja_baixa"]), style_center),
-            Paragraph(str(r["data_baixa"]), style_center),
-            Paragraph(str(r["ref_bon_transferen"]), style_center),
-            Paragraph(str(r["nf_b_entrada"]), style_center),
-            Paragraph(str(r["produto_hortifruti"]), style_left),
-            Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_left)
-        ])
+    
+    if not df_baixas_sub.empty:
+        for _, r in df_baixas_sub.head(15).iterrows():
+            loja_bx_val = str(r.get("loja_baixa", "N/A"))
+            data_bx_val = str(r.get("data_baixa", "N/A"))
+            ref_bx_val = str(r.get("ref_bon_transferen", "N/A"))
+            nf_ent_val = str(r.get("nf_b_entrada", "N/A"))
+            prod_bx_val = str(r.get("produto_hortifruti", "N/A"))
+            qtd_bx_val = float(r["quantidade_kg_cx"]) if "quantidade_kg_cx" in r and pd.notna(r["quantidade_kg_cx"]) else 0.0
+            val_av_val = float(r["valor_total_avaria"]) if "valor_total_avaria" in r and pd.notna(r["valor_total_avaria"]) else 0.0
+
+            tb_bx.append([
+                Paragraph(loja_bx_val, style_center),
+                Paragraph(data_bx_val, style_center),
+                Paragraph(ref_bx_val, style_center),
+                Paragraph(nf_ent_val, style_center),
+                Paragraph(prod_bx_val, style_left),
+                Paragraph(fmt_ptbr(qtd_bx_val, 3), style_center),
+                Paragraph(f"R$ {fmt_ptbr(val_av_val, 2)}", style_left)
+            ])
+            
     table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
     table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
     story.append(table_bx)
@@ -869,7 +892,6 @@ else:
     
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
-    # Injeção dinâmica do Fundo de Tela (incluindo a nova opção de Fundo Branco)
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
     css_fundo_dinamico = ""
     if tema_selecionado_usuario == "Fundo Branco":
@@ -1018,7 +1040,6 @@ else:
                     finally:
                         conn_cfg.close()
 
-    # Ícones atualizados de acordo com o tipo de operação e seção:
     if is_conferente:
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
@@ -2608,7 +2629,7 @@ else:
                                 conn_del_f, db_tdf = get_db_connection()
                                 try:
                                     cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdp == "postgres" else id_f_ed,))
                                     conn_del_f.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
@@ -2646,7 +2667,7 @@ else:
                             st.success("Cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            conn.rollback()
+                            conn_rollback = conn.rollback()
                             st.error(f"Erro: {e}")
                         finally:
                             conn.close()
