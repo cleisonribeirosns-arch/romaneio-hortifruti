@@ -272,6 +272,14 @@ def init_db():
                 custom_bg_b64 TEXT
             )
             """)
+            # Migração automática segura para colunas novas no Postgres
+            try:
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'")
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0")
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS custom_bg_b64 TEXT")
+            except Exception:
+                pass
+
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS produtos (
                 id SERIAL PRIMARY KEY,
@@ -376,7 +384,6 @@ def init_db():
                 custom_bg_b64 TEXT
             )
             """)
-            # Verificação de colunas caso a tabela já exista localmente
             try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova'")
             except Exception:
@@ -663,7 +670,7 @@ def gerar_pdf_bonificacoes(df_bonf_data):
         t_bonf = r.get("tipo_bonificacao", "Bonificação")
         table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
     bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
-    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), ("MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(bonf_table)
     story.append(Spacer(1, 10))
     total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
@@ -843,7 +850,6 @@ if st.session_state["usuario_logado"] is None:
                             "login": usuario[3],
                             "loja_atual": loja_login_sel
                         }
-                        # Carregar preferências salvas no banco para o state
                         st.session_state["tema_bg_selecionado"] = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
                         st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
                         if usuario[6]:
@@ -862,6 +868,63 @@ else:
     is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
     
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
+
+    # Injeção dinâmica do Fundo de Tela (incluindo a nova opção de Fundo Branco)
+    tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
+    css_fundo_dinamico = ""
+    if tema_selecionado_usuario == "Fundo Branco":
+        css_fundo_dinamico = """
+        <style>
+        .stApp {
+            background-color: #FFFFFF !important;
+            color: #1A202C !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label {
+            color: #1A202C !important;
+        }
+        </style>
+        """
+    elif tema_selecionado_usuario == "Verde Supernova (Escuro)":
+        css_fundo_dinamico = """
+        <style>
+        .stApp {
+            background-color: #0E140C !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """
+    elif tema_selecionado_usuario == "Azul Corporativo Executivo":
+        css_fundo_dinamico = """
+        <style>
+        .stApp {
+            background-color: #0A192F !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """
+    elif tema_selecionado_usuario == "Grafite High-Tech":
+        css_fundo_dinamico = """
+        <style>
+        .stApp {
+            background-color: #181A1B !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """
+    elif tema_selecionado_usuario == "Imagem Personalizada (Upload)" and st.session_state.get("custom_bg_b64"):
+        b64_bg = st.session_state["custom_bg_b64"]
+        css_fundo_dinamico = f"""
+        <style>
+        .stApp {{
+            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/jpeg;base64,{b64_bg}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        </style>
+        """
+    if css_fundo_dinamico:
+        st.markdown(css_fundo_dinamico, unsafe_allow_html=True)
 
     st.markdown("---")
     col_info_usr, col_botoes_topo = st.columns([2.5, 2.5], vertical_alignment="center")
@@ -902,6 +965,7 @@ else:
             st.markdown("### 🖼️ Personalizar Imagem de Fundo (Wallpaper)")
             opcoes_temas_bg = [
                 "Logomarca Oficial Supernova",
+                "Fundo Branco",
                 "Verde Supernova (Escuro)",
                 "Azul Corporativo Executivo",
                 "Grafite High-Tech",
@@ -932,7 +996,6 @@ else:
             col_salv_cfg1, col_salv_cfg2 = st.columns([2, 1])
             with col_salv_cfg1:
                 if st.button("💾 Aplicar e Salvar Configurações", type="primary", key="btn_fechar_cfg_painel"):
-                    # Persistir alterações no banco de dados para o usuário atual
                     conn_cfg, db_t_cfg = get_db_connection()
                     try:
                         cur_cfg = conn_cfg.cursor()
@@ -955,6 +1018,7 @@ else:
                     finally:
                         conn_cfg.close()
 
+    # Ícones atualizados de acordo com o tipo de operação e seção:
     if is_conferente:
         opcoes_menu_map = {
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
@@ -964,7 +1028,7 @@ else:
             "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔍 Consultar Romaneios": "Consultar Romaneios",
             "🏷️ Controle de Bonificação": "Controle de Bonificação",
-            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)"
+            "🏷️ Cadastros": "Gerenciar Cadastros (Produtos)"
         }
     else:
         opcoes_menu_map = {
@@ -973,7 +1037,7 @@ else:
             "🏷️ Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🛠️ Cadastros": "Gerenciar Cadastros (Produtos)",
+            "🏷️ Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
 
@@ -1306,7 +1370,6 @@ else:
                                 if tipo_op_val == "TODOS OS TIPOS":
                                     df_tipo_atual = df_loja_atual.copy()
                                 else:
-                                    # Filtragem exata para evitar misturar Transferência pura com Transferência/Bonificação
                                     if tipo_op_val == "Transferência":
                                         df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() == "transferência"].copy()
                                     elif tipo_op_val == "Bonificação":
@@ -1400,7 +1463,6 @@ else:
                                             finally:
                                                 conn_i.close()
 
-                                            # Recuperação correta dos caminhos das assinaturas armazenadas no registro
                                             path_conf_reg = row_sel.get("assinatura_conferente", "")
                                             path_ent_reg = row_sel.get("assinatura_entregador", "")
 
@@ -1577,7 +1639,6 @@ else:
             if f_status != "TODOS": df_bonf = df_bonf[df_bonf["status"] == f_status]
             if f_prod.strip(): df_bonf = df_bonf[df_bonf["produto_hortifruti"].str.contains(f_prod.strip(), case=False, na=False)]
 
-            # Separação exata solicitada entre Bonificação e Transferência de Bonificação
             subtabs_tipo_bonf = st.tabs(["🎁 Bonificações", "🔀 Transferências de Bonificação"])
             with subtabs_tipo_bonf[0]:
                 df_bonf_puro = df_bonf[df_bonf.get("tipo_bonificacao", "Bonificação").str.strip().str.lower() == "bonificação"].copy()
