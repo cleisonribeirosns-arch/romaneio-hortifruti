@@ -43,6 +43,20 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
+# CSS GLOBAL PARA OCULTAR O MENU DE FORK/GITHUB DO STREAMLIT
+# ---------------------------------------------------------
+st.markdown("""
+<style>
+/* Oculta o botão de Fork/GitHub do Streamlit no topo da página */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+.stDeployButton {display:none;}
+[data-testid="stToolbar"] {display: none !important;}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------
 # CONFIGURAÇÃO DE PWA (MANIFESTO PARA ÍCONE E NOME NO TELEMÓVEL)
 # ---------------------------------------------------------
 pwa_manifest_code = """
@@ -151,7 +165,7 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
                 f"Item Principal: {primeiro_item} (Total: {total_itens} itens)"
             )
             notification.notify(
-                title=f"📦 Novo Romaneio {num_rom} Cadastrado!",
+                title=f"📋 Novo Romaneio {num_rom} Cadastrado!",
                 message=mensagem_detalhes,
                 app_name="HortiControl Supernova",
                 timeout=10
@@ -164,7 +178,7 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
         num_rom = romaneio_dados.get('numero_romaneio', '')
         forn = romaneio_dados.get('fornecedor', '')
         emitir_notificacao_desktop_web(
-            titulo=f"📦 Novo Romaneio {num_rom}!",
+            titulo=f"📋 Novo Romaneio {num_rom}!",
             mensagem=f"Fornecedor: {forn} | Total de itens: {total_itens}"
         )
 
@@ -902,7 +916,6 @@ if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
 if st.session_state["usuario_logado"] is None:
-    # Aplicar fundo padrão ou o último salvo/global na tela de login
     tema_login_padrao = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
     b64_login_padrao = st.session_state.get("custom_bg_b64", "")
     css_login = obter_css_fundo(tema_login_padrao, b64_login_padrao)
@@ -991,14 +1004,6 @@ else:
                 st.session_state["usuario_logado"] = None
                 st.rerun()
 
-    # ÍCONE DO GATINHO / ATALHO DE DESENVOLVEDOR RESTRITO (APENAS PARA ASSISTENTES E GESTORES / IS_ADMIN)
-    if is_admin:
-        with st.sidebar:
-            st.markdown("---")
-            with st.expander("🐱 Painel Dev / Códigos (Restrito)", expanded=False):
-                st.info("Atalho de desenvolvimento visível apenas para Gestores e Assistentes de Logística.")
-                st.code("print('HortiControl Ativo')", language="python")
-
     if st.session_state.get("exibir_modal_config", False):
         with st.expander("⚙️ Configurações do Aplicativo & Planos de Fundo Múltiplos", expanded=True):
             st.markdown("### 🔔 Notificações Nativas")
@@ -1021,7 +1026,6 @@ else:
             st.markdown("---")
             st.markdown("### 🖼️ Gerenciamento de Múltiplos Wallpapers e Temas")
             
-            # Carregar wallpapers salvos no banco de dados
             conn_w, db_tw = get_db_connection()
             try:
                 cur_w = conn_w.cursor()
@@ -1120,25 +1124,26 @@ else:
                     finally:
                         conn_cfg.close()
 
+    # DEFINIÇÃO DOS MENUS COM ÍCONES INTUITIVOS E CORRESPONDENTES
     if is_conferente:
         opcoes_menu_map = {
-            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
+            "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
         }
     elif is_auxiliar:
         opcoes_menu_map = {
-            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
-            "🔍 Consultar Romaneios": "Consultar Romaneios",
-            "🏷️ Controle de Bonificação": "Controle de Bonificação",
-            "🏷️ Cadastros": "Gerenciar Cadastros (Produtos)"
+            "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🗂️ Consultar Romaneios": "Consultar Romaneios",
+            "🎁 Controle de Bonificação": "Controle de Bonificação",
+            "🛒 Cadastros": "Gerenciar Cadastros (Produtos)"
         }
     else:
         opcoes_menu_map = {
-            "📦 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
-            "🔍 Consultar Romaneios": "Consultar Romaneios",
-            "🏷️ Controle de Bonificação": "Controle de Bonificação",
+            "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🗂️ Consultar Romaneios": "Consultar Romaneios",
+            "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🏷️ Cadastros": "Gerenciar Cadastros (Produtos)",
+            "🛒 Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
 
@@ -1152,7 +1157,17 @@ else:
     st.markdown("---")
     
     if menu == "Romaneio de Recebimento - Hortifrúti":
-        st.title("📦 Romaneio de Recebimento - Hortifrúti")
+        # TÍTULO COM BLOCO / PRANCHETA PERSONALIZADA DA LOGO
+        logo_path_header = buscar_caminho_logo()
+        col_tit_logo, col_tit_txt = st.columns([0.1, 3.9], vertical_alignment="center")
+        with col_tit_logo:
+            if logo_path_header and os.path.exists(logo_path_header):
+                st.image(logo_path_header, width=45)
+            else:
+                st.markdown("📋")
+        with col_tit_txt:
+            st.title("Romaneio de Recebimento - Hortifrúti")
+
         if "form_key_suffix" not in st.session_state: st.session_state["form_key_suffix"] = 0
         if "item_key_suffix" not in st.session_state: st.session_state["item_key_suffix"] = 0
         k_suffix = st.session_state["form_key_suffix"]
@@ -1422,7 +1437,7 @@ else:
             )
 
     elif menu == "Consultar Romaneios":
-        st.title("🔍 Consultar & Gerenciar Romaneios de Recebimento")
+        st.title("🗂️ Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
         try:
             df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
@@ -1593,7 +1608,7 @@ else:
                                                         finally:
                                                             conn_del.close()
 
-                                        with st.expander(f"📦 Ver Itens Cadastrados no Romaneio {row_sel['numero_romaneio']}", expanded=False):
+                                        with st.expander(f"📋 Ver Itens Cadastrados no Romaneio {row_sel['numero_romaneio']}", expanded=False):
                                             if not df_itens_r.empty:
                                                 df_itens_show = df_itens_r.copy()
                                                 df_itens_show['Qtd / Peso'] = df_itens_show['quantidade'].apply(lambda x: fmt_ptbr(x, 3))
@@ -1653,7 +1668,7 @@ else:
                                                             conn_urom.close()
 
     elif menu == "Controle de Bonificação":
-        st.title("🏷️ Controle de Bonificação Hortifrúti")
+        st.title("🎁 Controle de Bonificação Hortifrúti")
         prods_cad = carregar_produtos_cached()
 
         lista_opcoes_prod = []
@@ -2286,8 +2301,8 @@ else:
     elif menu == "Relatórios & Gráficos" and is_admin:
         st.title("📊 Relatórios & Business Intelligence (BI) Executive")
         tab_bi_receb, tab_bi_bonf_avaria = st.tabs([
-            "📦 BI de Recebimento de Cargas",
-            "🏷️ BI Bonificações, Transferências & Prevenção de Perdas"
+            "📋 BI de Recebimento de Cargas",
+            "📈 BI Bonificações, Transferências & Prevenção de Perdas"
         ])
         conn, db_type = get_db_connection()
         try:
@@ -2455,7 +2470,7 @@ else:
             st.markdown(f"""
             <div style="background: rgba(46, 125, 50, 0.25); border: 1px solid #4CAF50; border-radius: 8px; padding: 12px 18px; margin: 15px 0;">
                 <span style="color: #81C784; font-weight: bold; font-size: 15px;">🛡️ Mensagem para Liderança:</span>
-                <span style="color: #FFFFFF; font-size: 14px;"> O processo de acompanhamento de bonificações já garantiu uma <b>recuperação direta de R$ <span style="color: #FFF; font-weight: bold;">{fmt_ptbr(v_tot_avarias_salvas, 2)}</span> em avarias que seriam registradas como prejuízo líquido direto para a empresa.</span>
+                <span style="color: #FFFFFF; font-size: 14px;"> O processo de acompanhamento de bonificações já garantiu uma <b>recuperação direta de R$ <span style="color: #FFF; font-weight: bold;">{fmt_ptbr(v_tot_avarias_salvas, 2)}</span> em avarias que seriam registradas como prejuízo líquido direto para a empresa.</b></span>
             </div>
             """, unsafe_allow_html=True)
 
@@ -2499,7 +2514,7 @@ else:
                 )
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("🛠️ Gerenciamento e Cadastro (Produtos & Fornecedores)")
+        st.title("🛒 Gerenciamento e Cadastro (Produtos & Fornecedores)")
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🏢 Cadastro de Fornecedores"])
         with tab_prod:
             with st.expander("➕ Cadastrar Novo Produto", expanded=False):
