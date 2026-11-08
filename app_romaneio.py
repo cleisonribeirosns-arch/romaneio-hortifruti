@@ -21,7 +21,7 @@ def gerar_hash_senha(senha: str) -> str:
 
 def verificar_senha(senha_digitada: str, senha_banco: str) -> bool:
     """Compara senha digitada (com suporte a hash seguro ou legado em texto puro)."""
-    if senha_banco == senha_digitada:  # Compatibilidade com usuários existentes
+    if senha_banco == senha_digitada:  
         return True
     return gerar_hash_senha(senha_digitada) == senha_banco
 
@@ -253,235 +253,6 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
             canvas_doc.restoreState()
 
 # ---------------------------------------------------------
-# 2. ESTILOS E PADRÃO VISUAL
-# ---------------------------------------------------------
-bg_login_path = buscar_caminho_logo()
-
-b64_img_fundo = ""
-if "custom_bg_b64" in st.session_state and st.session_state["custom_bg_b64"]:
-    b64_img_fundo = st.session_state["custom_bg_b64"]
-elif bg_login_path:
-    try:
-        with open(bg_login_path, "rb") as img_f:
-            b64_img_fundo = base64.b64encode(img_f.read()).decode()
-    except Exception:
-        b64_img_fundo = ""
-
-opcao_tema_bg = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
-
-if b64_img_fundo and opcao_tema_bg == "Logomarca Oficial Supernova":
-    css_fundo = f"""
-    .stApp {{
-        background-image: linear-gradient(rgba(14, 20, 16, 0.90), rgba(14, 20, 16, 0.94)), url("data:image/jpeg;base64,{b64_img_fundo}") !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-        background-attachment: fixed !important;
-    }}
-    """
-elif b64_img_fundo and opcao_tema_bg == "Imagem Personalizada (Upload)":
-    css_fundo = f"""
-    .stApp {{
-        background-image: linear-gradient(rgba(10, 15, 12, 0.85), rgba(10, 15, 12, 0.92)), url("data:image/jpeg;base64,{b64_img_fundo}") !important;
-        background-size: cover !important;
-        background-position: center !important;
-        background-repeat: no-repeat !important;
-        background-attachment: fixed !important;
-    }}
-    """
-elif opcao_tema_bg == "Verde Supernova (Escuro)":
-    css_fundo = """
-    .stApp {
-        background: linear-gradient(135deg, #0A140C 0%, #142318 50%, #1A202C 100%) !important;
-        background-attachment: fixed !important;
-    }
-    """
-elif opcao_tema_bg == "Azul Corporativo Executivo":
-    css_fundo = """
-    .stApp {
-        background: linear-gradient(135deg, #0D1B2A 0%, #1B263B 50%, #415A77 100%) !important;
-        background-attachment: fixed !important;
-    }
-    """
-elif opcao_tema_bg == "Grafite High-Tech":
-    css_fundo = """
-    .stApp {
-        background: linear-gradient(135deg, #121212 0%, #1E1E1E 50%, #2D2D2D 100%) !important;
-        background-attachment: fixed !important;
-    }
-    """
-else:
-    css_fundo = """
-    .stApp {
-        background: linear-gradient(135deg, #0A140C 0%, #142318 50%, #1A202C 100%) !important;
-        background-attachment: fixed !important;
-    }
-    """
-
-st.markdown(
-    f"""
-    <style>
-    footer, div[data-testid="stToolbar"], div[class*="viewerBadge"] {{
-        display: none !important;
-        visibility: hidden !important;
-    }}
-    header[data-testid="stHeader"] {{
-        background-color: transparent !important;
-    }}
-    h1, h2, h3, h4, h5, h6, p, span, div, label {{
-        color: #FFFFFF !important;
-        text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.8) !important;
-    }}
-    .stApp label, .stMarkdown, div[data-testid="stMarkdownContainer"] p {{
-        font-size: 14px !important;
-        font-weight: 700 !important;
-        color: #FFFFFF !important;
-    }}
-    
-    div[data-testid="stRadio"] > div {{
-        background: transparent !important;
-        padding: 0px !important;
-        border: none !important;
-        box-shadow: none !important;
-        gap: 10px !important;
-        flex-wrap: wrap !important;
-        display: flex !important;
-    }}
-    div[data-testid="stRadio"] label {{
-        background: linear-gradient(135deg, rgba(20, 35, 25, 0.95), rgba(15, 25, 20, 0.98)) !important;
-        padding: 12px 18px !important;
-        border-radius: 10px !important;
-        border: 1px solid rgba(76, 175, 80, 0.4) !important;
-        box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.4) !important;
-        margin-bottom: 6px !important;
-        transition: all 0.25s ease-in-out !important;
-        cursor: pointer !important;
-        flex: 1 1 auto !important;
-        min-width: 180px !important;
-        justify-content: center !important;
-    }}
-    div[data-testid="stRadio"] label:hover {{
-        background: linear-gradient(135deg, rgba(40, 75, 50, 0.95), rgba(25, 50, 35, 0.98)) !important;
-        border-color: #4CAF50 !important;
-        transform: translateY(-2px) !important;
-    }}
-    div[data-testid="stRadio"] label[data-checked="true"] {{
-        background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
-        border: 2px solid #81C784 !important;
-        box-shadow: 0px 6px 16px rgba(76, 175, 80, 0.4) !important;
-    }}
-    div[data-testid="stRadio"] label p {{
-        color: #FFFFFF !important;
-        font-size: 14px !important;
-        font-weight: 800 !important;
-    }}
-    
-    div[data-testid="stExpander"] {{
-        background: rgba(18, 28, 22, 0.92) !important;
-        border: 1px solid rgba(76, 175, 80, 0.3) !important;
-        border-radius: 10px !important;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.5) !important;
-    }}
-    
-    img[data-testid="stImage"] {{
-        background: transparent !important;
-        filter: drop-shadow(2px 2px 6px rgba(0,0,0,0.6)) !important;
-        max-width: 95px !important;
-        width: 100% !important;
-        height: auto !important;
-        margin: 0 auto !important;
-        display: block !important;
-    }}
-    .titulo-logo {{
-        font-size: 2.1rem !important;
-        font-weight: 900 !important;
-        line-height: 1.1 !important;
-        margin-bottom: 0px !important;
-        font-family: 'Arial Black', Gadget, sans-serif !important;
-    }}
-    .palavra-sup-mercado {{
-        color: #4CAF50 !important;
-        font-size: 1.25rem !important;
-        font-weight: 800 !important;
-        font-style: italic !important;
-    }}
-    .palavra-super {{
-        color: #81C784 !important;
-        font-style: italic !important;
-    }}
-    .palavra-nova {{
-        color: #FF5252 !important;
-        font-style: italic !important;
-    }}
-    .palavra-cidade {{
-        color: #FFFFFF !important;
-        font-style: italic !important;
-        font-family: 'Brush Script MT', cursive, sans-serif !important;
-        font-size: 2.6rem !important;
-    }}
-    div[data-baseweb="input"] input,
-    div[data-baseweb="base-input"] input,
-    div[data-testid="stDateInput"] input,
-    div[data-baseweb="select"] input,
-    textarea {{
-        color: #111111 !important;
-        -webkit-text-fill-color: #111111 !important;
-        background-color: #F8F9FA !important;
-        font-weight: bold !important;
-        font-size: 14px !important;
-        border-radius: 6px !important;
-    }}
-    div[data-baseweb="input"],
-    div[data-baseweb="base-input"],
-    div[data-baseweb="select"] {{
-        background-color: #F8F9FA !important;
-        border-radius: 6px !important;
-        border: 2px solid #2E7D32 !important;
-    }}
-    div[data-baseweb="select"] span {{
-        color: #111111 !important;
-        font-weight: bold !important;
-    }}
-    div[data-testid="stFileUploader"],
-    div[data-testid="stFileUploader"] section {{
-        background: rgba(22, 35, 26, 0.9) !important;
-        border: 2px solid rgba(76, 175, 80, 0.5) !important;
-        border-radius: 8px !important;
-    }}
-    
-    button[kind="primary"], .stButton > button[kind="primary"] {{
-        background: linear-gradient(135deg, #2E7D32, #1B5E20) !important;
-        color: #FFFFFF !important;
-        border: 2px solid #81C784 !important;
-        font-weight: bold !important;
-        font-size: 15px !important;
-        border-radius: 8px !important;
-        width: 100% !important;
-        box-shadow: 0px 4px 10px rgba(0,0,0,0.5) !important;
-        transition: all 0.2s ease-in-out !important;
-    }}
-    button[kind="primary"]:hover, .stButton > button[kind="primary"]:hover {{
-        background: linear-gradient(135deg, #388E3C, #2E7D32) !important;
-        border-color: #A5D6A7 !important;
-        transform: scale(1.01) !important;
-    }}
-    button[kind="secondary"], .stButton > button[kind="secondary"] {{
-        background: linear-gradient(135deg, #C62828, #8E0000) !important;
-        color: #FFFFFF !important;
-        border: 1px solid #FF8A80 !important;
-        font-weight: bold !important;
-        border-radius: 8px !important;
-    }}
-    button[kind="secondary"]:hover, .stButton > button[kind="secondary"]:hover {{
-        background: linear-gradient(135deg, #D32F2F, #B71C1C) !important;
-    }}
-    {css_fundo}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-# ---------------------------------------------------------
 # 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
 # ---------------------------------------------------------
 def init_db():
@@ -495,7 +266,10 @@ def init_db():
                 nome VARCHAR(255) NOT NULL,
                 login VARCHAR(255) UNIQUE NOT NULL,
                 senha VARCHAR(255) NOT NULL,
-                perfil VARCHAR(255) NOT NULL
+                perfil VARCHAR(255) NOT NULL,
+                tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova',
+                notif_desktop INTEGER DEFAULT 0,
+                custom_bg_b64 TEXT
             )
             """)
             cursor.execute("""
@@ -586,8 +360,8 @@ def init_db():
             senha_hash_adm = gerar_hash_senha('0332')
             if not usr_adm:
                 cursor.execute(
-                    "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)",
-                    ('Administrador', '908', senha_hash_adm, 'Gestor')
+                    "INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop) VALUES (%s, %s, %s, %s, %s, %s)",
+                    ('Administrador', '908', senha_hash_adm, 'Gestor', 'Logomarca Oficial Supernova', 0)
                 )
         else:
             cursor.execute("""
@@ -596,9 +370,26 @@ def init_db():
                 nome TEXT NOT NULL,
                 login TEXT UNIQUE NOT NULL,
                 senha TEXT NOT NULL,
-                perfil TEXT NOT NULL
+                perfil TEXT NOT NULL,
+                tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova',
+                notif_desktop INTEGER DEFAULT 0,
+                custom_bg_b64 TEXT
             )
             """)
+            # Verificação de colunas caso a tabela já exista localmente
+            try:
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova'")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN notif_desktop INTEGER DEFAULT 0")
+            except Exception:
+                pass
+            try:
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN custom_bg_b64 TEXT")
+            except Exception:
+                pass
+
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS produtos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -688,7 +479,7 @@ def init_db():
             senha_hash_adm = gerar_hash_senha('0332')
             if not usr_adm:
                 cursor.execute(
-                    "INSERT INTO usuarios (nome, login, senha, perfil) VALUES ('Administrador', '908', ?, 'Gestor')",
+                    "INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop) VALUES ('Administrador', '908', ?, 'Gestor', 'Logomarca Oficial Supernova', 0)",
                     (senha_hash_adm,)
                 )
         conn.commit()
@@ -709,12 +500,12 @@ def fazer_login(login_ou_nome, senha):
         cursor = conn.cursor()
         if db_type == "postgres":
             cursor.execute(
-                "SELECT id, nome, perfil, login, senha FROM usuarios WHERE login = %s OR LOWER(nome) = LOWER(%s)",
+                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios WHERE login = %s OR LOWER(nome) = LOWER(%s)",
                 (login_ou_nome.strip(), login_ou_nome.strip()),
             )
         else:
             cursor.execute(
-                "SELECT id, nome, perfil, login, senha FROM usuarios WHERE login = ? OR nome COLLATE NOCASE = ?",
+                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios WHERE login = ? OR nome COLLATE NOCASE = ?",
                 (login_ou_nome.strip(), login_ou_nome.strip()),
             )
         usr = cursor.fetchone()
@@ -728,7 +519,7 @@ def fazer_login(login_ou_nome, senha):
                         (hash_novo, usr[0])
                     )
                     conn.commit()
-                return (usr[0], usr[1], usr[2], usr[3])
+                return (usr[0], usr[1], usr[2], usr[3], usr[5], usr[6], usr[7])
         return None
     finally:
         conn.close()
@@ -872,7 +663,7 @@ def gerar_pdf_bonificacoes(df_bonf_data):
         t_bonf = r.get("tipo_bonificacao", "Bonificação")
         table_content.append([Paragraph(str(r["numero_nota"]), style_center), Paragraph(str(t_bonf), style_center), Paragraph(str(r["loja"]), style_center), Paragraph(str(r["data_entrada"]), style_center), Paragraph(f"R$ {fmt_ptbr(v_b, 2)}", style_left), Paragraph(str(r["status"]), style_center), Paragraph(str(r["produto_hortifruti"]), style_left)])
     bonf_table = Table(table_content, colWidths=[55, 65, 65, 85, 70, 80, 120])
-    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
+    bonf_table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#2D3748")), ("VALIGN", (0, 0), (-1, -1), ("MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey)]))
     story.append(bonf_table)
     story.append(Spacer(1, 10))
     total_table = Table([[f"VALOR TOTAL BONIFICADO / TRANSFERIDO: R$ {fmt_ptbr(tot_val, 2)}"]], colWidths=[540])
@@ -995,7 +786,7 @@ def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
             Paragraph(str(r["nf_b_entrada"]), style_center),
             Paragraph(str(r["produto_hortifruti"]), style_left),
             Paragraph(fmt_ptbr(r["quantidade_kg_cx"], 3), style_center),
-            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_center)
+            Paragraph(f"R$ {fmt_ptbr(r['valor_total_avaria'], 2)}", style_left)
         ])
     table_bx = Table(tb_bx, colWidths=[90, 95, 90, 80, 237, 80, 120])
     table_bx.setStyle(TableStyle([("BACKGROUND", (0,0), (-1,0), colors.HexColor("#2D3748")), ("GRID", (0,0), (-1,-1), 0.5, colors.grey), ("VALIGN", (0,0), (-1,-1), "MIDDLE")]))
@@ -1034,7 +825,7 @@ if st.session_state["usuario_logado"] is None:
             senha_input = st.text_input("Senha", type="password", value="", placeholder="Digite sua senha...")
             loja_login_sel = st.selectbox(
                 "Selecione a Loja de Atuação",
-                ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"],
+                ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"],
                 index=0
             )
             btn_entrar = st.form_submit_button("Entrar no Sistema", type="primary")
@@ -1052,6 +843,12 @@ if st.session_state["usuario_logado"] is None:
                             "login": usuario[3],
                             "loja_atual": loja_login_sel
                         }
+                        # Carregar preferências salvas no banco para o state
+                        st.session_state["tema_bg_selecionado"] = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
+                        st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
+                        if usuario[6]:
+                            st.session_state["custom_bg_b64"] = usuario[6]
+
                         st.success(f"Bem-vindo(a), {usuario[1]} na {loja_login_sel}!")
                         st.rerun()
                     else:
@@ -1134,9 +931,29 @@ else:
             
             col_salv_cfg1, col_salv_cfg2 = st.columns([2, 1])
             with col_salv_cfg1:
-                if st.button("💾 Aplicar e Fechar Configurações", type="primary", key="btn_fechar_cfg_painel"):
-                    st.session_state["exibir_modal_config"] = False
-                    st.rerun()
+                if st.button("💾 Aplicar e Salvar Configurações", type="primary", key="btn_fechar_cfg_painel"):
+                    # Persistir alterações no banco de dados para o usuário atual
+                    conn_cfg, db_t_cfg = get_db_connection()
+                    try:
+                        cur_cfg = conn_cfg.cursor()
+                        u_id = int(user_info["id"]) if db_t_cfg == "postgres" else user_info["id"]
+                        bg_b64_val = st.session_state.get("custom_bg_b64", "")
+                        notif_val = 1 if st.session_state.get("notif_desktop_toggle", False) else 0
+                        tema_val = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
+                        
+                        cur_cfg.execute(
+                            "UPDATE usuarios SET tema_bg = %s, notif_desktop = %s, custom_bg_b64 = %s WHERE id = %s" if db_t_cfg == "postgres" else "UPDATE usuarios SET tema_bg = ?, notif_desktop = ?, custom_bg_b64 = ? WHERE id = ?",
+                            (tema_val, notif_val, bg_b64_val, u_id)
+                        )
+                        conn_cfg.commit()
+                        st.session_state["exibir_modal_config"] = False
+                        st.success("Configurações salvas permanentemente com sucesso!")
+                        st.rerun()
+                    except Exception as e:
+                        conn_cfg.rollback()
+                        st.error(f"Erro ao salvar configurações: {e}")
+                    finally:
+                        conn_cfg.close()
 
     if is_conferente:
         opcoes_menu_map = {
@@ -1219,13 +1036,13 @@ else:
                 data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
-                    loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione a origem...", key=f"loja_orig_{k_suffix}")
-                    loja_destino = st.selectbox("Loja de Destino (Entrou)", ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione o destino...", key=f"loja_dest_{k_suffix}")
+                    loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione a origem...", key=f"loja_orig_{k_suffix}")
+                    loja_destino = st.selectbox("Loja de Destino (Entrou)", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione o destino...", key=f"loja_dest_{k_suffix}")
                     loja = f"{loja_origem} -> {loja_destino}"
                 else:
                     loja_origem = ""
                     loja_destino = ""
-                    lista_lojas_opc = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    lista_lojas_opc = ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_loja_login = lista_lojas_opc.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_opc else 0
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, placeholder="Selecione a loja...", key=f"loja_{k_suffix}")
             with col3:
@@ -1443,7 +1260,7 @@ else:
         st.title("🔍 Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
         try:
-            df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
+            df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
             df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
         finally:
             conn.close()
@@ -1457,7 +1274,7 @@ else:
             else:
                 df_rom["valor_total_rom"] = 0.0
 
-            lista_lojas_sistema = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+            lista_lojas_sistema = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
             if not is_admin and loja_atual_usuario in lista_lojas_sistema:
                 lojas_para_exibir = [loja_atual_usuario]
             else:
@@ -1475,19 +1292,32 @@ else:
                     if df_loja_atual.empty:
                         st.info(f"Nenhum romaneio registrado para a {loja_nome}.")
                     else:
-                        tipos_operacao_disponiveis = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
-                        subtabs_tipo = st.tabs([f"📌 {t}" for t in tipos_operacao_disponiveis])
-                        for idx_t, tipo_op in enumerate(tipos_operacao_disponiveis):
+                        tipos_operacao_map = {
+                            "📋 TODOS OS TIPOS": "TODOS OS TIPOS",
+                            "🛒 Compra": "Compra",
+                            "🎁 Bonificação": "Bonificação",
+                            "🚚 Transferência": "Transferência",
+                            "📦 Transferência/Bonificação": "Transferência/Bonificação",
+                            "🔄 Troca por Troca": "Troca por Troca"
+                        }
+                        subtabs_tipo = st.tabs(list(tipos_operacao_map.keys()))
+                        for idx_t, (label_aba, tipo_op_val) in enumerate(tipos_operacao_map.items()):
                             with subtabs_tipo[idx_t]:
-                                if tipo_op == "TODOS OS TIPOS":
+                                if tipo_op_val == "TODOS OS TIPOS":
                                     df_tipo_atual = df_loja_atual.copy()
                                 else:
-                                    df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.contains(tipo_op, case=False, na=False)].copy()
+                                    # Filtragem exata para evitar misturar Transferência pura com Transferência/Bonificação
+                                    if tipo_op_val == "Transferência":
+                                        df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() == "transferência"].copy()
+                                    elif tipo_op_val == "Bonificação":
+                                        df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() == "bonificação"].copy()
+                                    else:
+                                        df_tipo_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.contains(tipo_op_val, case=False, na=False)].copy()
 
                                 if df_tipo_atual.empty:
-                                    st.markdown("<p style='color: #9aa0a6; font-style: italic; padding: 10px;'>Nenhum romaneio encontrado nesta categoria.</p>", unsafe_allow_html=True)
+                                    st.markdown(f"<p style='color: #9aa0a6; font-style: italic; padding: 10px;'>Nenhum romaneio encontrado na categoria '{tipo_op_val}'.</p>", unsafe_allow_html=True)
                                 else:
-                                    st.markdown(f"**Total de registros em '{tipo_op}':** {len(df_tipo_atual)}")
+                                    st.markdown(f"**Total de registros em '{tipo_op_val}':** {len(df_tipo_atual)}")
                                     df_planilha = df_tipo_atual.copy()
                                     df_planilha["Anexo"] = df_planilha.apply(lambda r: "📎 Disponível" if (r.get("caminho_foto") and os.path.exists(str(r["caminho_foto"]))) else "Sem Anexo", axis=1)
                                     df_planilha["Valor Total"] = df_planilha["valor_total_rom"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
@@ -1504,7 +1334,7 @@ else:
                                     st.markdown("---")
                                     st.subheader("⚙️ Gerenciador de Romaneio: Visualizar Anexo, Atualizar Status e Editar (Admin)")
                                     opcoes_rom_gerenciar = [(row["id"], f"Romaneio {row['numero_romaneio']} | Status: {row.get('status_nota','Pendente')} | Fornecedor: {row['fornecedor'] or 'N/A'} | Data: {row['data_recebimento']}") for _, row in df_tipo_atual.iterrows()]
-                                    chave_tab = f"{loja_nome}_{tipo_op}".replace(" ", "_").replace("/", "_")
+                                    chave_tab = f"{loja_nome}_{tipo_op_val}".replace(" ", "_").replace("/", "_")
                                     rom_sel_tuple = st.selectbox(
                                         "Selecione o Romaneio na Planilha para Ações",
                                         options=opcoes_rom_gerenciar,
@@ -1567,13 +1397,14 @@ else:
                                             try:
                                                 r_id_i = int(id_rom_sel) if db_t_i == "postgres" else id_rom_sel
                                                 df_itens_r = pd.read_sql_query("SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s" if db_t_i == "postgres" else "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = ?", conn_i, params=(r_id_i,))
-                                                cur_ass = conn_i.cursor()
-                                                cur_ass.execute("SELECT assinatura_conferente, assinatura_entregador FROM romaneios WHERE id = %s" if db_t_i == "postgres" else "SELECT assinatura_conferente, assinatura_entregador FROM romaneios WHERE id = ?", (r_id_i,))
-                                                ass_dados = cur_ass.fetchone()
                                             finally:
                                                 conn_i.close()
 
-                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], ass_dados[0] if ass_dados else None, ass_dados[1] if ass_dados else None)
+                                            # Recuperação correta dos caminhos das assinaturas armazenadas no registro
+                                            path_conf_reg = row_sel.get("assinatura_conferente", "")
+                                            path_ent_reg = row_sel.get("assinatura_entregador", "")
+
+                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], path_conf_reg, path_ent_reg)
                                             col_dl_p, col_del_p = st.columns([2, 1])
                                             with col_dl_p:
                                                 st.download_button(
@@ -1673,7 +1504,7 @@ else:
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
                     num_nota_bonf = st.text_input("N° Nota Fiscal", value="", placeholder="Número da nota...")
-                    lista_lojas_cad_b = ["", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    lista_lojas_cad_b = ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_cad_b = lista_lojas_cad_b.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_cad_b else 0
                     loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, placeholder="Selecione a loja...", key="loja_bonf_sel")
                 with col_b2:
@@ -1722,7 +1553,7 @@ else:
 
         st.markdown("---")
         st.subheader("📋 Registros de Bonificação e Consulta de Notas")
-        lista_lojas_filtro_bonf = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+        lista_lojas_filtro_bonf = ["TODAS", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
         idx_filtro_bonf = 0
         if not is_admin and loja_atual_usuario in lista_lojas_filtro_bonf:
             idx_filtro_bonf = lista_lojas_filtro_bonf.index(loja_atual_usuario)
@@ -1746,48 +1577,67 @@ else:
             if f_status != "TODOS": df_bonf = df_bonf[df_bonf["status"] == f_status]
             if f_prod.strip(): df_bonf = df_bonf[df_bonf["produto_hortifruti"].str.contains(f_prod.strip(), case=False, na=False)]
 
-            if not df_bonf.empty:
-                tot_bonf_val = float(df_bonf["valor_bonificacao"].sum())
-                tot_disp_val = float(df_bonf[df_bonf["status"] == "Disponível"]["valor_bonificacao"].sum())
-                tot_parc_val = float(df_bonf[df_bonf["status"] == "Parcialmente Utilizada"]["valor_bonificacao"].sum())
-                tot_util_val = float(df_bonf[df_bonf["status"] == "Totalmente Utilizada"]["valor_bonificacao"].sum())
+            # Separação exata solicitada entre Bonificação e Transferência de Bonificação
+            subtabs_tipo_bonf = st.tabs(["🎁 Bonificações", "🔀 Transferências de Bonificação"])
+            with subtabs_tipo_bonf[0]:
+                df_bonf_puro = df_bonf[df_bonf.get("tipo_bonificacao", "Bonificação").str.strip().str.lower() == "bonificação"].copy()
+                st.markdown(f"**Registros de Bonificação Pura:** {len(df_bonf_puro)}")
+                if not df_bonf_puro.empty:
+                    df_bp_show = df_bonf_puro.copy()
+                    df_bp_show["Valor (R$)"] = df_bp_show["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                    df_bp_show["Anexo"] = df_bp_show.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
+                    df_bp_show = df_bp_show.rename(columns={"numero_nota": "N° Nota", "loja": "Loja", "data_entrada": "Data e Hora", "status": "Status", "produto_hortifruti": "Produto Hortifrúti"})
+                    cols_ex_bp = df_bp_show[["N° Nota", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
+                    cols_ex_bp.index = range(1, len(cols_ex_bp) + 1)
+                    st.dataframe(cols_ex_bp, use_container_width=True, height=280)
+                else:
+                    st.info("Nenhuma bonificação pura encontrada.")
 
-                kpi_b1, kpi_b2, kpi_b3, kpi_b4 = st.columns(4)
-                kpi_b1.metric("Total Bonificado", f"R$ {fmt_ptbr(tot_bonf_val, 2)}")
-                kpi_b2.metric("Disponível", f"R$ {fmt_ptbr(tot_disp_val, 2)}")
-                kpi_b3.metric("Parcialmente Utilizada", f"R$ {fmt_ptbr(tot_parc_val, 2)}")
-                kpi_b4.metric("Totalmente Utilizada", f"R$ {fmt_ptbr(tot_util_val, 2)}")
+            with subtabs_tipo_bonf[1]:
+                df_bonf_transf = df_bonf[df_bonf.get("tipo_bonificacao", "").str.strip().str.lower() == "transferência de bonificação"].copy()
+                st.markdown(f"**Registros de Transferência de Bonificação:** {len(df_bonf_transf)}")
+                if not df_bonf_transf.empty:
+                    df_bt_show = df_bonf_transf.copy()
+                    df_bt_show["Valor (R$)"] = df_bt_show["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                    df_bt_show["Anexo"] = df_bt_show.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
+                    df_bt_show = df_bt_show.rename(columns={"numero_nota": "N° Nota", "loja": "Loja", "data_entrada": "Data e Hora", "status": "Status", "produto_hortifruti": "Produto Hortifrúti"})
+                    cols_ex_bt = df_bt_show[["N° Nota", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
+                    cols_ex_bt.index = range(1, len(cols_ex_bt) + 1)
+                    st.dataframe(cols_ex_bt, use_container_width=True, height=280)
+                else:
+                    st.info("Nenhuma transferência de bonificação encontrada.")
 
-                st.markdown("---")
-                pdf_bonf_bytes = gerar_pdf_bonificacoes(df_bonf)
-                st.download_button(
-                    label="📥 Descarregar Relatório de Bonificação em PDF",
-                    data=pdf_bonf_bytes,
-                    file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf", type="primary", key="btn_download_pdf_bonf"
-                )
-                st.markdown("")
+            tot_bonf_val = float(df_bonf["valor_bonificacao"].sum())
+            tot_disp_val = float(df_bonf[df_bonf["status"] == "Disponível"]["valor_bonificacao"].sum())
+            tot_parc_val = float(df_bonf[df_bonf["status"] == "Parcialmente Utilizada"]["valor_bonificacao"].sum())
+            tot_util_val = float(df_bonf[df_bonf["status"] == "Totalmente Utilizada"]["valor_bonificacao"].sum())
 
-                df_bonf_tabela = df_bonf.copy()
-                df_bonf_tabela["Valor (R$)"] = df_bonf_tabela["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_bonf_tabela["Anexo"] = df_bonf_tabela.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
-                df_bonf_tabela = df_bonf_tabela.rename(columns={
-                    "numero_nota": "N° Nota", "tipo_bonificacao": "Tipo", "loja": "Loja",
-                    "data_entrada": "Data e Hora", "status": "Status", "produto_hortifruti": "Produto Hortifrúti"
-                })
-                cols_exibidas = df_bonf_tabela[["N° Nota", "Tipo", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
-                cols_exibidas.index = range(1, len(cols_exibidas) + 1)
-                st.dataframe(cols_exibidas, use_container_width=True, height=350)
+            kpi_b1, kpi_b2, kpi_b3, kpi_b4 = st.columns(4)
+            kpi_b1.metric("Total Bonificado", f"R$ {fmt_ptbr(tot_bonf_val, 2)}")
+            kpi_b2.metric("Disponível", f"R$ {fmt_ptbr(tot_disp_val, 2)}")
+            kpi_b3.metric("Parcialmente Utilizada", f"R$ {fmt_ptbr(tot_parc_val, 2)}")
+            kpi_b4.metric("Totalmente Utilizada", f"R$ {fmt_ptbr(tot_util_val, 2)}")
 
-                st.markdown("---")
-                st.subheader("⚙️ Abertura de Anexo, Edição & Exclusão de Registro")
-                opcoes_notas_editar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} | Status: {row['status']} ({row['data_entrada']})") for _, row in df_bonf.iterrows()]
-                col_ed1, col_ed2 = st.columns(2)
-                with col_ed1:
-                    nota_selecionada_edicao = st.selectbox("Selecione o Registro para Gerenciar / Abrir Anexo", options=opcoes_notas_editar, format_func=lambda x: x[1], key="sel_registro_bonf_gerenciar")
-                with col_ed2:
-                    st.write("")
-                    st.write("")
+            st.markdown("---")
+            pdf_bonf_bytes = gerar_pdf_bonificacoes(df_bonf)
+            st.download_button(
+                label="📥 Descarregar Relatório de Bonificação em PDF",
+                data=pdf_bonf_bytes,
+                file_name=f"Relatorio_Bonificacao_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.pdf",
+                mime="application/pdf", type="primary", key="btn_download_pdf_bonf"
+            )
+            st.markdown("")
+
+            st.markdown("---")
+            st.subheader("⚙️ Abertura de Anexo, Edição & Exclusão de Registro")
+            opcoes_notas_editar = [(row["id"], f"Nota N° {row['numero_nota']} - {row['loja']} | Status: {row['status']} ({row['data_entrada']})") for _, row in df_bonf.iterrows()]
+            col_ed1, col_ed2 = st.columns(2)
+            with col_ed1:
+                nota_selecionada_edicao = st.selectbox("Selecione o Registro para Gerenciar / Abrir Anexo", options=opcoes_notas_editar, format_func=lambda x: x[1], key="sel_registro_bonf_gerenciar")
+            with col_ed2:
+                st.write("")
+                st.write("")
+                if opcoes_notas_editar:
                     id_reg_atual = nota_selecionada_edicao[0]
                     reg_obj_atual = df_bonf[df_bonf["id"] == id_reg_atual].iloc[0]
                     caminho_nota_alvo = reg_obj_atual.get("caminho_anexo", "")
@@ -1804,6 +1654,7 @@ else:
                     else:
                         st.warning("Este registo não possui ficheiro de nota anexado.")
 
+            if opcoes_notas_editar:
                 with st.form("form_edicao_direta_bonificacao"):
                     st.markdown(f"**Editando Nota N° {reg_obj_atual['numero_nota']} ({reg_obj_atual['loja']})**")
                     data_atual_str = str(reg_obj_atual["data_entrada"]).split(" ")[0] if reg_obj_atual["data_entrada"] else ""
@@ -1813,7 +1664,7 @@ else:
                     col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns(5)
                     with col_e1: novo_val_nota_str = st.text_input("Valor (R$)", value=str(reg_obj_atual["valor_bonificacao"]).replace(".", ","))
                     with col_e2:
-                        lista_lojas_alt = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                        lista_lojas_alt = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                         idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
                         nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
                     with col_e3: nova_data_input = st.date_input("Data de Entrada", value=dt_obj_default, format="DD/MM/YYYY")
@@ -1997,7 +1848,7 @@ else:
             with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=True):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
-                    lista_lojas_reg = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    lista_lojas_reg = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...", key=f"bx_ref_{bx_suf}")
@@ -2090,7 +1941,7 @@ else:
 
         st.markdown("---")
         st.subheader("📊 Planilha de Registro de Baixas das Avarias")
-        lista_lojas_filtro_bx = ["TODAS", "LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+        lista_lojas_filtro_bx = ["TODAS", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
         idx_filtro_bx = 0
         if not is_admin and loja_atual_usuario in lista_lojas_filtro_bx:
             idx_filtro_bx = lista_lojas_filtro_bx.index(loja_atual_usuario)
@@ -2192,7 +2043,7 @@ else:
                             st.markdown(f"**Editando Baixa (Ref: {reg_bx_atual['ref_bon_transferen']} - NF Entrada Atual: {reg_bx_atual['nf_b_entrada']})**")
                             col_eb1, col_eb2, col_eb3 = st.columns(3)
                             with col_eb1:
-                                lista_lojas_eb = ["LOJA 01 CD", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                                lista_lojas_eb = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                                 idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                                 nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
                                 notas_disponiveis_edicao = [item["nf_entrada"] for item in (notas_com_saldo_loja02 + notas_transf_loja02)]
@@ -2696,7 +2547,7 @@ else:
                                 conn_del_f, db_tdf = get_db_connection()
                                 try:
                                     cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdp == "postgres" else id_f_ed,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
                                     conn_del_f.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
@@ -2792,7 +2643,7 @@ else:
                                     )
                                 else:
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ? WHERE id = ?",
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
                                         (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
                                     )
                                 conn_up_u.commit()
