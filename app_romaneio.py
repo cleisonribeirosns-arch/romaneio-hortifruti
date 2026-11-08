@@ -272,6 +272,13 @@ def init_db():
                 custom_bg_b64 TEXT
             )
             """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wallpapers (
+                id SERIAL PRIMARY KEY,
+                nome VARCHAR(255) UNIQUE NOT NULL,
+                b64_dados TEXT NOT NULL
+            )
+            """)
             try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0")
@@ -381,6 +388,13 @@ def init_db():
                 tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova',
                 notif_desktop INTEGER DEFAULT 0,
                 custom_bg_b64 TEXT
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS wallpapers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT UNIQUE NOT NULL,
+                b64_dados TEXT NOT NULL
             )
             """)
             try:
@@ -826,12 +840,75 @@ def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
     return buffer
 
 # ---------------------------------------------------------
+# APLICAR ESTILO DE TEMA/FUNDO DINÂMICO GLOBAL (LOGIN E SISTEMA)
+# ---------------------------------------------------------
+def obter_css_fundo(tema_selecionado, custom_b64=""):
+    if tema_selecionado == "Fundo Branco":
+        return """
+        <style>
+        .stApp {
+            background-color: #FFFFFF !important;
+            color: #1A202C !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label {
+            color: #1A202C !important;
+        }
+        </style>
+        """
+    elif tema_selecionado == "Verde Supernova (Escuro)":
+        return """
+        <style>
+        .stApp {
+            background-color: #0E140C !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """
+    elif tema_selecionado == "Azul Corporativo Executivo":
+        return """
+        <style>
+        .stApp {
+            background-color: #0A192F !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """
+    elif tema_selecionado == "Grafite High-Tech":
+        return """
+        <style>
+        .stApp {
+            background-color: #181A1B !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """
+    elif custom_b64:
+        return f"""
+        <style>
+        .stApp {{
+            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/jpeg;base64,{custom_b64}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        </style>
+        """
+    return ""
+
+# ---------------------------------------------------------
 # 4. TELA DE LOGIN
 # ---------------------------------------------------------
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
 
 if st.session_state["usuario_logado"] is None:
+    # Aplicar fundo padrão ou o último salvo/global na tela de login
+    tema_login_padrao = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
+    b64_login_padrao = st.session_state.get("custom_bg_b64", "")
+    css_login = obter_css_fundo(tema_login_padrao, b64_login_padrao)
+    if css_login:
+        st.markdown(css_login, unsafe_allow_html=True)
+
     logo_display = None
     for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
         if os.path.exists(nome):
@@ -893,58 +970,8 @@ else:
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
-    css_fundo_dinamico = ""
-    if tema_selecionado_usuario == "Fundo Branco":
-        css_fundo_dinamico = """
-        <style>
-        .stApp {
-            background-color: #FFFFFF !important;
-            color: #1A202C !important;
-        }
-        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label {
-            color: #1A202C !important;
-        }
-        </style>
-        """
-    elif tema_selecionado_usuario == "Verde Supernova (Escuro)":
-        css_fundo_dinamico = """
-        <style>
-        .stApp {
-            background-color: #0E140C !important;
-            color: #FFFFFF !important;
-        }
-        </style>
-        """
-    elif tema_selecionado_usuario == "Azul Corporativo Executivo":
-        css_fundo_dinamico = """
-        <style>
-        .stApp {
-            background-color: #0A192F !important;
-            color: #FFFFFF !important;
-        }
-        </style>
-        """
-    elif tema_selecionado_usuario == "Grafite High-Tech":
-        css_fundo_dinamico = """
-        <style>
-        .stApp {
-            background-color: #181A1B !important;
-            color: #FFFFFF !important;
-        }
-        </style>
-        """
-    elif tema_selecionado_usuario == "Imagem Personalizada (Upload)" and st.session_state.get("custom_bg_b64"):
-        b64_bg = st.session_state["custom_bg_b64"]
-        css_fundo_dinamico = f"""
-        <style>
-        .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/jpeg;base64,{b64_bg}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }}
-        </style>
-        """
+    custom_bg_b64_usuario = st.session_state.get("custom_bg_b64", "")
+    css_fundo_dinamico = obter_css_fundo(tema_selecionado_usuario, custom_bg_b64_usuario)
     if css_fundo_dinamico:
         st.markdown(css_fundo_dinamico, unsafe_allow_html=True)
 
@@ -964,8 +991,16 @@ else:
                 st.session_state["usuario_logado"] = None
                 st.rerun()
 
+    # ÍCONE DO GATINHO / ATALHO DE DESENVOLVEDOR RESTRITO (APENAS PARA ASSISTENTES E GESTORES / IS_ADMIN)
+    if is_admin:
+        with st.sidebar:
+            st.markdown("---")
+            with st.expander("🐱 Painel Dev / Códigos (Restrito)", expanded=False):
+                st.info("Atalho de desenvolvimento visível apenas para Gestores e Assistentes de Logística.")
+                st.code("print('HortiControl Ativo')", language="python")
+
     if st.session_state.get("exibir_modal_config", False):
-        with st.expander("⚙️ Configurações do Aplicativo & Plano de Fundo", expanded=True):
+        with st.expander("⚙️ Configurações do Aplicativo & Planos de Fundo Múltiplos", expanded=True):
             st.markdown("### 🔔 Notificações Nativas")
             notif_desktop_toggle = st.toggle(
                 "Ativar Notificações na Tela (Desktop / Navegador)", 
@@ -984,7 +1019,21 @@ else:
                 """, height=0)
 
             st.markdown("---")
-            st.markdown("### 🖼️ Personalizar Imagem de Fundo (Wallpaper)")
+            st.markdown("### 🖼️ Gerenciamento de Múltiplos Wallpapers e Temas")
+            
+            # Carregar wallpapers salvos no banco de dados
+            conn_w, db_tw = get_db_connection()
+            try:
+                cur_w = conn_w.cursor()
+                cur_w.execute("SELECT id, nome FROM wallpapers ORDER BY id DESC")
+                lista_wallpapers_db = cur_w.fetchall()
+            except Exception:
+                lista_wallpapers_db = []
+            finally:
+                conn_w.close()
+
+            nomes_wallpapers_db = [w[1] for w in lista_wallpapers_db]
+
             opcoes_temas_bg = [
                 "Logomarca Oficial Supernova",
                 "Fundo Branco",
@@ -992,7 +1041,8 @@ else:
                 "Azul Corporativo Executivo",
                 "Grafite High-Tech",
                 "Imagem Personalizada (Upload)"
-            ]
+            ] + [f"Galeria: {w}" for w in nomes_wallpapers_db]
+
             tema_atual = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
             idx_tema = opcoes_temas_bg.index(tema_atual) if tema_atual in opcoes_temas_bg else 0
             
@@ -1004,14 +1054,44 @@ else:
             )
             st.session_state["tema_bg_selecionado"] = sel_tema_bg
 
-            if sel_tema_bg == "Imagem Personalizada (Upload)":
+            if sel_tema_bg.startswith("Galeria: "):
+                nome_escolhido = sel_tema_bg.replace("Galeria: ", "")
+                conn_w2, db_tw2 = get_db_connection()
+                try:
+                    cur_w2 = conn_w2.cursor()
+                    cur_w2.execute("SELECT b64_dados FROM wallpapers WHERE nome = %s" if db_tw2 == "postgres" else "SELECT b64_dados FROM wallpapers WHERE nome = ?", (nome_escolhido,))
+                    res_w = cur_w2.fetchone()
+                    if res_w:
+                        st.session_state["custom_bg_b64"] = res_w[0]
+                finally:
+                    conn_w2.close()
+
+            elif sel_tema_bg == "Imagem Personalizada (Upload)":
                 up_bg_file = st.file_uploader("Enviar Nova Imagem de Fundo (JPG/PNG)", type=["jpg", "jpeg", "png"], key="up_custom_bg_file")
+                nome_novo_wp = st.text_input("Nome para salvar este Wallpaper na Galeria (Opcional)", value="")
                 if up_bg_file is not None:
                     try:
                         bg_bytes = up_bg_file.getbuffer()
                         b64_new_bg = base64.b64encode(bg_bytes).decode('utf-8')
                         st.session_state["custom_bg_b64"] = b64_new_bg
-                        st.success("Imagem de fundo personalizada aplicada com sucesso!")
+
+                        if nome_novo_wp.strip():
+                            conn_ins_w, db_tins_w = get_db_connection()
+                            cur_iw = conn_ins_w.cursor()
+                            try:
+                                cur_iw.execute(
+                                    "INSERT INTO wallpapers (nome, b64_dados) VALUES (%s, %s)" if db_tins_w == "postgres" else "INSERT INTO wallpapers (nome, b64_dados) VALUES (?, ?)",
+                                    (nome_novo_wp.strip(), b64_new_bg)
+                                )
+                                conn_ins_w.commit()
+                                st.success(f"Wallpaper '{nome_novo_wp}' salvo com sucesso na galeria!")
+                            except Exception:
+                                conn_ins_w.rollback()
+                                st.warning("Já existe um wallpaper com esse nome. A imagem foi aplicada apenas na sessão.")
+                            finally:
+                                conn_ins_w.close()
+                        else:
+                            st.success("Imagem de fundo personalizada aplicada com sucesso!")
                     except Exception as e:
                         st.error(f"Erro ao processar imagem de fundo: {e}")
             
