@@ -240,9 +240,6 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
             pass
     st.warning("Arquivo de anexo não encontrado no servidor.")
 
-# ---------------------------------------------------------
-# FUNÇÃO PARA MARCA D'ÁGUA NO FUNDO DO PDF GERADO
-# ---------------------------------------------------------
 def buscar_caminho_logo():
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
         for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
@@ -853,9 +850,6 @@ def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
     buffer.seek(0)
     return buffer
 
-# ---------------------------------------------------------
-# APLICAR ESTILO DE TEMA/FUNDO DINÂMICO GLOBAL (LOGIN E SISTEMA)
-# ---------------------------------------------------------
 def obter_css_fundo(tema_selecionado, custom_b64=""):
     if tema_selecionado == "Fundo Branco":
         return """
@@ -1157,7 +1151,6 @@ else:
     st.markdown("---")
     
     if menu == "Romaneio de Recebimento - Hortifrúti":
-        # TÍTULO COM BLOCO / PRANCHETA PERSONALIZADA DA LOGO
         logo_path_header = buscar_caminho_logo()
         col_tit_logo, col_tit_txt = st.columns([0.1, 3.9], vertical_alignment="center")
         with col_tit_logo:
@@ -1460,7 +1453,18 @@ else:
             else:
                 lojas_para_exibir = lista_lojas_sistema
 
-            tabs_lojas = st.tabs([f"🏪 {l}" for l in lojas_para_exibir])
+            # SISTEMA DINÂMICO DE SINOS (🔔) NAS ABAS DE LOJAS
+            nomes_abas_lojas = []
+            for l in lojas_para_exibir:
+                df_l_check = df_rom[
+                    df_rom["loja"].str.contains(l, case=False, na=False) |
+                    df_rom.get("loja_destino", pd.Series(dtype=str)).str.contains(l, case=False, na=False)
+                ]
+                tem_pendente_loja = not df_l_check[df_l_check["status_nota"].str.strip().str.lower() == "pendente"].empty
+                prefixo_sino = "🔔 " if tem_pendente_loja else ""
+                nomes_abas_lojas.append(f"{prefixo_sino}🏪 {l}")
+
+            tabs_lojas = st.tabs(nomes_abas_lojas)
             for idx_l, loja_nome in enumerate(lojas_para_exibir):
                 with tabs_lojas[idx_l]:
                     st.markdown(f"### 📋 Romaneios - {loja_nome}")
@@ -1480,7 +1484,27 @@ else:
                             "📦 Transferência/Bonificação": "Transferência/Bonificação",
                             "🔄 Troca por Troca": "Troca por Troca"
                         }
-                        subtabs_tipo = st.tabs(list(tipos_operacao_map.keys()))
+                        
+                        # SISTEMA DINÂMICO DE SINOS (🔔) NAS ABAS DE TIPOS DE OPERAÇÃO
+                        nomes_abas_tipos = []
+                        for label_tp, tipo_val in tipos_operacao_map.items():
+                            if tipo_val == "TODOS OS TIPOS":
+                                df_tp_check = df_loja_atual.copy()
+                            else:
+                                if tipo_val == "Transferência":
+                                    df_tp_check = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() == "transferência"]
+                                elif tipo_val == "Bonificação":
+                                    df_tp_check = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() == "bonificação"]
+                                else:
+                                    df_tp_check = df_loja_atual[df_loja_atual["tipo_operacao"].str.contains(tipo_val, case=False, na=False)]
+                            
+                            tem_pendente_tp = not df_tp_check[df_tp_check["status_nota"].str.strip().str.lower() == "pendente"].empty
+                            sino_tp = "🔔 " if tem_pendente_tp else ""
+                            # Substitui o ícone padrão ou adiciona o sino na frente do label da aba
+                            label_limpo = label_tp.split(" ", 1)[1] if " " in label_tp else label_tp
+                            nomes_abas_tipos.append(f"{sino_tp}{label_tp}")
+
+                        subtabs_tipo = st.tabs(nomes_abas_tipos)
                         for idx_t, (label_aba, tipo_op_val) in enumerate(tipos_operacao_map.items()):
                             with subtabs_tipo[idx_t]:
                                 if tipo_op_val == "TODOS OS TIPOS":
@@ -1562,7 +1586,7 @@ else:
                                                             (str(novo_st_sel), r_id_st)
                                                         )
                                                         conn_st.commit()
-                                                        st.success("Status atualizado com sucesso!")
+                                                        st.success("Status atualizado com sucesso! (Sino de notificação removido se alterado)")
                                                         st.rerun()
                                                     except Exception as e:
                                                         conn_st.rollback()
