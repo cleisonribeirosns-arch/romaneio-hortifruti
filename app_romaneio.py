@@ -57,26 +57,9 @@ header {visibility: hidden;}
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PWA (MANIFESTO PARA ÍCONE E NOME NO TELEMÓVEL)
+# CONFIGURAÇÃO DE PWA (REFERÊNCIA AO ARQUIVO MANIFEST.JSON FISICO)
 # ---------------------------------------------------------
-pwa_manifest_code = """
-<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{
-  'name': 'HortiControl Supernova',
-  'short_name': 'HortiControl',
-  'start_url': '.',
-  'display': 'standalone',
-  'background_color': '#0E140C',
-  'theme_color': '#2E7D32',
-  'icons': [
-    {
-      'src': 'logo_romaneio.png.jpg',
-      'sizes': '512x512',
-      'type': 'image/jpeg'
-    }
-  ]
-}">
-"""
-st.markdown(pwa_manifest_code, unsafe_allow_html=True)
+st.markdown('<link rel="manifest" href="manifest.json">', unsafe_allow_html=True)
 
 import plotly.express as px
 import plotly.graph_objects as go
