@@ -261,36 +261,27 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
             canvas_doc.restoreState()
 
 # ---------------------------------------------------------
-# SELETOR DE DATA UNIFICADO E INFINITO (DE 2000 ATÉ O INFINITO)
+# SELETOR DE DATA ESTILO CISSPOWER (COMPACTO E CLÁSSICO)
 # ---------------------------------------------------------
 def seletor_data_unificado(label_titulo, key_prefix):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
     
-    # Garantir intervalo de anos de 2000 até o infinito (ex: 2100 ou mais)
-    anos_disponiveis = list(range(2000, 2151))
-    meses_dict = {
-        1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-        5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
-        9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
-    }
-    
     st.markdown(f"**{label_titulo}**")
     
-    # Usando o st.date_input nativo do Streamlit configurado com min_value e max_value amplos,
-    # ou uma linha limpa. O st.date_input agora aceita perfeitamente qualquer ano a partir de 2000.
+    # Componente unificado limpo e fluido, permitindo navegar livremente de 2000 até o infinito[cite: 12]
     data_selecionada = st.date_input(
         label_titulo,
         value=hoje.date(),
         min_value=datetime(2000, 1, 1).date(),
         max_value=datetime(2150, 12, 31).date(),
         format="DD/MM/YYYY",
-        key=f"{key_prefix}_date_input_unico",
+        key=f"{key_prefix}_date_input_ciss",
         label_visibility="collapsed"
     )
     return data_selecionada
 
 # ---------------------------------------------------------
-# 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
+# BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
 # ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
@@ -947,7 +938,7 @@ if img_padrao_fundo:
         pass
 
 # ---------------------------------------------------------
-# 4. TELA DE LOGIN
+# TELA DE LOGIN
 # ---------------------------------------------------------
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
@@ -1259,7 +1250,7 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
             with col2:
-                # SELETOR DE DATA UNIFICADO (COM ANOS DE 2000 ATE O INFINITO)
+                # SELETOR DE DATA ESTILO CISSPOWER (COM ANOS DE 2000 ATÉ O INFINITO)
                 data_rec_val = seletor_data_unificado("Data do Recebimento (Livre - A partir de 2000)", f"rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
 
