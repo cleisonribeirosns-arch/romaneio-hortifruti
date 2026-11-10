@@ -599,9 +599,9 @@ def fmt_ptbr(val, decimais=2):
         return "0,00"
 
 # ---------------------------------------------------------
-# GERADORES DE PDF
+# GERADORES DE PDF (COM SUPORTE ROBUSTO A ASSINATURAS EM BASE64)
 # ---------------------------------------------------------
-def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None):
+def gerar_pdf_romaneio(romaneio_data, itens_data):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
     story = []
@@ -658,16 +658,67 @@ def gerar_pdf_romaneio(romaneio_data, itens_data, path_conf=None, path_ent=None)
     story.append(total_table)
     story.append(Spacer(1, 15))
     
-    path_conf_transp = remover_fundo_branco(path_conf)
-    path_ent_transp = remover_fundo_branco(path_ent)
+    # PROCESSAMENTO ROBUSTO DAS ASSINATURAS (VIA BASE64 DO BANCO OU ARQUIVO LOCAL)
     img_conf_pdf = None
-    if path_conf_transp and os.path.exists(path_conf_transp):
-        try: img_conf_pdf = RLImage(path_conf_transp, width=180, height=45)
-        except Exception: pass
+    b64_conf = romaneio_data.get('ass_conf_b64', '')
+    path_conf = romaneio_data.get('assinatura_conferente', '')
+    
+    if b64_conf:
+        try:
+            img_bytes = base64.b64decode(b64_conf)
+            img_io = io.BytesIO(img_bytes)
+            # Remove fundo branco da assinatura em memória
+            img_pil = Image.open(img_io).convert("RGBA")
+            datas = img_pil.getdata()
+            newData = []
+            for item in datas:
+                if item[0] > 180 and item[1] > 180 and item[2] > 180:
+                    newData.append((255, 255, 255, 0))
+                else:
+                    newData.append(item)
+            img_pil.putdata(newData)
+            buf_clean = io.BytesIO()
+            img_pil.save(buf_clean, format="PNG")
+            buf_clean.seek(0)
+            img_conf_pdf = RLImage(buf_clean, width=180, height=45)
+        except Exception:
+            pass
+    elif path_conf and os.path.exists(path_conf):
+        try:
+            path_conf_transp = remover_fundo_branco(path_conf)
+            img_conf_pdf = RLImage(path_conf_transp, width=180, height=45)
+        except Exception:
+            pass
+
     img_ent_pdf = None
-    if path_ent_transp and os.path.exists(path_ent_transp):
-        try: img_ent_pdf = RLImage(path_ent_transp, width=180, height=45)
-        except Exception: pass
+    b64_ent = romaneio_data.get('ass_ent_b64', '')
+    path_ent = romaneio_data.get('assinatura_entregador', '')
+    
+    if b64_ent:
+        try:
+            img_bytes_e = base64.b64decode(b64_ent)
+            img_io_e = io.BytesIO(img_bytes_e)
+            img_pil_e = Image.open(img_io_e).convert("RGBA")
+            datas_e = img_pil_e.getdata()
+            newData_e = []
+            for item in datas_e:
+                if item[0] > 180 and item[1] > 180 and item[2] > 180:
+                    newData_e.append((255, 255, 255, 0))
+                else:
+                    newData_e.append(item)
+            img_pil_e.putdata(newData_e)
+            buf_clean_e = io.BytesIO()
+            img_pil_e.save(buf_clean_e, format="PNG")
+            buf_clean_e.seek(0)
+            img_ent_pdf = RLImage(buf_clean_e, width=180, height=45)
+        except Exception:
+            pass
+    elif path_ent and os.path.exists(path_ent):
+        try:
+            path_ent_transp = remover_fundo_branco(path_ent)
+            img_ent_pdf = RLImage(path_ent_transp, width=180, height=45)
+        except Exception:
+            pass
         
     col_conf_cell = [img_conf_pdf if img_conf_pdf else Spacer(1, 45), Paragraph(f"<b>Assinatura do Conferente:</b><br/>{romaneio_data.get('conferente','')}", styles["Normal"])]
     col_ent_cell = [img_ent_pdf if img_ent_pdf else Spacer(1, 45), Paragraph(f"<b>Assinatura do Entregador / Fornecedor:</b><br/>{romaneio_data.get('fornecedor','')}", styles["Normal"])]
@@ -973,7 +1024,6 @@ if st.session_state["usuario_logado"] is None:
             
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
-        # APLICANDO A LOGOMARCA MAIOR E EM 3D COM EFEITO DE RELEVO E SOMBRAS
         if logo_display:
             logo_b64_transp = obter_logo_transparente_b64(logo_display)
             if logo_b64_transp:
@@ -1411,17 +1461,29 @@ else:
                 conn, db_type = get_db_connection()
                 try:
                     if not os.path.exists("uploads"): os.makedirs("uploads")
+                    
+                    # CONVERSÃO E PERSISTÊNCIA DAS ASSINATURAS EM BASE64 NO BANCO
                     path_ass_conf = ""
+                    b64_conf_str = ""
                     if canvas_conf.image_data is not None:
                         img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
                         path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
                         img_c.save(path_ass_conf)
+                        
+                        buffered_c = io.BytesIO()
+                        img_c.save(buffered_c, format="PNG")
+                        b64_conf_str = base64.b64encode(buffered_c.getvalue()).decode("utf-8")
 
                     path_ass_ent = ""
+                    b64_ent_str = ""
                     if canvas_ent.image_data is not None:
                         img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
                         path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
                         img_e.save(path_ass_ent)
+                        
+                        buffered_e = io.BytesIO()
+                        img_e.save(buffered_e, format="PNG")
+                        b64_ent_str = base64.b64encode(buffered_e.getvalue()).decode("utf-8")
 
                     caminho_foto_salva = ""
                     if fotos_upload:
@@ -1439,7 +1501,7 @@ else:
                         data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao,
                         observacoes, foto_b64, ass_conf_b64, ass_ent_b64)
                         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
-                        """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, "", "", ""))
+                        """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, "", b64_conf_str, b64_ent_str))
                         romaneio_id = cursor.fetchone()[0]
                     else:
                         cursor.execute("""
@@ -1448,7 +1510,7 @@ else:
                         data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao,
                         observacoes, foto_b64, ass_conf_b64, ass_ent_b64)
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, "", "", ""))
+                        """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, "", b64_conf_str, b64_ent_str))
                         romaneio_id = cursor.lastrowid
 
                     itens_salvos_pdf = []
@@ -1473,12 +1535,13 @@ else:
                         "loja_origem": loja_origem, "loja_destino": loja_destino,
                         "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista,
                         "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao,
-                        "observacoes": observacoes_romaneio
+                        "observacoes": observacoes_romaneio,
+                        "ass_conf_b64": b64_conf_str, "ass_ent_b64": b64_ent_str
                     }
 
                     disparar_notificacao_sistema(romaneio_dict_atual, st.session_state["itens_romaneio"])
 
-                    pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf, path_ass_conf, path_ass_ent)
+                    pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf)
                     st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
                     st.session_state["ultimo_num_romaneio"] = num_rom_final
                     st.session_state["itens_romaneio"] = []
@@ -1506,7 +1569,7 @@ else:
         st.title("🗂️ Consultar & Gerenciar Romaneios de Recebimento")
         conn, db_type = get_db_connection()
         try:
-            df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
+            df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes, ass_conf_b64, ass_ent_b64 FROM romaneios ORDER BY id DESC", conn)
             df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
         finally:
             conn.close()
@@ -1672,10 +1735,7 @@ else:
                                             finally:
                                                 conn_i.close()
 
-                                            path_conf_reg = row_sel.get("assinatura_conferente", "")
-                                            path_ent_reg = row_sel.get("assinatura_entregador", "")
-
-                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()], path_conf_reg, path_ent_reg)
+                                            pdf_buf = gerar_pdf_romaneio(row_sel.to_dict(), [(None, r['produto'], r['quantidade'], r['unidade'], r['valor_unitario'], r['valor_total']) for _, r in df_itens_r.iterrows()])
                                             col_dl_p, col_del_p = st.columns([2, 1])
                                             with col_dl_p:
                                                 st.download_button(
@@ -2858,7 +2918,7 @@ else:
                             st.success("Cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            conn.rollback()
+                            conn_del.rollback() # type: ignore
                             st.error(f"Erro: {e}")
                         finally:
                             conn.close()
@@ -2916,7 +2976,7 @@ else:
                                     )
                                 else:
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
                                         (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
                                     )
                                 conn_up_u.commit()
