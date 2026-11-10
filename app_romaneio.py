@@ -261,47 +261,33 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
             canvas_doc.restoreState()
 
 # ---------------------------------------------------------
-# SELETOR DE DATA INFINITO (CUSTOMIZADO COM MESES E ANOS LIVRES)
+# SELETOR DE DATA UNIFICADO E INFINITO (DE 2000 ATÉ O INFINITO)
 # ---------------------------------------------------------
-def seletor_data_infinito(label_titulo, key_prefix):
-    st.markdown(f"**{label_titulo}**")
-    col_d, col_m, col_a = st.columns([1, 1.5, 1])
-    
+def seletor_data_unificado(label_titulo, key_prefix):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
     
-    anos_disponiveis = list(range(1900, 2101)) # Anos de 1900 a 2100 (Infinito/Amplo)
+    # Garantir intervalo de anos de 2000 até o infinito (ex: 2100 ou mais)
+    anos_disponiveis = list(range(2000, 2151))
     meses_dict = {
         1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
-        5: "Mai", 5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
+        5: "Maio", 6: "Junho", 7: "Julho", 8: "Agosto",
         9: "Setembro", 10: "Outubro", 11: "Novembro", 12: "Dezembro"
     }
     
-    with col_a:
-        ano_sel = st.selectbox("Ano", options=anos_disponiveis, index=anos_disponiveis.index(hoje.year), key=f"{key_prefix}_ano")
-    with col_m:
-        mes_nomes = list(meses_dict.values())
-        mes_sel_nome = st.selectbox("Mês", options=mes_nomes, index=hoje.month - 1, key=f"{key_prefix}_mes")
-        mes_num = [k for k, v in meses_dict.items() if v == mes_sel_nome][0]
-    with col_d:
-        # Calcular dias do mês selecionado corretamente
-        if mes_num in [1, 3, 5, 7, 8, 10, 12]:
-            total_dias = 31
-        elif mes_num in [4, 6, 9, 11]:
-            total_dias = 30
-        else: # Fevereiro
-            if (ano_sel % 4 == 0 and ano_sel % 100 != 0) or (ano_sel % 400 == 0):
-                total_dias = 29
-            else:
-                total_dias = 28
-                
-        dias_disponiveis = list(range(1, total_dias + 1))
-        dia_padrao = min(hoje.day, total_dias)
-        dia_sel = st.selectbox("Dia", options=dias_disponiveis, index=dia_padrao - 1, key=f"{key_prefix}_dia")
-        
-    try:
-        return datetime(ano_sel, mes_num, dia_sel).date()
-    except Exception:
-        return hoje.date()
+    st.markdown(f"**{label_titulo}**")
+    
+    # Usando o st.date_input nativo do Streamlit configurado com min_value e max_value amplos,
+    # ou uma linha limpa. O st.date_input agora aceita perfeitamente qualquer ano a partir de 2000.
+    data_selecionada = st.date_input(
+        label_titulo,
+        value=hoje.date(),
+        min_value=datetime(2000, 1, 1).date(),
+        max_value=datetime(2150, 12, 31).date(),
+        format="DD/MM/YYYY",
+        key=f"{key_prefix}_date_input_unico",
+        label_visibility="collapsed"
+    )
+    return data_selecionada
 
 # ---------------------------------------------------------
 # 3. BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
@@ -944,10 +930,10 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     return ""
 
 # ---------------------------------------------------------
-# CARREGAR O FUNDO PADRÃO GLOBAL AUTOMATICAMENTE
+# CARREGAR A IMAGEM PADRÃO EXATA (Tela de login.jpeg.jpeg) COMO FUNDO GLOBAL
 # ---------------------------------------------------------
 img_padrao_fundo = None
-for nome_img in ["image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
+for nome_img in ["Tela de login.jpeg.jpeg", "Tela de login.jpeg", "image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
     if os.path.exists(nome_img):
         img_padrao_fundo = nome_img
         break
@@ -974,7 +960,7 @@ if st.session_state["usuario_logado"] is None:
         st.markdown(css_login, unsafe_allow_html=True)
 
     logo_display = None
-    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg"]:
+    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg.jpeg"]:
         if os.path.exists(nome):
             logo_display = nome
             break
@@ -1273,8 +1259,8 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
             with col2:
-                # SELETOR DE DATA INFINITO (PERMITE ESCOLHER QUALQUER DIA, MÊS OU ANO LIVREMENTE)
-                data_rec_val = seletor_data_infinito("Data do Recebimento (Navegação Livre de Meses e Anos)", f"rec_{k_suffix}")
+                # SELETOR DE DATA UNIFICADO (COM ANOS DE 2000 ATE O INFINITO)
+                data_rec_val = seletor_data_unificado("Data do Recebimento (Livre - A partir de 2000)", f"rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
 
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
@@ -1317,7 +1303,7 @@ else:
             fornecedor = fornecedor_sel
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag_val = seletor_data_infinito("Data para Pagamento (Navegação Livre)", f"pag_{k_suffix}")
+                data_pag_val = seletor_data_unificado("Data para Pagamento (Livre)", f"pag_{k_suffix}")
                 data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
             conferente = st.text_input("Responsável Rec. Físico", value=user_info["nome"], disabled=True, key=f"conf_{k_suffix}")
 
@@ -1784,7 +1770,7 @@ else:
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
                 with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
                 with col_dt2: 
-                    data_entrada_manual = seletor_data_infinito("Data de Entrada (Livre)", "cad_bonf_dt")
+                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", "cad_bonf_dt")
                 with col_dt3:
                     hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
@@ -1935,7 +1921,7 @@ else:
                         idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
                         nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
                     with col_e3: 
-                        nova_data_input = seletor_data_infinito("Data de Entrada (Livre)", "edit_bonf_dt")
+                        nova_data_input = seletor_data_unificado("Data de Entrada (Livre)", "edit_bonf_dt")
                     with col_e4:
                         status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
                         idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
@@ -2132,7 +2118,7 @@ else:
 
                 col_dm1, col_dm2 = st.columns(2)
                 with col_dm1: 
-                    data_baixa_man = seletor_data_infinito("Data da Baixa (Livre)", f"bx_dt_{bx_suf}")
+                    data_baixa_man = seletor_data_unificado("Data da Baixa (Livre)", f"bx_dt_{bx_suf}")
                 with col_dm2:
                     hora_baixa_aut = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True, key=f"bx_hr_{bx_suf}")
@@ -2421,10 +2407,10 @@ else:
                 with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
                 with col_f3:
                     dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime(1900, 1, 1).date()
-                    dt_inicio = seletor_data_infinito("Data Início", "bi_ini")
+                    dt_inicio = seletor_data_unificado("Data Início", "bi_ini")
                 with col_f4:
                     dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                    dt_fim = seletor_data_infinito("Data Fim", "bi_fim")
+                    dt_fim = seletor_data_unificado("Data Fim", "bi_fim")
 
                 df_filtrado = df_full.copy()
                 if tipo_op_bi_sel != "TODOS OS TIPOS":
@@ -2857,7 +2843,7 @@ else:
                             conn_rollback = conn.rollback()
                             st.error(f"Erro: {e}")
                         finally:
-                            conn.close()
+                            conn_close()
         st.markdown("---")
         conn, db_type = get_db_connection()
         try:
@@ -2934,7 +2920,7 @@ else:
                                     (int(id_id_ed) if db_tdu == "postgres" else id_u_ed,)
                                 )
                                 conn_del_u.commit()
-                                st.success("Utilizador excluído com sucesso!")
+                                st.success("Excluído com sucesso!")
                                 st.rerun()
                             except Exception as e:
                                 conn_del_u.rollback()
