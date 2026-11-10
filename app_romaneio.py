@@ -973,20 +973,26 @@ if st.session_state["usuario_logado"] is None:
             
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
-        # APLICANDO A REMOÇÃO DO FUNDO BRANCO NA LOGO DA TELA DE LOGIN
+        # APLICANDO A LOGOMARCA MAIOR E EM 3D COM EFEITO DE RELEVO E SOMBRAS
         if logo_display:
             logo_b64_transp = obter_logo_transparente_b64(logo_display)
             if logo_b64_transp:
                 st.markdown(
                     f"""
-                    <div style="text-align: center; margin-bottom: 15px;">
-                        <img src="data:image/png;base64,{logo_b64_transp}" style="max-height: 140px; width: auto;" />
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <img src="data:image/png;base64,{logo_b64_transp}" 
+                             style="max-height: 220px; width: auto; 
+                                    filter: drop-shadow(0px 15px 25px rgba(0,0,0,0.85)) 
+                                            drop-shadow(0px 5px 10px rgba(0,200,0,0.35)) 
+                                            contrast(1.15) saturate(1.1);
+                                    transform: perspective(600px) rotateX(4deg);
+                                    transition: transform 0.3s ease;" />
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
             else:
-                st.image(logo_display, width=150)
+                st.image(logo_display, width=220)
                 
         st.markdown("<h2 style='text-align: center; color: white;'>HortiControl - Sistema de Recebimento Hortifrúti</h2>", unsafe_allow_html=True)
             
@@ -2910,7 +2916,7 @@ else:
                                     )
                                 else:
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
                                         (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
                                     )
                                 conn_up_u.commit()
