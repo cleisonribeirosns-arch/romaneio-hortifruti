@@ -244,9 +244,30 @@ def obter_logo_transparente_b64(caminho_imagem):
         return ""
 
 def exibir_foto_modal(caminho_foto, b64_foto=None):
+    # CORREÇÃO APLICADA: Tratamento adequado para arquivos PDF na função de exibição modal
+    if caminho_foto and caminho_foto.lower().endswith('.pdf'):
+        if os.path.exists(caminho_foto):
+            with open(caminho_foto, "rb") as f_pdf:
+                pdf_bytes = f_pdf.read()
+            st.success("📄 Documento PDF identificado.")
+            st.download_button(
+                label="📥 Baixar / Visualizar PDF Anexado",
+                data=pdf_bytes,
+                file_name=os.path.basename(caminho_foto),
+                mime="application/pdf"
+            )
+            return
+        else:
+            st.warning("Arquivo PDF não encontrado no servidor.")
+            return
+
     if caminho_foto and os.path.exists(caminho_foto):
-        st.image(caminho_foto, use_container_width=True)
-        return
+        try:
+            st.image(caminho_foto, use_container_width=True)
+            return
+        except Exception:
+            pass
+            
     if b64_foto:
         try:
             img_data = base64.b64decode(b64_foto)
@@ -254,7 +275,8 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
             return
         except Exception:
             pass
-    st.warning("Arquivo de anexo não encontrado no servidor.")
+            
+    st.warning("Arquivo de anexo não encontrado no servidor ou formato inválido.")
 
 def buscar_caminho_logo():
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
@@ -658,7 +680,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
     story.append(total_table)
     story.append(Spacer(1, 15))
     
-    # PROCESSAMENTO ROBUSTO DAS ASSINATURAS (VIA BASE64 DO BANCO OU ARQUIVO LOCAL)
     img_conf_pdf = None
     b64_conf = romaneio_data.get('ass_conf_b64', '')
     path_conf = romaneio_data.get('assinatura_conferente', '')
@@ -1860,7 +1881,6 @@ else:
                         spinner_supernova("Salvando bonificação...")
                         valor_bonf_val = parse_float_ptbr(valor_bonf_str)
 
-                        # CORREÇÃO APLICADA: Garante que a pasta uploads existe antes de salvar
                         if not os.path.exists("uploads"):
                             os.makedirs("uploads")
 
@@ -2887,7 +2907,7 @@ else:
                                 conn_del_f, db_tdf = get_db_connection()
                                 try:
                                     cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdp == "postgres" else id_f_ed,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
                                     conn_del_f.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
