@@ -891,7 +891,7 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
         return f"""
         <style>
         .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.7), rgba(0,0,0,0.7)), url("data:image/jpeg;base64,{custom_b64}");
+            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{custom_b64}");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
@@ -901,6 +901,23 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     return ""
 
 # ---------------------------------------------------------
+# CARREGAR O FUNDO PADRÃO GLOBAL AUTOMATICAMENTE
+# ---------------------------------------------------------
+img_padrao_fundo = None
+for nome_img in ["image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
+    if os.path.exists(nome_img):
+        img_padrao_fundo = nome_img
+        break
+
+b64_padrao_global = ""
+if img_padrao_fundo:
+    try:
+        with open(img_padrao_fundo, "rb") as f_bg_glob:
+            b64_padrao_global = base64.b64encode(f_bg_glob.read()).decode('utf-8')
+    except Exception:
+        pass
+
+# ---------------------------------------------------------
 # 4. TELA DE LOGIN
 # ---------------------------------------------------------
 if "usuario_logado" not in st.session_state:
@@ -908,7 +925,7 @@ if "usuario_logado" not in st.session_state:
 
 if st.session_state["usuario_logado"] is None:
     tema_login_padrao = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
-    b64_login_padrao = st.session_state.get("custom_bg_b64", "")
+    b64_login_padrao = st.session_state.get("custom_bg_b64", b64_padrao_global)
     css_login = obter_css_fundo(tema_login_padrao, b64_login_padrao)
     if css_login:
         st.markdown(css_login, unsafe_allow_html=True)
@@ -961,13 +978,7 @@ if st.session_state["usuario_logado"] is None:
                         if usuario[6]:
                             st.session_state["custom_bg_b64"] = usuario[6]
                         elif tema_usr_db == "Logomarca Oficial Supernova":
-                            img_padrao_fundo = "image_e68cb8.jpg"
-                            if os.path.exists(img_padrao_fundo):
-                                try:
-                                    with open(img_padrao_fundo, "rb") as f_bg:
-                                        st.session_state["custom_bg_b64"] = base64.b64encode(f_bg.read()).decode('utf-8')
-                                except Exception:
-                                    pass
+                            st.session_state["custom_bg_b64"] = b64_padrao_global
 
                         st.success(f"Bem-vindo(a), {usuario[1]} na {loja_login_sel}!")
                         st.rerun()
@@ -984,17 +995,11 @@ else:
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
-    custom_bg_b64_usuario = st.session_state.get("custom_bg_b64", "")
+    custom_bg_b64_usuario = st.session_state.get("custom_bg_b64", b64_padrao_global)
     
     if tema_selecionado_usuario == "Logomarca Oficial Supernova" and not custom_bg_b64_usuario:
-        img_padrao_fundo = "image_e68cb8.jpg"
-        if os.path.exists(img_padrao_fundo):
-            try:
-                with open(img_padrao_fundo, "rb") as f_bg:
-                    custom_bg_b64_usuario = base64.b64encode(f_bg.read()).decode('utf-8')
-                    st.session_state["custom_bg_b64"] = custom_bg_b64_usuario
-            except Exception:
-                pass
+        custom_bg_b64_usuario = b64_padrao_global
+        st.session_state["custom_bg_b64"] = custom_bg_b64_usuario
 
     css_fundo_dinamico = obter_css_fundo(tema_selecionado_usuario, custom_bg_b64_usuario)
     if css_fundo_dinamico:
@@ -1071,13 +1076,7 @@ else:
             st.session_state["tema_bg_selecionado"] = sel_tema_bg
 
             if sel_tema_bg == "Logomarca Oficial Supernova":
-                img_padrao_fundo = "image_e68cb8.jpg"
-                if os.path.exists(img_padrao_fundo):
-                    try:
-                        with open(img_padrao_fundo, "rb") as f_bg:
-                            st.session_state["custom_bg_b64"] = base64.b64encode(f_bg.read()).decode('utf-8')
-                    except Exception:
-                        pass
+                st.session_state["custom_bg_b64"] = b64_padrao_global
             elif sel_tema_bg.startswith("Galeria: "):
                 nome_escolhido = sel_tema_bg.replace("Galeria: ", "")
                 conn_w2, db_tw2 = get_db_connection()
@@ -1231,12 +1230,12 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
             with col2:
-                # SELETOR DE DATA FLEXÍVEL COM SUPORTE AMPLO (2020 a 2035) E DIGITAÇÃO LIVRE DD/MM/AAAA
+                # SELETOR DE DATA AMPLIADO (1900 a 2050) PARA PERMITIR QUALQUER ANO PASSADO
                 data_rec_val = st.date_input(
                     "Data do Recebimento (Livre)", 
                     value=datetime.now(ZoneInfo("America/Manaus")), 
-                    min_value=datetime(2020, 1, 1).date(),
-                    max_value=datetime(2035, 12, 31).date(),
+                    min_value=datetime(1900, 1, 1).date(),
+                    max_value=datetime(2050, 12, 31).date(),
                     format="DD/MM/YYYY", 
                     key=f"data_rec_{k_suffix}"
                 )
@@ -1284,8 +1283,8 @@ else:
                 data_pag_val = st.date_input(
                     "Data para Pagamento (Livre)", 
                     value=None, 
-                    min_value=datetime(2020, 1, 1).date(),
-                    max_value=datetime(2035, 12, 31).date(),
+                    min_value=datetime(1900, 1, 1).date(),
+                    max_value=datetime(2050, 12, 31).date(),
                     format="DD/MM/YYYY", 
                     key=f"data_pag_{k_suffix}"
                 )
@@ -1758,8 +1757,8 @@ else:
                     data_entrada_manual = st.date_input(
                         "Data de Entrada (Livre)", 
                         value=datetime.now(ZoneInfo("America/Manaus")), 
-                        min_value=datetime(2020, 1, 1).date(),
-                        max_value=datetime(2035, 12, 31).date(),
+                        min_value=datetime(1900, 1, 1).date(),
+                        max_value=datetime(2050, 12, 31).date(),
                         format="DD/MM/YYYY"
                     )
                 with col_dt3:
@@ -1915,8 +1914,8 @@ else:
                         nova_data_input = st.date_input(
                             "Data de Entrada (Livre)", 
                             value=dt_obj_default, 
-                            min_value=datetime(2020, 1, 1).date(),
-                            max_value=datetime(2035, 12, 31).date(),
+                            min_value=datetime(1900, 1, 1).date(),
+                            max_value=datetime(2050, 12, 31).date(),
                             format="DD/MM/YYYY"
                         )
                     with col_e4:
@@ -2118,8 +2117,8 @@ else:
                     data_baixa_man = st.date_input(
                         "Data da Baixa (Livre)", 
                         value=datetime.now(ZoneInfo("America/Manaus")), 
-                        min_value=datetime(2020, 1, 1).date(),
-                        max_value=datetime(2035, 12, 31).date(),
+                        min_value=datetime(1900, 1, 1).date(),
+                        max_value=datetime(2050, 12, 31).date(),
                         format="DD/MM/YYYY", 
                         key=f"bx_dt_{bx_suf}"
                     )
@@ -2410,12 +2409,12 @@ else:
                 with col_f1: loja_sel = st.selectbox("Filtrar por Loja", ["TODAS AS LOJAS"] + list(df_roms["loja"].unique()), placeholder="Selecione...", key="rel_filter_loja")
                 with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
                 with col_f3:
-                    dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
+                    dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime(1900, 1, 1).date()
                     dt_inicio = st.date_input(
                         "Data Início (Livre)", 
                         value=dt_min, 
-                        min_value=datetime(2020, 1, 1).date(),
-                        max_value=datetime(2035, 12, 31).date(),
+                        min_value=datetime(1900, 1, 1).date(),
+                        max_value=datetime(2050, 12, 31).date(),
                         format="DD/MM/YYYY", 
                         key="rel_filter_dt_ini"
                     )
@@ -2424,8 +2423,8 @@ else:
                     dt_fim = st.date_input(
                         "Data Fim (Livre)", 
                         value=dt_max, 
-                        min_value=datetime(2020, 1, 1).date(),
-                        max_value=datetime(2035, 12, 31).date(),
+                        min_value=datetime(1900, 1, 1).date(),
+                        max_value=datetime(2050, 12, 31).date(),
                         format="DD/MM/YYYY", 
                         key="rel_filter_dt_fim"
                     )
@@ -2935,9 +2934,9 @@ else:
                                 cur_delu = conn_del_u.cursor()
                                 cur_delu.execute(
                                     "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
-                                    (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,)
+                                    (int(id_id_ed) if db_tdu == "postgres" else id_u_ed,)
                                 )
-                                conn_del__u.commit()
+                                conn_del_u.commit()
                                 st.success("Utilizador excluído com sucesso!")
                                 st.rerun()
                             except Exception as e:
