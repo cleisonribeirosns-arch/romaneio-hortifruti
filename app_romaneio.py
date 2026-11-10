@@ -244,7 +244,6 @@ def obter_logo_transparente_b64(caminho_imagem):
         return ""
 
 def exibir_foto_modal(caminho_foto, b64_foto=None):
-    # CORREÇÃO APLICADA: Tratamento adequado para arquivos PDF na função de exibição modal
     if caminho_foto and caminho_foto.lower().endswith('.pdf'):
         if os.path.exists(caminho_foto):
             with open(caminho_foto, "rb") as f_pdf:
@@ -2110,7 +2109,7 @@ else:
         if not df_baixar_hist.empty:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
-                total_baixado_por_nota[str(nf_e)] = float(val_bx)
+                total_baixado_por_nota[str(nf_e).strip()] = float(val_bx)
 
         conn_b_all, db_tb_all = get_db_connection()
         try:
@@ -2118,13 +2117,18 @@ else:
             if not df_todas_bonf.empty:
                 cur_st_up = conn_b_all.cursor()
                 for _, r_b in df_todas_bonf.iterrows():
-                    num_nf_b = str(r_b["numero_nota"])
+                    num_nf_b = str(r_b["numero_nota"]).strip()
                     val_orig_b = float(r_b["valor_bonificacao"])
                     baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
                     saldo_b = max(0.0, val_orig_b - baixado_b)
-                    if baixado_b <= 0: novo_st_auto = "Disponível"
-                    elif saldo_b > 0: novo_st_auto = "Parcialmente Utilizada"
-                    else: novo_st_auto = "Totalmente Utilizada"
+                    
+                    if baixado_b <= 0: 
+                        novo_st_auto = "Disponível"
+                    elif saldo_b > 0: 
+                        novo_st_auto = "Parcialmente Utilizada"
+                    else: 
+                        novo_st_auto = "Totalmente Utilizada"
+                        
                     if r_b["status"] != novo_st_auto:
                         r_b_id = int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"]
                         cur_st_up.execute(
@@ -2140,36 +2144,45 @@ else:
         dict_valor_orig_por_nf = {}
         if not df_todas_bonf.empty:
             for _, r_b in df_todas_bonf.iterrows():
-                dict_valor_orig_por_nf[str(r_b["numero_nota"])] = float(r_b["valor_bonificacao"])
+                dict_valor_orig_por_nf[str(r_b["numero_nota"]).strip()] = float(r_b["valor_bonificacao"])
 
+        # CORREÇÃO APLICADA: Carrega notas ativas de todas as lojas para transferências e Loja 02 para bonificações puras
         if not df_todas_bonf.empty:
-            df_bonf_loja02 = df_todas_bonf[df_todas_bonf["loja"].str.contains("02|NOVA CIDADE", case=False, na=False) & df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
+            df_bonf_ativas = df_todas_bonf[df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
         else:
-            df_bonf_loja02 = pd.DataFrame()
+            df_bonf_ativas = pd.DataFrame()
 
         notas_com_saldo_loja02 = []
         notas_transf_loja02 = []
         saldo_geral_somado_loja02 = 0.0
 
-        if not df_bonf_loja02.empty:
-            for _, r_bonf in df_bonf_loja02.iterrows():
-                num_nf_ent = str(r_bonf["numero_nota"])
+        if not df_bonf_ativas.empty:
+            for _, r_bonf in df_bonf_ativas.iterrows():
+                num_nf_ent = str(r_bonf["numero_nota"]).strip()
                 val_original = float(r_bonf["valor_bonificacao"])
                 ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
                 saldo_restante_nota = max(0.0, val_original - ja_baixado)
+                
                 if saldo_restante_nota > 0:
-                    saldo_geral_somado_loja02 += saldo_restante_nota
                     tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
+                    loja_reg = str(r_bonf.get("loja", ""))
+                    
                     item_dict = {
                         "nf_entrada": num_nf_ent,
+                        "loja": loja_reg,
                         "produto": r_bonf.get("produto_hortifruti", "N/A"),
                         "valor_original": val_original,
                         "saldo_restante": saldo_restante_nota
                     }
+                    
                     if "Transferência" in tipo_b_reg:
+                        # Notas de transferência de QUALQUER loja aparecem aqui
                         notas_transf_loja02.append(item_dict)
                     else:
-                        notas_com_saldo_loja02.append(item_dict)
+                        # Bonificações puras mantêm restrição para Loja 02 / Nova Cidade
+                        if "02" in loja_reg or "NOVA CIDADE" in loja_reg.upper():
+                            saldo_geral_somado_loja02 += saldo_restante_nota
+                            notas_com_saldo_loja02.append(item_dict)
 
         st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
@@ -2187,12 +2200,12 @@ else:
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
         if notas_transf_loja02:
-            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
+            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação com Saldo Disponível (Todas as Lojas)", expanded=True):
                 df_tr_show = pd.DataFrame(notas_transf_loja02)
                 df_tr_show["Valor Original (R$)"] = df_tr_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_tr_show["Saldo Disponível (R$)"] = df_tr_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_tr_show = df_tr_show.rename(columns={"nf_entrada": "N° Nota de Transferência", "produto": "Produto Hortifrúti"})
-                st.dataframe(df_tr_show[["N° Nota de Transferência", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
+                df_tr_show = df_tr_show.rename(columns={"nf_entrada": "N° Nota de Transferência", "loja": "Loja Origem", "produto": "Produto Hortifrúti"})
+                st.dataframe(df_tr_show[["N° Nota de Transferência", "Loja Origem", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
         prods_cad_v = carregar_produtos_cached()
         lista_opcoes_prod_v = []
@@ -2241,7 +2254,7 @@ else:
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada inválida.")
                         elif round(val_avaria_f, 2) > round(nota_selecionada_dict["saldo_restante"], 2):
-                            st.error("❌ O valor da avaria ultrapassa o saldo restante da nota da Loja 02!")
+                            st.error("❌ O valor da avaria ultrapassa o saldo restante da nota!")
                         else:
                             path_nf_baixa = ""
                             if nf_baixa_file:
@@ -2277,17 +2290,11 @@ else:
                                         float(novo_saldo_restante_nota), float(saldo_disponivel_da_nota_referenciada), ""
                                     )
                                 )
-                                if "02" not in lojas_baixa_sel and "NOVA CIDADE" not in lojas_baixa_sel:
-                                    cursor_ins.execute(
-                                        "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE numero_nota = ?",
-                                        (nf_b_entrada_sel,)
-                                    )
-                                else:
-                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
-                                    cursor_ins.execute(
-                                        "UPDATE bonificacoes SET status = %s WHERE numero_nota = %s" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE numero_nota = ?",
-                                        (st_auto_l2, nf_b_entrada_sel)
-                                    )
+                                st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
+                                cursor_ins.execute(
+                                    "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
+                                    (st_auto_l2, str(nf_b_entrada_sel).strip())
+                                )
                                 conn_ins.commit()
                                 st.session_state["baixa_form_suffix"] += 1
                                 st.success("Baixa registrada com sucesso!")
@@ -2328,13 +2335,13 @@ else:
                 
                 saldo_atual_por_nf, utilizado_total_por_nf = {}, {}
                 for nf_ent_key, val_orig in dict_valor_orig_por_nf.items():
-                    v_bx_total = total_utilizado_por_nf.get(str(nf_ent_key), 0.0)
-                    utilizado_total_por_nf[str(nf_ent_key)] = v_bx_total
-                    saldo_atual_por_nf[str(nf_ent_key)] = max(0.0, float(val_orig) - v_bx_total)
+                    v_bx_total = total_utilizado_por_nf.get(str(nf_ent_key).strip(), 0.0)
+                    utilizado_total_por_nf[str(nf_ent_key).strip()] = v_bx_total
+                    saldo_atual_por_nf[str(nf_ent_key).strip()] = max(0.0, float(val_orig) - v_bx_total)
 
                 saldo_calculado_list, utilizado_calculado_list = [], []
                 for _, row_bx in df_display_plan.iterrows():
-                    nf_ent_item = str(row_bx["nf_b_entrada"])
+                    nf_ent_item = str(row_bx["nf_b_entrada"]).strip()
                     v_utilizado = utilizado_total_por_nf.get(nf_ent_item, float(row_bx["valor_total_avaria"]))
                     utilizado_calculado_list.append(v_utilizado)
                     v_saldo_atual_nota = saldo_atual_por_nf.get(nf_ent_item, float(row_bx["saldo_restante_nota"]))
