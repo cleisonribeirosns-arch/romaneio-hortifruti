@@ -15,12 +15,10 @@ import hashlib
 # SISTEMA DE SEGURANÇA E HASH DE SENHAS
 # ---------------------------------------------------------
 def gerar_hash_senha(senha: str) -> str:
-    """Gera um hash SHA-256 seguro com salt para a senha do usuário."""
     salt = "SuperNovaHortiControlSalt2026"
     return hashlib.sha256((salt + senha).encode('utf-8')).hexdigest()
 
 def verificar_senha(senha_digitada: str, senha_banco: str) -> bool:
-    """Compara senha digitada (com suporte a hash seguro ou legado em texto puro)."""
     if senha_banco == senha_digitada:  
         return True
     return gerar_hash_senha(senha_digitada) == senha_banco
@@ -47,7 +45,6 @@ st.set_page_config(
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-/* Oculta o botão de Fork/GitHub do Streamlit no topo da página */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
@@ -57,9 +54,26 @@ header {visibility: hidden;}
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PWA (REFERÊNCIA AO ARQUIVO MANIFEST.JSON FISICO)
+# CONFIGURAÇÃO DE PWA
 # ---------------------------------------------------------
-st.markdown('<link rel="manifest" href="manifest.json">', unsafe_allow_html=True)
+pwa_manifest_code = """
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{
+  'name': 'HortiControl Supernova',
+  'short_name': 'HortiControl',
+  'start_url': '.',
+  'display': 'standalone',
+  'background_color': '#0E140C',
+  'theme_color': '#2E7D32',
+  'icons': [
+    {
+      'src': 'logo_romaneio.png.jpg',
+      'sizes': '512x512',
+      'type': 'image/jpeg'
+    }
+  ]
+}">
+"""
+st.markdown(pwa_manifest_code, unsafe_allow_html=True)
 
 import plotly.express as px
 import plotly.graph_objects as go
@@ -89,7 +103,7 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# FUNÇÕES DE CONEXÃO E AUXILIARES / PARSING GLOBAL
+# FUNÇÕES DE CONEXÃO E AUXILIARES
 # ---------------------------------------------------------
 def get_db_connection():
     if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
@@ -940,10 +954,22 @@ if st.session_state["usuario_logado"] is None:
                             "login": usuario[3],
                             "loja_atual": loja_login_sel
                         }
-                        st.session_state["tema_bg_selecionado"] = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
+                        # SE O USUÁRIO NÃO TIVER TEMA SALVO, APLICAR A IMAGEM DE FUNDO PADRÃO SOLICITADA
+                        tema_usr_db = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
+                        st.session_state["tema_bg_selecionado"] = tema_usr_db
                         st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
+                        
                         if usuario[6]:
                             st.session_state["custom_bg_b64"] = usuario[6]
+                        elif tema_usr_db == "Logomarca Oficial Supernova":
+                            # TENTA CARREGAR A IMAGEM PADRÃO ENVIADA (image_e68cb8.jpg ou similar)
+                            img_padrao_fundo = "image_e68cb8.jpg"
+                            if os.path.exists(img_padrao_fundo):
+                                try:
+                                    with open(img_padrao_fundo, "rb") as f_bg:
+                                        st.session_state["custom_bg_b64"] = base64.b64encode(f_bg.read()).decode('utf-8')
+                                except Exception:
+                                    pass
 
                         st.success(f"Bem-vindo(a), {usuario[1]} na {loja_login_sel}!")
                         st.rerun()
@@ -959,8 +985,20 @@ else:
     
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
+    # APLICAÇÃO AUTOMÁTICA DA IMAGEM DE FUNDO PADRÃO SE ESTIVER NA OPÇÃO OFICIAL
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
     custom_bg_b64_usuario = st.session_state.get("custom_bg_b64", "")
+    
+    if tema_selecionado_usuario == "Logomarca Oficial Supernova" and not custom_bg_b64_usuario:
+        img_padrao_fundo = "image_e68cb8.jpg"
+        if os.path.exists(img_padrao_fundo):
+            try:
+                with open(img_padrao_fundo, "rb") as f_bg:
+                    custom_bg_b64_usuario = base64.b64encode(f_bg.read()).decode('utf-8')
+                    st.session_state["custom_bg_b64"] = custom_bg_b64_usuario
+            except Exception:
+                pass
+
     css_fundo_dinamico = obter_css_fundo(tema_selecionado_usuario, custom_bg_b64_usuario)
     if css_fundo_dinamico:
         st.markdown(css_fundo_dinamico, unsafe_allow_html=True)
@@ -1028,14 +1066,22 @@ else:
             idx_tema = opcoes_temas_bg.index(tema_atual) if tema_atual in opcoes_temas_bg else 0
             
             sel_tema_bg = st.selectbox(
-                "Selecione o Estilo / Papel de Parede do Sistema",
+                "Selecione o Estilo / Papel de Parede do Sistema (Individual)",
                 options=opcoes_temas_bg,
                 index=idx_tema,
                 key="sel_tema_bg_input"
             )
             st.session_state["tema_bg_selecionado"] = sel_tema_bg
 
-            if sel_tema_bg.startswith("Galeria: "):
+            if sel_tema_bg == "Logomarca Oficial Supernova":
+                img_padrao_fundo = "image_e68cb8.jpg"
+                if os.path.exists(img_padrao_fundo):
+                    try:
+                        with open(img_padrao_fundo, "rb") as f_bg:
+                            st.session_state["custom_bg_b64"] = base64.b64encode(f_bg.read()).decode('utf-8')
+                    except Exception:
+                        pass
+            elif sel_tema_bg.startswith("Galeria: "):
                 nome_escolhido = sel_tema_bg.replace("Galeria: ", "")
                 conn_w2, db_tw2 = get_db_connection()
                 try:
@@ -1101,7 +1147,6 @@ else:
                     finally:
                         conn_cfg.close()
 
-    # DEFINIÇÃO DOS MENUS COM ÍCONES INTUITIVOS E CORRESPONDENTES
     if is_conferente:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
@@ -1189,7 +1234,15 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
             with col2:
-                data_rec_val = st.date_input("Data do Recebimento", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"data_rec_{k_suffix}")
+                # SELETOR DE DATA FLEXÍVEL PARA QUAISQUER MESES E ANOS (MIN 2020 - MAX 2035)
+                data_rec_val = st.date_input(
+                    "Data do Recebimento", 
+                    value=datetime.now(ZoneInfo("America/Manaus")), 
+                    min_value=datetime(2020, 1, 1).date(),
+                    max_value=datetime(2035, 12, 31).date(),
+                    format="DD/MM/YYYY", 
+                    key=f"data_rec_{k_suffix}"
+                )
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
                     loja_origem = st.selectbox("Loja de Origem (Saiu)", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], index=0, placeholder="Selecione a origem...", key=f"loja_orig_{k_suffix}")
@@ -1231,7 +1284,14 @@ else:
             fornecedor = fornecedor_sel
             data_pag_str = ""
             if pag_a_vista == "NÃO":
-                data_pag_val = st.date_input("Data para Pagamento", value=None, format="DD/MM/YYYY", key=f"data_pag_{k_suffix}")
+                data_pag_val = st.date_input(
+                    "Data para Pagamento", 
+                    value=None, 
+                    min_value=datetime(2020, 1, 1).date(),
+                    max_value=datetime(2035, 12, 31).date(),
+                    format="DD/MM/YYYY", 
+                    key=f"data_pag_{k_suffix}"
+                )
                 data_pag_str = data_pag_val.strftime("%d/%m/%Y") if data_pag_val else ""
             conferente = st.text_input("Responsável Rec. Físico", value=user_info["nome"], disabled=True, key=f"conf_{k_suffix}")
 
@@ -1436,7 +1496,6 @@ else:
             else:
                 lojas_para_exibir = lista_lojas_sistema
 
-            # SISTEMA DINÂMICO DE SINOS (🔔) NAS ABAS DE LOJAS
             nomes_abas_lojas = []
             for l in lojas_para_exibir:
                 df_l_check = df_rom[
@@ -1468,7 +1527,6 @@ else:
                             "🔄 Troca por Troca": "Troca por Troca"
                         }
                         
-                        # SISTEMA DINÂMICO DE SINOS (🔔) NAS ABAS DE TIPOS DE OPERAÇÃO
                         nomes_abas_tipos = []
                         for label_tp, tipo_val in tipos_operacao_map.items():
                             if tipo_val == "TODOS OS TIPOS":
@@ -1483,8 +1541,6 @@ else:
                             
                             tem_pendente_tp = not df_tp_check[df_tp_check["status_nota"].str.strip().str.lower() == "pendente"].empty
                             sino_tp = "🔔 " if tem_pendente_tp else ""
-                            # Substitui o ícone padrão ou adiciona o sino na frente do label da aba
-                            label_limpo = label_tp.split(" ", 1)[1] if " " in label_tp else label_tp
                             nomes_abas_tipos.append(f"{sino_tp}{label_tp}")
 
                         subtabs_tipo = st.tabs(nomes_abas_tipos)
@@ -1569,7 +1625,7 @@ else:
                                                             (str(novo_st_sel), r_id_st)
                                                         )
                                                         conn_st.commit()
-                                                        st.success("Status atualizado com sucesso! (Sino de notificação removido se alterado)")
+                                                        st.success("Status atualizado com sucesso!")
                                                         st.rerun()
                                                     except Exception as e:
                                                         conn_st.rollback()
@@ -1701,7 +1757,14 @@ else:
 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
                 with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
-                with col_dt2: data_entrada_manual = st.date_input("Data de Entrada", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY")
+                with col_dt2: 
+                    data_entrada_manual = st.date_input(
+                        "Data de Entrada", 
+                        value=datetime.now(ZoneInfo("America/Manaus")), 
+                        min_value=datetime(2020, 1, 1).date(),
+                        max_value=datetime(2035, 12, 31).date(),
+                        format="DD/MM/YYYY"
+                    )
                 with col_dt3:
                     hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
@@ -1851,7 +1914,14 @@ else:
                         lista_lojas_alt = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                         idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
                         nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
-                    with col_e3: nova_data_input = st.date_input("Data de Entrada", value=dt_obj_default, format="DD/MM/YYYY")
+                    with col_e3: 
+                        nova_data_input = st.date_input(
+                            "Data de Entrada", 
+                            value=dt_obj_default, 
+                            min_value=datetime(2020, 1, 1).date(),
+                            max_value=datetime(2035, 12, 31).date(),
+                            format="DD/MM/YYYY"
+                        )
                     with col_e4:
                         status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
                         idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
@@ -2047,7 +2117,15 @@ else:
                     nf_baixa_file = st.file_uploader("NF da baixa (Anexo)", type=["pdf", "png", "jpg", "jpeg"], key=f"bx_file_{bx_suf}")
 
                 col_dm1, col_dm2 = st.columns(2)
-                with col_dm1: data_baixa_man = st.date_input("Data da Baixa", value=datetime.now(ZoneInfo("America/Manaus")), format="DD/MM/YYYY", key=f"bx_dt_{bx_suf}")
+                with col_dm1: 
+                    data_baixa_man = st.date_input(
+                        "Data da Baixa", 
+                        value=datetime.now(ZoneInfo("America/Manaus")), 
+                        min_value=datetime(2020, 1, 1).date(),
+                        max_value=datetime(2035, 12, 31).date(),
+                        format="DD/MM/YYYY", 
+                        key=f"bx_dt_{bx_suf}"
+                    )
                 with col_dm2:
                     hora_baixa_aut = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True, key=f"bx_hr_{bx_suf}")
@@ -2336,10 +2414,24 @@ else:
                 with col_f2: prod_sel = st.selectbox("Filtrar por Produto", ["TODOS OS PRODUTOS"] + sorted(list(df_itens["produto"].unique())), placeholder="Selecione...", key="rel_filter_prod")
                 with col_f3:
                     dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                    dt_inicio = st.date_input("Data Início", value=dt_min, format="DD/MM/YYYY", key="rel_filter_dt_ini")
+                    dt_inicio = st.date_input(
+                        "Data Início", 
+                        value=dt_min, 
+                        min_value=datetime(2020, 1, 1).date(),
+                        max_value=datetime(2035, 12, 31).date(),
+                        format="DD/MM/YYYY", 
+                        key="rel_filter_dt_ini"
+                    )
                 with col_f4:
                     dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
-                    dt_fim = st.date_input("Data Fim", value=dt_max, format="DD/MM/YYYY", key="rel_filter_dt_fim")
+                    dt_fim = st.date_input(
+                        "Data Fim", 
+                        value=dt_max, 
+                        min_value=datetime(2020, 1, 1).date(),
+                        max_value=datetime(2035, 12, 31).date(),
+                        format="DD/MM/YYYY", 
+                        key="rel_filter_dt_fim"
+                    )
 
                 df_filtrado = df_full.copy()
                 if tipo_op_bi_sel != "TODOS OS TIPOS":
@@ -2848,7 +2940,7 @@ else:
                                     "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
                                     (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,)
                                 )
-                                conn_del_u.commit()
+                                conn_del__u.commit()
                                 st.success("Utilizador excluído com sucesso!")
                                 st.rerun()
                             except Exception as e:
