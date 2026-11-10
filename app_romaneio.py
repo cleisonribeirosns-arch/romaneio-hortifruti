@@ -224,6 +224,25 @@ def remover_fundo_branco(caminho_imagem):
     except Exception:
         return caminho_imagem
 
+def obter_logo_transparente_b64(caminho_imagem):
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return ""
+    try:
+        img = Image.open(caminho_imagem).convert("RGBA")
+        datas = img.getdata()
+        newData = []
+        for item in datas:
+            if item[0] > 180 and item[1] > 180 and item[2] > 180:
+                newData.append((255, 255, 255, 0))
+            else:
+                newData.append(item)
+        img.putdata(newData)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
+    except Exception:
+        return ""
+
 def exibir_foto_modal(caminho_foto, b64_foto=None):
     if caminho_foto and os.path.exists(caminho_foto):
         st.image(caminho_foto, use_container_width=True)
@@ -268,7 +287,6 @@ def seletor_data_unificado(label_titulo, key_prefix):
     
     st.markdown(f"**{label_titulo}**")
     
-    # Componente unificado limpo e fluido, permitindo navegar livremente de 2000 até o infinito[cite: 12]
     data_selecionada = st.date_input(
         label_titulo,
         value=hoje.date(),
@@ -920,9 +938,6 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
         """
     return ""
 
-# ---------------------------------------------------------
-# CARREGAR A IMAGEM PADRÃO EXATA (Tela de login.jpeg.jpeg) COMO FUNDO GLOBAL
-# ---------------------------------------------------------
 img_padrao_fundo = None
 for nome_img in ["Tela de login.jpeg.jpeg", "Tela de login.jpeg", "image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
     if os.path.exists(nome_img):
@@ -955,18 +970,25 @@ if st.session_state["usuario_logado"] is None:
         if os.path.exists(nome):
             logo_display = nome
             break
+            
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
+        # APLICANDO A REMOÇÃO DO FUNDO BRANCO NA LOGO DA TELA DE LOGIN
         if logo_display:
-            col_logo, col_titulo = st.columns([0.45, 3.55], vertical_alignment="center")
-            with col_logo:
-                st.image(logo_display, use_container_width=True)
-            with col_titulo:
-                st.markdown("""<div class='titulo-logo'><span class='palavra-sup-mercado'>Supermercado</span><br><span class='palavra-super'>SUPER</span> <span class='palavra-nova'>NOVA</span><br><span class='palavra-cidade'>Cidade</span></div>""", unsafe_allow_html=True)
-                st.markdown("<h3>HortiControl - Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
-        else:
-            st.markdown("""<div class='titulo-logo'><span class='palavra-sup-mercado'>Supermercado</span><br><span class='palavra-super'>SUPER</span> <span class='palavra-nova'>NOVA</span><br><span class='palavra-cidade'>Cidade</span></div>""", unsafe_allow_html=True)
-            st.markdown("<h3>HortiControl - Sistema de Recebimento Hortifrúti</h3>", unsafe_allow_html=True)
+            logo_b64_transp = obter_logo_transparente_b64(logo_display)
+            if logo_b64_transp:
+                st.markdown(
+                    f"""
+                    <div style="text-align: center; margin-bottom: 15px;">
+                        <img src="data:image/png;base64,{logo_b64_transp}" style="max-height: 140px; width: auto;" />
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+            else:
+                st.image(logo_display, width=150)
+                
+        st.markdown("<h2 style='text-align: center; color: white;'>HortiControl - Sistema de Recebimento Hortifrúti</h2>", unsafe_allow_html=True)
             
         with st.form("form_login"):
             login_input = st.text_input("Usuário / Login ou Nome Completo", value="", placeholder="Digite seu usuário ou nome...")
@@ -1250,7 +1272,6 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
             with col2:
-                # SELETOR DE DATA ESTILO CISSPOWER (COM ANOS DE 2000 ATÉ O INFINITO)
                 data_rec_val = seletor_data_unificado("Data do Recebimento (Livre - A partir de 2000)", f"rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
 
@@ -2831,10 +2852,10 @@ else:
                             st.success("Cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            conn_rollback = conn.rollback()
+                            conn.rollback()
                             st.error(f"Erro: {e}")
                         finally:
-                            conn_close()
+                            conn.close()
         st.markdown("---")
         conn, db_type = get_db_connection()
         try:
@@ -2908,7 +2929,7 @@ else:
                                 cur_delu = conn_del_u.cursor()
                                 cur_delu.execute(
                                     "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
-                                    (int(id_id_ed) if db_tdu == "postgres" else id_u_ed,)
+                                    (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,)
                                 )
                                 conn_del_u.commit()
                                 st.success("Excluído com sucesso!")
