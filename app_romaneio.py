@@ -954,7 +954,6 @@ if st.session_state["usuario_logado"] is None:
                             "login": usuario[3],
                             "loja_atual": loja_login_sel
                         }
-                        # SE O USUÁRIO NÃO TIVER TEMA SALVO, APLICAR A IMAGEM DE FUNDO PADRÃO SOLICITADA
                         tema_usr_db = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
                         st.session_state["tema_bg_selecionado"] = tema_usr_db
                         st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
@@ -962,7 +961,6 @@ if st.session_state["usuario_logado"] is None:
                         if usuario[6]:
                             st.session_state["custom_bg_b64"] = usuario[6]
                         elif tema_usr_db == "Logomarca Oficial Supernova":
-                            # TENTA CARREGAR A IMAGEM PADRÃO ENVIADA (image_e68cb8.jpg ou similar)
                             img_padrao_fundo = "image_e68cb8.jpg"
                             if os.path.exists(img_padrao_fundo):
                                 try:
@@ -985,7 +983,6 @@ else:
     
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
-    # APLICAÇÃO AUTOMÁTICA DA IMAGEM DE FUNDO PADRÃO SE ESTIVER NA OPÇÃO OFICIAL
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
     custom_bg_b64_usuario = st.session_state.get("custom_bg_b64", "")
     
@@ -1234,9 +1231,9 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
             with col2:
-                # SELETOR DE DATA FLEXÍVEL PARA QUAISQUER MESES E ANOS (MIN 2020 - MAX 2035)
+                # SELETOR DE DATA FLEXÍVEL COM SUPORTE AMPLO (2020 a 2035) E DIGITAÇÃO LIVRE DD/MM/AAAA
                 data_rec_val = st.date_input(
-                    "Data do Recebimento", 
+                    "Data do Recebimento (Livre)", 
                     value=datetime.now(ZoneInfo("America/Manaus")), 
                     min_value=datetime(2020, 1, 1).date(),
                     max_value=datetime(2035, 12, 31).date(),
@@ -1285,7 +1282,7 @@ else:
             data_pag_str = ""
             if pag_a_vista == "NÃO":
                 data_pag_val = st.date_input(
-                    "Data para Pagamento", 
+                    "Data para Pagamento (Livre)", 
                     value=None, 
                     min_value=datetime(2020, 1, 1).date(),
                     max_value=datetime(2035, 12, 31).date(),
@@ -1759,7 +1756,7 @@ else:
                 with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
                 with col_dt2: 
                     data_entrada_manual = st.date_input(
-                        "Data de Entrada", 
+                        "Data de Entrada (Livre)", 
                         value=datetime.now(ZoneInfo("America/Manaus")), 
                         min_value=datetime(2020, 1, 1).date(),
                         max_value=datetime(2035, 12, 31).date(),
@@ -1916,7 +1913,7 @@ else:
                         nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
                     with col_e3: 
                         nova_data_input = st.date_input(
-                            "Data de Entrada", 
+                            "Data de Entrada (Livre)", 
                             value=dt_obj_default, 
                             min_value=datetime(2020, 1, 1).date(),
                             max_value=datetime(2035, 12, 31).date(),
@@ -2119,7 +2116,7 @@ else:
                 col_dm1, col_dm2 = st.columns(2)
                 with col_dm1: 
                     data_baixa_man = st.date_input(
-                        "Data da Baixa", 
+                        "Data da Baixa (Livre)", 
                         value=datetime.now(ZoneInfo("America/Manaus")), 
                         min_value=datetime(2020, 1, 1).date(),
                         max_value=datetime(2035, 12, 31).date(),
@@ -2405,7 +2402,7 @@ else:
                 df_roms['data_dt'] = pd.to_datetime(df_roms['data_recebimento'], format='%d/%m/%Y', errors='coerce')
                 df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
 
-                st.markdown("### 🔍 Filtros da Análise Gerencial")
+                st.markdown("### 🔍 Filtros da Análise Gerencial (Período Livre)")
                 col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1, 1, 1, 1])
                 with col_f0:
                     lista_tipos_op_bi = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
@@ -2415,7 +2412,7 @@ else:
                 with col_f3:
                     dt_min = df_roms['data_dt'].min() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
                     dt_inicio = st.date_input(
-                        "Data Início", 
+                        "Data Início (Livre)", 
                         value=dt_min, 
                         min_value=datetime(2020, 1, 1).date(),
                         max_value=datetime(2035, 12, 31).date(),
@@ -2425,7 +2422,7 @@ else:
                 with col_f4:
                     dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
                     dt_fim = st.date_input(
-                        "Data Fim", 
+                        "Data Fim (Livre)", 
                         value=dt_max, 
                         min_value=datetime(2020, 1, 1).date(),
                         max_value=datetime(2035, 12, 31).date(),
