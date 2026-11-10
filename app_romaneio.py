@@ -667,7 +667,6 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
         try:
             img_bytes = base64.b64decode(b64_conf)
             img_io = io.BytesIO(img_bytes)
-            # Remove fundo branco da assinatura em memória
             img_pil = Image.open(img_io).convert("RGBA")
             datas = img_pil.getdata()
             newData = []
@@ -1462,7 +1461,6 @@ else:
                 try:
                     if not os.path.exists("uploads"): os.makedirs("uploads")
                     
-                    # CONVERSÃO E PERSISTÊNCIA DAS ASSINATURAS EM BASE64 NO BANCO
                     path_ass_conf = ""
                     b64_conf_str = ""
                     if canvas_conf.image_data is not None:
@@ -1795,6 +1793,7 @@ else:
                                                         try:
                                                             path_foto_ed = row_sel.get("caminho_foto", "")
                                                             if novo_anexo_rom_up:
+                                                                if not os.path.exists("uploads"): os.makedirs("uploads")
                                                                 path_foto_ed = os.path.join("uploads", f"ROM_EDIT_{row_sel['numero_romaneio']}_{novo_anexo_rom_up.name}")
                                                                 b_up_rom = novo_anexo_rom_up.getbuffer()
                                                                 with open(path_foto_ed, "wb") as f_out: f_out.write(b_up_rom)
@@ -1861,11 +1860,16 @@ else:
                         spinner_supernova("Salvando bonificação...")
                         valor_bonf_val = parse_float_ptbr(valor_bonf_str)
 
+                        # CORREÇÃO APLICADA: Garante que a pasta uploads existe antes de salvar
+                        if not os.path.exists("uploads"):
+                            os.makedirs("uploads")
+
                         path_anexo_bonf = ""
                         if anexo_bonf:
                             path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
                             anexo_bytes = anexo_bonf.getbuffer()
-                            with open(path_anexo_bonf, "wb") as f_out: f_out.write(anexo_bytes)
+                            with open(path_anexo_bonf, "wb") as f_out: 
+                                f_out.write(anexo_bytes)
 
                         conn_b, db_tb = get_db_connection()
                         try:
@@ -2023,6 +2027,7 @@ else:
 
                             path_novo_arq = reg_obj_atual["caminho_anexo"]
                             if novo_anexo_up:
+                                if not os.path.exists("uploads"): os.makedirs("uploads")
                                 path_novo_arq = os.path.join("uploads", f"NF_EDIT_{reg_obj_atual['numero_nota']}_{novo_anexo_up.name}")
                                 bytes_up = novo_anexo_up.getbuffer()
                                 with open(path_novo_arq, "wb") as f_out: f_out.write(bytes_up)
@@ -2220,6 +2225,7 @@ else:
                         else:
                             path_nf_baixa = ""
                             if nf_baixa_file:
+                                if not os.path.exists("uploads"): os.makedirs("uploads")
                                 path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
                                 bytes_baixa = nf_baixa_file.getbuffer()
                                 with open(path_nf_baixa, "wb") as f_out: f_out.write(bytes_baixa)
@@ -2405,6 +2411,7 @@ else:
                                     
                                     path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
                                     if novo_anexo_bx_up:
+                                        if not os.path.exists("uploads"): os.makedirs("uploads")
                                         path_nf_bx_ed = os.path.join("uploads", f"NF_BAIXA_EDIT_{novo_ref_bx}_{novo_anexo_bx_up.name}")
                                         bytes_bx_up = novo_anexo_bx_up.getbuffer()
                                         with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
@@ -2576,7 +2583,7 @@ else:
                     )
 
         with tab_bi_bonf_avaria:
-            st.subheader("📈 Análise Executiva de Bonificações, Transferências & Mitigação de Perdas")
+            st.subheader("📈 Análise Executiva de Bonificações, Transferências & Prevenção de Perdas")
             st.markdown("Visão consolidada para a alta gerência sobre a **eficiência do processo de conferência, bonificação e aproveitamento de avarias** para a saúde financeira do supermercado.")
             with st.expander("🔍 Filtros Avançados para Apresentação à Liderança", expanded=True):
                 col_bi_f1, col_bi_f2, col_bi_f3, col_bi_f4 = st.columns(4)
@@ -2918,7 +2925,7 @@ else:
                             st.success("Cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            conn_del.rollback() # type: ignore
+                            conn.rollback()
                             st.error(f"Erro: {e}")
                         finally:
                             conn.close()
