@@ -2121,7 +2121,6 @@ else:
                     saldo_b = max(0.0, val_orig_b - baixado_b)
                     tipo_b_reg_chk = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     
-                    # CORREÇÃO APLICADA: Se for nota de transferência, ao ser mencionada nas baixas muda automaticamente para "Totalmente Utilizada"
                     if "transferência" in tipo_b_reg_chk:
                         if baixado_b > 0:
                             novo_st_auto = "Totalmente Utilizada"
@@ -2225,10 +2224,17 @@ else:
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     
-                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else ["Nenhuma Nota de Transferência Disponível"]
-                    ref_bon_transf = st.selectbox("Ref. Bon. transferen", options=opcoes_transf_ref, key=f"bx_ref_transf_{bx_suf}")
+                    # CORREÇÃO IMPLEMENTADA: Seleção ou Digitação Manual da Ref. Bon. transferen
+                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else []
+                    opcoes_transf_ref_com_manual = ["-- Digitar Manualmente / Outra --"] + opcoes_transf_ref
+                    
+                    escolha_ref_transf = st.selectbox("Ref. Bon. transferen (Selecionar)", options=opcoes_transf_ref_com_manual, key=f"bx_ref_transf_sel_{bx_suf}")
+                    
+                    if escolha_ref_transf == "-- Digitar Manualmente / Outra --":
+                        ref_bon_transf = st.text_input("Digite o N° da Nota de Transferência Manualmente", value="", key=f"bx_ref_transf_manual_{bx_suf}")
+                    else:
+                        ref_bon_transf = escolha_ref_transf
                 with col_m2:
-                    # CORREÇÃO APLICADA: NF de B. ENTRADA exibe apenas notas de bonificação pura, excluindo notas de transferência
                     opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02 if not any(t["nf_entrada"] == item["nf_entrada"] for t in notas_transf_loja02)] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
                     prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
@@ -2248,8 +2254,8 @@ else:
                 btn_enviar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
 
                 if btn_enviar_baixa:
-                    if not lojas_baixa_sel or ref_bon_transf == "Nenhuma Nota de Transferência Disponível" or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
-                        st.error("Preencha todos os campos obrigatórios.")
+                    if not lojas_baixa_sel or not ref_bon_transf or ref_bon_transf == "-- Digitar Manualmente / Outra --" or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
+                        st.error("Preencha todos os campos obrigatórios (incluindo o número da nota de transferência).")
                     else:
                         spinner_supernova("Registrando baixa de avaria...")
                         qtd_val_f = parse_float_ptbr(qtd_kg_cx_str)
@@ -2297,9 +2303,12 @@ else:
                                     )
                                 )
                                 
-                                # CORREÇÃO APLICADA: Se for nota de transferência mencionada, muda automaticamente para "Totalmente Utilizada"
-                                is_transf_nota_atual = any(str(t["nf_entrada"]).strip() == str(nf_b_entrada_sel).strip() for t in notas_transf_loja02)
-                                if is_transf_nota_atual or ref_bon_transf == str(nf_b_entrada_sel).strip() or novo_saldo_restante_nota <= 0:
+                                # CORREÇÃO IMPLEMENTADA: Mudança automática imediata de status para "Totalmente Utilizada" ao ser mencionada
+                                is_transf_nota_atual = any(str(t["nf_entrada"]).strip() == str(ref_bon_transf).strip() for t in notas_transf_loja02)
+                                
+                                if is_transf_nota_atual or ref_bon_transf:
+                                    st_auto_l2 = "Totalmente Utilizada"
+                                elif novo_saldo_restante_nota <= 0:
                                     st_auto_l2 = "Totalmente Utilizada"
                                 else:
                                     st_auto_l2 = "Parcialmente Utilizada"
@@ -2308,9 +2317,17 @@ else:
                                     "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
                                     (st_auto_l2, str(nf_b_entrada_sel).strip())
                                 )
+                                
+                                # Garante que a nota de transferência referenciada mude imediatamente para Totalmente Utilizada
+                                if ref_bon_transf:
+                                    cursor_ins.execute(
+                                        "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
+                                        ("Totalmente Utilizada", str(ref_bon_transf).strip())
+                                    )
+
                                 conn_ins.commit()
                                 st.session_state["baixa_form_suffix"] += 1
-                                st.success("Baixa registrada com sucesso!")
+                                st.success("Baixa registrada com sucesso e status atualizado!")
                                 st.rerun()
                             except Exception as e:
                                 conn_ins.rollback()
