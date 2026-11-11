@@ -2121,13 +2121,21 @@ else:
                     val_orig_b = float(r_b["valor_bonificacao"])
                     baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
                     saldo_b = max(0.0, val_orig_b - baixado_b)
+                    tipo_b_reg_chk = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     
-                    if baixado_b <= 0: 
-                        novo_st_auto = "Disponível"
-                    elif saldo_b > 0: 
-                        novo_st_auto = "Parcialmente Utilizada"
-                    else: 
-                        novo_st_auto = "Totalmente Utilizada"
+                    # REGRA APLICADA: Se for Transferência de Bonificação e foi mencionada 1 vez (baixado_b > 0), muda para Totalmente Utilizada
+                    if "transferência" in tipo_b_reg_chk:
+                        if baixado_b > 0:
+                            novo_st_auto = "Totalmente Utilizada"
+                        else:
+                            novo_st_auto = "Disponível"
+                    else:
+                        if baixado_b <= 0: 
+                            novo_st_auto = "Disponível"
+                        elif saldo_b > 0: 
+                            novo_st_auto = "Parcialmente Utilizada"
+                        else: 
+                            novo_st_auto = "Totalmente Utilizada"
                         
                     if r_b["status"] != novo_st_auto:
                         r_b_id = int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"]
@@ -2146,7 +2154,6 @@ else:
             for _, r_b in df_todas_bonf.iterrows():
                 dict_valor_orig_por_nf[str(r_b["numero_nota"]).strip()] = float(r_b["valor_bonificacao"])
 
-        # CORREÇÃO APLICADA: Carrega notas ativas de todas as lojas para transferências e Loja 02 para bonificações puras
         if not df_todas_bonf.empty:
             df_bonf_ativas = df_todas_bonf[df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
         else:
@@ -2176,10 +2183,8 @@ else:
                     }
                     
                     if "Transferência" in tipo_b_reg:
-                        # Notas de transferência de QUALQUER loja aparecem aqui
                         notas_transf_loja02.append(item_dict)
                     else:
-                        # Bonificações puras mantêm restrição para Loja 02 / Nova Cidade
                         if "02" in loja_reg or "NOVA CIDADE" in loja_reg.upper():
                             saldo_geral_somado_loja02 += saldo_restante_nota
                             notas_com_saldo_loja02.append(item_dict)
@@ -2221,7 +2226,10 @@ else:
                     lista_lojas_reg = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
-                    ref_bon_transf = st.text_input("Ref. Bon. transferen", value="", placeholder="Referência...", key=f"bx_ref_{bx_suf}")
+                    
+                    # CORREÇÃO APLICADA: Ref. Bon. transferen agora possui lista suspensa com as notas disponíveis de transferência
+                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else ["Nenhuma Nota de Transferência Disponível"]
+                    ref_bon_transf = st.selectbox("Ref. Bon. transferen", options=opcoes_transf_ref, key=f"bx_ref_transf_{bx_suf}")
                 with col_m2:
                     todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
                     opcoes_nf_entrada = [item["nf_entrada"] for item in todas_as_notas_com_saldo] if todas_as_notas_com_saldo else ["Nenhuma Nota Disponível"]
@@ -2243,7 +2251,7 @@ else:
                 btn_enviar_baixa = st.form_submit_button("✅ Registrar Baixa", type="primary")
 
                 if btn_enviar_baixa:
-                    if not lojas_baixa_sel or not ref_bon_transf.strip() or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
+                    if not lojas_baixa_sel or ref_bon_transf == "Nenhuma Nota de Transferência Disponível" or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
                         st.error("Preencha todos os campos obrigatórios.")
                     else:
                         spinner_supernova("Registrando baixa de avaria...")
@@ -2285,12 +2293,19 @@ else:
                                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     """,
                                     (
-                                        lojas_baixa_sel, data_hora_baixa_str, ref_bon_transf.strip(),
+                                        lojas_baixa_sel, data_hora_baixa_str, str(ref_bon_transf).strip(),
                                         path_nf_baixa, nf_b_entrada_sel, prod_hort_sel, float(qtd_val_f), float(val_avaria_f),
                                         float(novo_saldo_restante_nota), float(saldo_disponivel_da_nota_referenciada), ""
                                     )
                                 )
-                                st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
+                                
+                                # REGRA APLICADA: Se for nota de transferência de bonificação, ao ser mencionada 1 vez muda automaticamente para "Totalmente Utilizada"
+                                is_transf_nota_atual = any(t["nf_entrada"] == str(ref_bon_transf).strip() for t in notas_transf_loja02)
+                                if is_transf_nota_atual:
+                                    st_auto_l2 = "Totalmente Utilizada"
+                                else:
+                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
+
                                 cursor_ins.execute(
                                     "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
                                     (st_auto_l2, str(nf_b_entrada_sel).strip())
@@ -2418,7 +2433,12 @@ else:
                                 idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
                                 nova_nf_b_entrada = st.selectbox("NF de B. ENTRADA", options=notas_disponiveis_edicao, index=idx_nf_atual)
                             with col_eb2:
-                                novo_ref_bx = st.text_input("Ref. Bon. transferen", value=reg_bx_atual["ref_bon_transferen"])
+                                opcoes_transf_ref_ed = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else [reg_bx_atual["ref_bon_transferen"]]
+                                if reg_bx_atual["ref_bon_transferen"] not in opcoes_transf_ref_ed:
+                                    opcoes_transf_ref_ed.insert(0, reg_bx_atual["ref_bon_transferen"])
+                                idx_ref_atual = opcoes_transf_ref_ed.index(reg_bx_atual["ref_bon_transferen"]) if reg_bx_atual["ref_bon_transferen"] in opcoes_transf_ref_ed else 0
+                                novo_ref_bx = st.selectbox("Ref. Bon. transferen", options=opcoes_transf_ref_ed, index=idx_ref_atual)
+                                
                                 novo_prod_bx = st.text_input("Produto Hortifrúti", value=reg_bx_atual["produto_hortifruti"])
                             with col_eb3:
                                 novo_qtd_bx_str = st.text_input("Qtd (kg/cx)", value=str(reg_bx_atual["quantidade_kg_cx"]).replace(".", ","))
