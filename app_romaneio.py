@@ -2099,15 +2099,22 @@ else:
 
         conn_bx_chk, db_tbx_chk = get_db_connection()
         try:
-            df_baixar_hist = pd.read_sql_query("SELECT nf_b_entrada, valor_total_avaria FROM baixas_avarias", conn_bx_chk)
+            df_baixar_hist = pd.read_sql_query("SELECT nf_b_entrada, ref_bon_transferen, valor_total_avaria FROM baixas_avarias", conn_bx_chk)
         finally:
             conn_bx_chk.close()
 
         total_baixado_por_nota = {}
+        notas_utilizadas_em_ref = set()
+
         if not df_baixar_hist.empty:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e).strip()] = float(val_bx)
+            
+            for _, row_bx in df_baixar_hist.iterrows():
+                ref_val = str(row_bx.get("ref_bon_transferen", "")).strip()
+                if ref_val:
+                    notas_utilizadas_em_ref.add(ref_val)
 
         conn_b_all, db_tb_all = get_db_connection()
         try:
@@ -2121,11 +2128,11 @@ else:
                     saldo_b = max(0.0, val_orig_b - baixado_b)
                     tipo_b_reg_chk = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     
-                    if "transferência" in tipo_b_reg_chk:
-                        if baixado_b > 0:
-                            novo_st_auto = "Totalmente Utilizada"
-                        else:
-                            novo_st_auto = "Disponível"
+                    # REGRA CORRIGIDA: Se a nota está referenciada na coluna Ref. Bon., muda o status automaticamente para Totalmente Utilizada
+                    if num_nf_b in notas_utilizadas_em_ref or ("transferência" in tipo_b_reg_chk and baixado_b > 0):
+                        novo_st_auto = "Totalmente Utilizada"
+                    elif "transferência" in tipo_b_reg_chk:
+                        novo_st_auto = "Disponível"
                     else:
                         if baixado_b <= 0: 
                             novo_st_auto = "Disponível"
@@ -2224,7 +2231,6 @@ else:
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     
-                    # CORREÇÃO IMPLEMENTADA: Seleção ou Digitação Manual da Ref. Bon. transferen
                     opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else []
                     opcoes_transf_ref_com_manual = ["-- Digitar Manualmente / Outra --"] + opcoes_transf_ref
                     
@@ -2303,7 +2309,6 @@ else:
                                     )
                                 )
                                 
-                                # CORREÇÃO IMPLEMENTADA: Mudança automática imediata de status para "Totalmente Utilizada" ao ser mencionada
                                 is_transf_nota_atual = any(str(t["nf_entrada"]).strip() == str(ref_bon_transf).strip() for t in notas_transf_loja02)
                                 
                                 if is_transf_nota_atual or ref_bon_transf:
@@ -2318,7 +2323,6 @@ else:
                                     (st_auto_l2, str(nf_b_entrada_sel).strip())
                                 )
                                 
-                                # Garante que a nota de transferência referenciada mude imediatamente para Totalmente Utilizada
                                 if ref_bon_transf:
                                     cursor_ins.execute(
                                         "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
