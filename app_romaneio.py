@@ -305,9 +305,7 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
 # ---------------------------------------------------------
 def seletor_data_unificado(label_titulo, key_prefix):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
-    
     st.markdown(f"**{label_titulo}**")
-    
     data_selecionada = st.date_input(
         label_titulo,
         value=hoje.date(),
@@ -620,7 +618,7 @@ def fmt_ptbr(val, decimais=2):
         return "0,00"
 
 # ---------------------------------------------------------
-# GERADORES DE PDF (COM SUPORTE ROBUSTO A ASSINATURAS EM BASE64)
+# GERADORES DE PDF
 # ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data):
     buffer = io.BytesIO()
@@ -2123,7 +2121,7 @@ else:
                     saldo_b = max(0.0, val_orig_b - baixado_b)
                     tipo_b_reg_chk = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     
-                    # REGRA APLICADA: Se for Transferência de Bonificação e foi mencionada 1 vez (baixado_b > 0), muda para Totalmente Utilizada
+                    # CORREÇÃO APLICADA: Se for nota de transferência, ao ser mencionada nas baixas muda automaticamente para "Totalmente Utilizada"
                     if "transferência" in tipo_b_reg_chk:
                         if baixado_b > 0:
                             novo_st_auto = "Totalmente Utilizada"
@@ -2227,12 +2225,11 @@ else:
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     
-                    # CORREÇÃO APLICADA: Ref. Bon. transferen agora possui lista suspensa com as notas disponíveis de transferência
                     opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else ["Nenhuma Nota de Transferência Disponível"]
                     ref_bon_transf = st.selectbox("Ref. Bon. transferen", options=opcoes_transf_ref, key=f"bx_ref_transf_{bx_suf}")
                 with col_m2:
-                    todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
-                    opcoes_nf_entrada = [item["nf_entrada"] for item in todas_as_notas_com_saldo] if todas_as_notas_com_saldo else ["Nenhuma Nota Disponível"]
+                    # CORREÇÃO APLICADA: NF de B. ENTRADA exibe apenas notas de bonificação pura, excluindo notas de transferência
+                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02 if not any(t["nf_entrada"] == item["nf_entrada"] for t in notas_transf_loja02)] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
                     prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
                 with col_m3:
@@ -2258,6 +2255,7 @@ else:
                         qtd_val_f = parse_float_ptbr(qtd_kg_cx_str)
                         val_avaria_f = parse_float_ptbr(valor_total_avaria_str)
 
+                        todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
                         nota_selecionada_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada inválida.")
@@ -2299,12 +2297,12 @@ else:
                                     )
                                 )
                                 
-                                # REGRA APLICADA: Se for nota de transferência de bonificação, ao ser mencionada 1 vez muda automaticamente para "Totalmente Utilizada"
-                                is_transf_nota_atual = any(t["nf_entrada"] == str(ref_bon_transf).strip() for t in notas_transf_loja02)
-                                if is_transf_nota_atual:
+                                # CORREÇÃO APLICADA: Se for nota de transferência mencionada, muda automaticamente para "Totalmente Utilizada"
+                                is_transf_nota_atual = any(str(t["nf_entrada"]).strip() == str(nf_b_entrada_sel).strip() for t in notas_transf_loja02)
+                                if is_transf_nota_atual or ref_bon_transf == str(nf_b_entrada_sel).strip() or novo_saldo_restante_nota <= 0:
                                     st_auto_l2 = "Totalmente Utilizada"
                                 else:
-                                    st_auto_l2 = "Totalmente Utilizada" if novo_saldo_restante_nota <= 0 else "Parcialmente Utilizada"
+                                    st_auto_l2 = "Parcialmente Utilizada"
 
                                 cursor_ins.execute(
                                     "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
@@ -2427,7 +2425,7 @@ else:
                                 lista_lojas_eb = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                                 idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                                 nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
-                                notas_disponiveis_edicao = [item["nf_entrada"] for item in (notas_com_saldo_loja02 + notas_transf_loja02)]
+                                notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
                                 if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
                                     notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
                                 idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
@@ -2463,7 +2461,8 @@ else:
                                         bytes_bx_up = novo_anexo_bx_up.getbuffer()
                                         with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
 
-                                    nota_edit_dict = next((item for item in (notas_com_saldo_loja02 + notas_transf_loja02) if item["nf_entrada"] == nova_nf_b_entrada), None)
+                                    todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
+                                    nota_edit_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nova_nf_b_entrada), None)
                                     saldo_disp_edit = float(nota_edit_dict["saldo_restante"]) if nota_edit_dict else float(reg_bx_atual["saldo_total_disponivel"])
                                     novo_saldo_restante_ed = float(saldo_disp_edit - v_f_ed)
 
@@ -2972,7 +2971,7 @@ else:
                             st.success("Cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            conn.rollback()
+                            conn_log.rollback() if 'conn_log' in locals() else conn.rollback()
                             st.error(f"Erro: {e}")
                         finally:
                             conn.close()
