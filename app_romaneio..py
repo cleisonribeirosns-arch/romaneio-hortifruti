@@ -172,8 +172,9 @@ def enviar_notificacao_google_chat(mensagem):
             headers={"Content-Type": "application/json; charset=UTF-8"},
             method="POST"
         )
-        with urlopen(requisicao, timeout=15) as resposta:
-            return 200 <= resposta.status < 300
+       with urlopen(requisicao, timeout=15) as resposta:
+    print(f"Google Chat: resposta HTTP {resposta.status}")
+    return 200 <= resposta.status < 300
 
     except (KeyError, TypeError):
         print("Google Chat: configure [google_chat].webhook_url nos Secrets do Streamlit.")
