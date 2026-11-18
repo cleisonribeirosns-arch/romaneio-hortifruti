@@ -44,42 +44,99 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------
-# CSS GLOBAL & ESTILO DA TELA DE TRANSIÇÃO COM A LOGO
+# FUNÇÕES DE LOGO E BASE64
 # ---------------------------------------------------------
-st.markdown("""
-<style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-.stDeployButton {display:none;}
-[data-testid="stToolbar"] {display: none !important;}
+def buscar_caminho_logo():
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                return pos_p
+    return None
 
-/* Transição elegante com a logo centralizada */
-.stSpinner > div {
+def obter_logo_transparente_b64(caminho_imagem):
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return ""
+    try:
+        img = Image.open(caminho_imagem).convert("RGBA")
+        datas = img.getdata()
+        newData = []
+        for item in datas:
+            if item[0] > 180 and item[1] > 180 and item[2] > 180:
+                newData.append((255, 255, 255, 0))
+            else:
+                newData.append(item)
+        img.putdata(newData)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
+    except Exception:
+        return ""
+
+logo_path_global = buscar_caminho_logo()
+logo_b64_global_overlay = obter_logo_transparente_b64(logo_path_global) if logo_path_global else ""
+
+# ---------------------------------------------------------
+# CSS GLOBAL & ESTILO DA TELA DE TRANSIÇÃO COM A LOGO CORRIGIDA
+# ---------------------------------------------------------
+st.markdown(f"""
+<style>
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+header {{visibility: hidden;}}
+.stDeployButton {{display:none;}}
+[data-testid="stToolbar"] {{display: none !important;}}
+
+/* Overlay de transição robusto com a logo centralizada */
+.supernova-transition-overlay {{
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: rgba(14, 20, 12, 0.9);
+    background: rgba(14, 20, 12, 0.95);
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
     z-index: 999999;
-}
-.stSpinner svg {
-    width: 70px !important;
-    height: 70px !important;
+    color: #FFFFFF;
+    font-family: sans-serif;
+}}
+.supernova-logo-pulse {{
+    width: 120px;
+    height: auto;
+    margin-bottom: 20px;
     animation: pulseLogo 1.2s infinite ease-in-out;
-}
-@keyframes pulseLogo {
-    0% { transform: scale(0.95); opacity: 0.8; }
-    50% { transform: scale(1.1); opacity: 1; }
-    100% { transform: scale(0.95); opacity: 0.8; }
-}
+    filter: drop-shadow(0px 15px 25px rgba(0,0,0,0.85)) drop-shadow(0px 5px 10px rgba(0,200,0,0.35));
+}}
+@keyframes pulseLogo {{
+    0% {{ transform: scale(0.95); opacity: 0.8; }}
+    50% {{ transform: scale(1.1); opacity: 1; }}
+    100% {{ transform: scale(0.95); opacity: 0.8; }}
+}}
 </style>
 """, unsafe_allow_html=True)
+
+def spinner_supernova(mensagem="Processando transição..."):
+    # Componente visual personalizado garantindo a exibição da transição com a logo
+    img_tag = f'<img src="data:image/png;base64,{logo_b64_global_overlay}" class="supernova-logo-pulse" />' if logo_b64_global_overlay else '<div style="font-size: 40px; margin-bottom: 20px;">📦</div>'
+    
+    placeholder = st.empty()
+    placeholder.markdown(f"""
+    <div class="supernova-transition-overlay">
+        {img_tag}
+        <h3 style="color: #FFFFFF; font-weight: 600; letter-spacing: 0.5px;">{mensagem}</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    class SpinnerContext:
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            placeholder.empty()
+            
+    return SpinnerContext()
 
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PWA
@@ -224,9 +281,6 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
             mensagem=f"Fornecedor: {forn} | Total de itens: {total_itens}"
         )
 
-def spinner_supernova(mensagem="Processando transição..."):
-    return st.spinner(mensagem)
-
 @st.cache_data(ttl=60)
 def carregar_produtos_cached():
     conn, db_type = get_db_connection()
@@ -268,25 +322,6 @@ def remover_fundo_branco(caminho_imagem):
     except Exception:
         return caminho_imagem
 
-def obter_logo_transparente_b64(caminho_imagem):
-    if not caminho_imagem or not os.path.exists(caminho_imagem):
-        return ""
-    try:
-        img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
-        newData = []
-        for item in datas:
-            if item[0] > 180 and item[1] > 180 and item[2] > 180:
-                newData.append((255, 255, 255, 0))
-            else:
-                newData.append(item)
-        img.putdata(newData)
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode("utf-8")
-    except Exception:
-        return ""
-
 def exibir_foto_modal(caminho_foto, b64_foto=None):
     if b64_foto:
         try:
@@ -327,14 +362,6 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
             pass
             
     st.warning("Arquivo de anexo não encontrado no servidor ou formato inválido.")
-
-def buscar_caminho_logo():
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                return pos_p
-    return None
 
 def desenhar_fundo_pdf(canvas_doc, doc_obj):
     logo_p = buscar_caminho_logo()
