@@ -172,9 +172,9 @@ def enviar_notificacao_google_chat(mensagem):
             headers={"Content-Type": "application/json; charset=UTF-8"},
             method="POST"
         )
-       with urlopen(requisicao, timeout=15) as resposta:
-    print(f"Google Chat: resposta HTTP {resposta.status}")
-    return 200 <= resposta.status < 300
+        with urlopen(requisicao, timeout=15) as resposta:
+            print(f"Google Chat: resposta HTTP {resposta.status}")
+            return 200 <= resposta.status < 300
 
     except (KeyError, TypeError):
         print("Google Chat: configure [google_chat].webhook_url nos Secrets do Streamlit.")
@@ -2175,17 +2175,10 @@ else:
             conn_bx_chk.close()
 
         total_baixado_por_nota = {}
-        notas_utilizadas_em_ref = set()
-
         if not df_baixar_hist.empty:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e).strip()] = float(val_bx)
-            
-            for _, row_bx in df_baixar_hist.iterrows():
-                ref_val = str(row_bx.get("ref_bon_transferen", "")).strip()
-                if ref_val:
-                    notas_utilizadas_em_ref.add(ref_val)
 
         conn_b_all, db_tb_all = get_db_connection()
         try:
@@ -2197,20 +2190,14 @@ else:
                     val_orig_b = float(r_b["valor_bonificacao"])
                     baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
                     saldo_b = max(0.0, val_orig_b - baixado_b)
-                    tipo_b_reg_chk = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     
-                    # REGRA CORRIGIDA: Se a nota está referenciada na coluna Ref. Bon., muda o status automaticamente para Totalmente Utilizada
-                    if num_nf_b in notas_utilizadas_em_ref or ("transferência" in tipo_b_reg_chk and baixado_b > 0):
+                    # CORREÇÃO APLICADA: Apenas atualiza a 2ª tabela (status da nota) de acordo com o saldo e baixas
+                    if saldo_b <= 0:
                         novo_st_auto = "Totalmente Utilizada"
-                    elif "transferência" in tipo_b_reg_chk:
-                        novo_st_auto = "Disponível"
+                    elif baixado_b > 0:
+                        novo_st_auto = "Parcialmente Utilizada"
                     else:
-                        if baixado_b <= 0: 
-                            novo_st_auto = "Disponível"
-                        elif saldo_b > 0: 
-                            novo_st_auto = "Parcialmente Utilizada"
-                        else: 
-                            novo_st_auto = "Totalmente Utilizada"
+                        novo_st_auto = "Disponível"
                         
                     if r_b["status"] != novo_st_auto:
                         r_b_id = int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"]
@@ -2238,13 +2225,14 @@ else:
         notas_transf_loja02 = []
         saldo_geral_somado_loja02 = 0.0
 
-        if not df_bonf_ativas.empty:
-            for _, r_bonf in df_bonf_ativas.iterrows():
+        if not df_todas_bonf.empty:
+            for _, r_bonf in df_todas_bonf.iterrows():
                 num_nf_ent = str(r_bonf["numero_nota"]).strip()
                 val_original = float(r_bonf["valor_bonificacao"])
                 ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
                 saldo_restante_nota = max(0.0, val_original - ja_baixado)
                 
+                # CORREÇÃO NA 1ª TABELA: A nota permanece visível enquanto o saldo for estritamente > 0, permitindo múltiplos usos
                 if saldo_restante_nota > 0:
                     tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
                     loja_reg = str(r_bonf.get("loja", ""))
@@ -2380,11 +2368,7 @@ else:
                                     )
                                 )
                                 
-                                is_transf_nota_atual = any(str(t["nf_entrada"]).strip() == str(ref_bon_transf).strip() for t in notas_transf_loja02)
-                                
-                                if is_transf_nota_atual or ref_bon_transf:
-                                    st_auto_l2 = "Totalmente Utilizada"
-                                elif novo_saldo_restante_nota <= 0:
+                                if novo_saldo_restante_nota <= 0:
                                     st_auto_l2 = "Totalmente Utilizada"
                                 else:
                                     st_auto_l2 = "Parcialmente Utilizada"
@@ -2393,12 +2377,6 @@ else:
                                     "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
                                     (st_auto_l2, str(nf_b_entrada_sel).strip())
                                 )
-                                
-                                if ref_bon_transf:
-                                    cursor_ins.execute(
-                                        "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
-                                        ("Totalmente Utilizada", str(ref_bon_transf).strip())
-                                    )
 
                                 conn_ins.commit()
                                 mensagem_baixa_chat = (
