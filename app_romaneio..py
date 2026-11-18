@@ -151,20 +151,10 @@ def emitir_notificacao_desktop_web(titulo, mensagem):
     components.html(js_code, height=0)
 
 def enviar_notificacao_google_chat(mensagem):
-    """Envia uma mensagem ao espaço do Google Chat configurado em st.secrets.
-
-    Configure no Streamlit Cloud em App settings > Secrets:
-    [google_chat]
-    webhook_url = "https://chat.googleapis.com/v1/spaces/.../messages?key=...&token=..."
-
-    A falha no envio não desfaz nem interrompe um registro já salvo no banco.
-    """
     try:
         webhook_url = st.secrets["google_chat"]["webhook_url"]
         if not webhook_url or not str(webhook_url).startswith("https://chat.googleapis.com/"):
-            print("Google Chat: URL do webhook ausente ou inválida.")
             return False
-
         payload = json.dumps({"text": str(mensagem)}, ensure_ascii=False).encode("utf-8")
         requisicao = Request(
             str(webhook_url),
@@ -173,22 +163,9 @@ def enviar_notificacao_google_chat(mensagem):
             method="POST"
         )
         with urlopen(requisicao, timeout=15) as resposta:
-            print(f"Google Chat: resposta HTTP {resposta.status}")
             return 200 <= resposta.status < 300
-
-    except (KeyError, TypeError):
-        print("Google Chat: configure [google_chat].webhook_url nos Secrets do Streamlit.")
+    except Exception:
         return False
-    except HTTPError as erro:
-        print(f"Google Chat: erro HTTP {erro.code}: {erro.reason}")
-        return False
-    except (URLError, TimeoutError, OSError) as erro:
-        print(f"Google Chat: falha de conexão: {erro}")
-        return False
-    except Exception as erro:
-        print(f"Google Chat: não foi possível enviar a notificação: {erro}")
-        return False
-
 
 def disparar_notificacao_sistema(romaneio_dados, itens_lista):
     if HAS_PLYER:
@@ -210,8 +187,8 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
                 app_name="HortiControl Supernova",
                 timeout=10
             )
-        except Exception as e:
-            print(f"Erro ao disparar notificação plyer: {e}")
+        except Exception:
+            pass
 
     if st.session_state.get("notif_desktop_toggle", False):
         total_itens = len(itens_lista)
@@ -343,9 +320,6 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
         except Exception:
             canvas_doc.restoreState()
 
-# ---------------------------------------------------------
-# SELETOR DE DATA ESTILO CISSPOWER (COMPACTO E CLÁSSICO)
-# ---------------------------------------------------------
 def seletor_data_unificado(label_titulo, key_prefix):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
     st.markdown(f"**{label_titulo}**")
@@ -360,9 +334,6 @@ def seletor_data_unificado(label_titulo, key_prefix):
     )
     return data_selecionada
 
-# ---------------------------------------------------------
-# BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
-# ---------------------------------------------------------
 def init_db():
     conn, db_type = get_db_connection()
     try:
@@ -660,9 +631,6 @@ def fmt_ptbr(val, decimais=2):
     except Exception:
         return "0,00"
 
-# ---------------------------------------------------------
-# GERADORES DE PDF
-# ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -1363,9 +1331,8 @@ else:
         forn_nomes_keys = []
         for f in fornecedores_lista:
             nome_f = f[0]
-            cod_f = str(f[1]).strip() if f[1] else ""
             forn_nomes_keys.append(nome_f)
-            forn_por_nome[nome_f] = cod_f
+            forn_por_nome[nome_f] = str(f[1]).strip() if f[1] else ""
 
         if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
         if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
@@ -2175,10 +2142,16 @@ else:
             conn_bx_chk.close()
 
         total_baixado_por_nota = {}
+        notas_transf_ja_utilizadas = set()
         if not df_baixar_hist.empty:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e).strip()] = float(val_bx)
+            
+            for _, r_bx in df_baixar_hist.iterrows():
+                ref_transf_usada = str(r_bx["ref_bon_transferen"]).strip()
+                if ref_transf_usada:
+                    notas_transf_ja_utilizadas.add(ref_transf_usada)
 
         conn_b_all, db_tb_all = get_db_connection()
         try:
@@ -2187,18 +2160,24 @@ else:
                 cur_st_up = conn_b_all.cursor()
                 for _, r_b in df_todas_bonf.iterrows():
                     num_nf_b = str(r_b["numero_nota"]).strip()
+                    tipo_b_reg = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     val_orig_b = float(r_b["valor_bonificacao"])
-                    baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
-                    saldo_b = max(0.0, val_orig_b - baixado_b)
                     
-                    # CORREÇÃO APLICADA: Apenas atualiza a 2ª tabela (status da nota) de acordo com o saldo e baixas
-                    if saldo_b <= 0:
-                        novo_st_auto = "Totalmente Utilizada"
-                    elif baixado_b > 0:
-                        novo_st_auto = "Parcialmente Utilizada"
+                    if "transferência" in tipo_b_reg:
+                        if num_nf_b in notas_transf_ja_utilizadas:
+                            novo_st_auto = "Totalmente Utilizada"
+                        else:
+                            novo_st_auto = "Disponível"
                     else:
-                        novo_st_auto = "Disponível"
-                        
+                        baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
+                        saldo_b = max(0.0, val_orig_b - baixado_b)
+                        if saldo_b <= 0:
+                            novo_st_auto = "Totalmente Utilizada"
+                        elif baixado_b > 0:
+                            novo_st_auto = "Parcialmente Utilizada"
+                        else:
+                            novo_st_auto = "Disponível"
+                            
                     if r_b["status"] != novo_st_auto:
                         r_b_id = int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"]
                         cur_st_up.execute(
@@ -2216,62 +2195,61 @@ else:
             for _, r_b in df_todas_bonf.iterrows():
                 dict_valor_orig_por_nf[str(r_b["numero_nota"]).strip()] = float(r_b["valor_bonificacao"])
 
-        if not df_todas_bonf.empty:
-            df_bonf_ativas = df_todas_bonf[df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
-        else:
-            df_bonf_ativas = pd.DataFrame()
-
-        notas_com_saldo_loja02 = []
-        notas_transf_loja02 = []
-        saldo_geral_somado_loja02 = 0.0
+        notas_com_saldo_ativa = []
+        notas_transf_ativa = []
+        saldo_geral_somado_ativa = 0.0
 
         if not df_todas_bonf.empty:
             for _, r_bonf in df_todas_bonf.iterrows():
                 num_nf_ent = str(r_bonf["numero_nota"]).strip()
                 val_original = float(r_bonf["valor_bonificacao"])
-                ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
-                saldo_restante_nota = max(0.0, val_original - ja_baixado)
+                tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
+                loja_reg = str(r_bonf.get("loja", ""))
                 
-                # CORREÇÃO NA 1ª TABELA: A nota permanece visível enquanto o saldo for estritamente > 0, permitindo múltiplos usos
-                if saldo_restante_nota > 0:
-                    tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
-                    loja_reg = str(r_bonf.get("loja", ""))
+                item_dict = {
+                    "nf_entrada": num_nf_ent,
+                    "loja": loja_reg,
+                    "produto": r_bonf.get("produto_hortifruti", "N/A"),
+                    "valor_original": val_original
+                }
+                
+                if "Transferência" in tipo_b_reg:
+                    # Lógica da 2ª Planilha: Uso único (rastreio). Se já foi utilizada, não exibe.
+                    if num_nf_ent not in notas_transf_ja_utilizadas:
+                        item_dict["saldo_restante"] = val_original
+                        notas_transf_ativa.append(item_dict)
+                else:
+                    # Lógica da 1ª Planilha: Saldo reutilizável da Loja 02
+                    ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
+                    saldo_restante_nota = max(0.0, val_original - ja_baixado)
                     
-                    item_dict = {
-                        "nf_entrada": num_nf_ent,
-                        "loja": loja_reg,
-                        "produto": r_bonf.get("produto_hortifruti", "N/A"),
-                        "valor_original": val_original,
-                        "saldo_restante": saldo_restante_nota
-                    }
-                    
-                    if "Transferência" in tipo_b_reg:
-                        notas_transf_loja02.append(item_dict)
-                    else:
-                        if "02" in loja_reg or "NOVA CIDADE" in loja_reg.upper():
-                            saldo_geral_somado_loja02 += saldo_restante_nota
-                            notas_com_saldo_loja02.append(item_dict)
+                    if saldo_restante_nota > 0:
+                        termo_loja = loja_ativa_sessao.split("-")[0].strip().upper()
+                        if is_admin or termo_loja in loja_reg.upper():
+                            saldo_geral_somado_ativa += saldo_restante_nota
+                            item_dict["saldo_restante"] = saldo_restante_nota
+                            notas_com_saldo_ativa.append(item_dict)
 
         st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
             <span style="font-size: 20px;">💳</span>
-            <span style="color: #FFFFFF; font-weight: 700; font-size: 15px;">Saldo Total Disponível (Referente às notas da Loja 02): R$ {fmt_ptbr(saldo_geral_somado_loja02, 2)}</span>
+            <span style="color: #FFFFFF; font-weight: 700; font-size: 15px;">Saldo Total Disponível ({loja_ativa_sessao}): R$ {fmt_ptbr(saldo_geral_somado_ativa, 2)}</span>
         </div>
         """, unsafe_allow_html=True)
 
-        if notas_com_saldo_loja02:
-            with st.expander("📌 Notas de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
-                df_ns_show = pd.DataFrame(notas_com_saldo_loja02)
+        if notas_com_saldo_ativa:
+            with st.expander(f"📌 Notas de Bonificação com Saldo Disponível ({loja_ativa_sessao})", expanded=True):
+                df_ns_show = pd.DataFrame(notas_com_saldo_ativa)
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
-        if notas_transf_loja02:
-            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação com Saldo Disponível (Todas as Lojas)", expanded=True):
-                df_tr_show = pd.DataFrame(notas_transf_loja02)
+        if notas_transf_ativa:
+            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação para Outras Lojas (Uso Único / Rastreio)", expanded=True):
+                df_tr_show = pd.DataFrame(notas_transf_ativa)
                 df_tr_show["Valor Original (R$)"] = df_tr_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_tr_show["Saldo Disponível (R$)"] = df_tr_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tr_show["Saldo Disponível (R$)"] = df_tr_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_tr_show = df_tr_show.rename(columns={"nf_entrada": "N° Nota de Transferência", "loja": "Loja Origem", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_tr_show[["N° Nota de Transferência", "Loja Origem", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
@@ -2290,7 +2268,7 @@ else:
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     
-                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else []
+                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_ativa] if notas_transf_ativa else []
                     opcoes_transf_ref_com_manual = ["-- Digitar Manualmente / Outra --"] + opcoes_transf_ref
                     
                     escolha_ref_transf = st.selectbox("Ref. Bon. transferen (Selecionar)", options=opcoes_transf_ref_com_manual, key=f"bx_ref_transf_sel_{bx_suf}")
@@ -2300,7 +2278,7 @@ else:
                     else:
                         ref_bon_transf = escolha_ref_transf
                 with col_m2:
-                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02 if not any(t["nf_entrada"] == item["nf_entrada"] for t in notas_transf_loja02)] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
+                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_ativa if not any(t["nf_entrada"] == item["nf_entrada"] for t in notas_transf_ativa)] if notas_com_saldo_ativa else ["Nenhuma Nota Disponível"]
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
                     prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
                 with col_m3:
@@ -2326,7 +2304,7 @@ else:
                         qtd_val_f = parse_float_ptbr(qtd_kg_cx_str)
                         val_avaria_f = parse_float_ptbr(valor_total_avaria_str)
 
-                        todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
+                        todas_as_notas_com_saldo = notas_com_saldo_ativa + notas_transf_ativa
                         nota_selecionada_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nf_b_entrada_sel), None)
                         if not nota_selecionada_dict:
                             st.error("Nota de entrada inválida.")
@@ -2378,6 +2356,12 @@ else:
                                     (st_auto_l2, str(nf_b_entrada_sel).strip())
                                 )
 
+                                # Se utilizou uma nota de transferência na baixa, marca imediatamente como Totalmente Utilizada (uso único)
+                                cursor_ins.execute(
+                                    "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE TRIM(numero_nota) = TRIM(%s) AND LOWER(tipo_bonificacao) LIKE '%%transferência%%'" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE TRIM(numero_nota) = TRIM(?) AND LOWER(tipo_bonificacao) LIKE '%transferência%'",
+                                    (str(ref_bon_transf).strip(),)
+                                )
+
                                 conn_ins.commit()
                                 mensagem_baixa_chat = (
                                     "📉 *NOVA BAIXA DE AVARIA REGISTRADA*\n"
@@ -2390,10 +2374,9 @@ else:
                                     f"Valor da avaria: R$ {val_avaria_f:,.2f}\n"
                                     f"Saldo restante da nota: R$ {novo_saldo_restante_nota:,.2f}"
                                 )
-                                chat_baixa_enviado = enviar_notificacao_google_chat(mensagem_baixa_chat)
+                                enviar_notificacao_google_chat(mensagem_baixa_chat)
                                 st.session_state["baixa_form_suffix"] += 1
-                                status_chat_baixa = " Google Chat notificado." if chat_baixa_enviado else " (Google Chat não notificado; confira os Secrets)."
-                                st.success("Baixa registrada com sucesso e status atualizado!" + status_chat_baixa)
+                                st.success("Baixa registrada com sucesso e saldo atualizado!")
                                 st.rerun()
                             except Exception as e:
                                 conn_ins.rollback()
@@ -2508,13 +2491,13 @@ else:
                                 lista_lojas_eb = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                                 idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                                 nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
-                                notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
+                                notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_ativa]
                                 if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
                                     notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
                                 idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
                                 nova_nf_b_entrada = st.selectbox("NF de B. ENTRADA", options=notas_disponiveis_edicao, index=idx_nf_atual)
                             with col_eb2:
-                                opcoes_transf_ref_ed = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else [reg_bx_atual["ref_bon_transferen"]]
+                                opcoes_transf_ref_ed = [item["nf_entrada"] for item in notas_transf_ativa] if notas_transf_ativa else [reg_bx_atual["ref_bon_transferen"]]
                                 if reg_bx_atual["ref_bon_transferen"] not in opcoes_transf_ref_ed:
                                     opcoes_transf_ref_ed.insert(0, reg_bx_atual["ref_bon_transferen"])
                                 idx_ref_atual = opcoes_transf_ref_ed.index(reg_bx_atual["ref_bon_transferen"]) if reg_bx_atual["ref_bon_transferen"] in opcoes_transf_ref_ed else 0
@@ -2544,7 +2527,7 @@ else:
                                         bytes_bx_up = novo_anexo_bx_up.getbuffer()
                                         with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
 
-                                    todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
+                                    todas_as_notas_com_saldo = notas_com_saldo_ativa + notas_transf_ativa
                                     nota_edit_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nova_nf_b_entrada), None)
                                     saldo_disp_edit = float(nota_edit_dict["saldo_restante"]) if nota_edit_dict else float(reg_bx_atual["saldo_total_disponivel"])
                                     novo_saldo_restante_ed = float(saldo_disp_edit - v_f_ed)
@@ -3016,7 +2999,7 @@ else:
                                 conn_del_f, db_tdf = get_db_connection()
                                 try:
                                     cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
+                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
                                     conn_del_f.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
@@ -3054,7 +3037,7 @@ else:
                             st.success("Cadastrado com sucesso!")
                             st.rerun()
                         except Exception as e:
-                            conn_log.rollback() if 'conn_log' in locals() else conn.rollback()
+                            conn.rollback()
                             st.error(f"Erro: {e}")
                         finally:
                             conn.close()
