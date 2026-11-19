@@ -1134,7 +1134,7 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     return ""
 
 img_padrao_fundo = None
-for nome_img in ["Tela de login.jpeg.jpeg", "Tela de login.jpeg", "image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
+for nome_img in ["tela de login padrao.jpeg", "tela de login padrao.jpg", "tela de login padrao.png", "Tela de login.jpeg.jpeg", "Tela de login.jpeg", "image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
     if os.path.exists(nome_img):
         img_padrao_fundo = nome_img
         break
@@ -1161,7 +1161,7 @@ if st.session_state["usuario_logado"] is None:
         st.markdown(css_login, unsafe_allow_html=True)
 
     logo_display = None
-    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg.jpeg"]:
+    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "tela de login padrao.jpeg", "Tela de login.jpeg.jpeg"]:
         if os.path.exists(nome):
             logo_display = nome
             break
