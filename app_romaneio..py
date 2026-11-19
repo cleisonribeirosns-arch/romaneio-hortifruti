@@ -240,16 +240,42 @@ except ImportError:
 # ---------------------------------------------------------
 # FUNÇÕES DE CONEXÃO E AUXILIARES
 # ---------------------------------------------------------
-def get_db_connection():
+def get_db_connection(ping_only=False):
     if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
-        try:
-            conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
-            return conn, "postgres"
-        except Exception as e:
-            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {e}")
-            raise e
+        ultimo_erro = None
+        for _tentativa in range(2):
+            try:
+                conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=20)
+                return conn, "postgres"
+            except Exception as e:
+                ultimo_erro = e
+                time_module.sleep(1.0)
+        if not ping_only:
+            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {ultimo_erro}")
+        raise ultimo_erro
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
+
+def executar_keep_alive_banco():
+    conn, db_type = get_db_connection(ping_only=True)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        if db_type == "postgres":
+            conn.commit()
+        return True, db_type
+    finally:
+        conn.close()
+
+if st.query_params.get("ping") == "1":
+    try:
+        _, _db_t = executar_keep_alive_banco()
+        st.write(f"OK - keep-alive ativo ({_db_t})")
+        st.stop()
+    except Exception as _err_ping:
+        st.write(f"PING_ERR: {_err_ping}")
+        st.stop()
 
 def parse_float_ptbr(valor_str):
     if not valor_str or not str(valor_str).strip():
@@ -704,7 +730,18 @@ def init_db():
     finally:
         conn.close()
 
+def manter_sessao_ativa_periodica():
+    agora_ts = time_module.time()
+    ultimo_ping = st.session_state.get("ultimo_keep_alive_ts", 0.0)
+    if agora_ts - ultimo_ping >= 240:
+        st.session_state["ultimo_keep_alive_ts"] = agora_ts
+        try:
+            executar_keep_alive_banco()
+        except Exception:
+            pass
+
 init_db()
+manter_sessao_ativa_periodica()
 
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
