@@ -238,44 +238,791 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# FUNÇÕES DE CONEXÃO E AUXILIARES
+# FUNÇÕES DE CONEXÃO, CONTINGÊNCIA (NEON -> SUPABASE) E SINCRONIZAÇÃO AUTOMÁTICA
 # ---------------------------------------------------------
-def get_db_connection(ping_only=False):
-    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
-        ultimo_erro = None
-        for _tentativa in range(2):
+def _obter_urls_postgres():
+    if not HAS_POSTGRES or "database" not in st.secrets:
+        return None, None
+    db_sec = st.secrets["database"]
+    neon_url = str(db_sec.get("db_url", "")).strip() or None
+    supabase_url = (
+        str(db_sec.get("backup_db_url", "")).strip()
+        or str(db_sec.get("supabase_url", "")).strip()
+        or str(db_sec.get("supabase_db_url", "")).strip()
+        or None
+    )
+    return neon_url, supabase_url
+
+
+def _conectar_pg_direto(url, timeout=15, tentativas=2):
+    ultimo_erro = None
+    for _ in range(tentativas):
+        try:
+            conn = psycopg2.connect(url, connect_timeout=timeout)
+            return conn
+        except Exception as e:
+            ultimo_erro = e
+            time_module.sleep(0.8)
+    raise ultimo_erro
+
+
+def _garantir_schema_postgres(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        login VARCHAR(255) UNIQUE NOT NULL,
+        senha VARCHAR(255) NOT NULL,
+        perfil VARCHAR(255) NOT NULL,
+        tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova',
+        notif_desktop INTEGER DEFAULT 0,
+        custom_bg_b64 TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS wallpapers (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        b64_dados TEXT NOT NULL
+    )
+    """)
+    for alt_sql in [
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS custom_bg_b64 TEXT",
+    ]:
+        try:
+            cursor.execute(alt_sql)
+        except Exception:
+            pass
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS produtos (
+        id SERIAL PRIMARY KEY,
+        codigo_barras VARCHAR(255),
+        codigo_produto VARCHAR(255) UNIQUE,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        unidade_padrao VARCHAR(50) NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fornecedores (
+        id SERIAL PRIMARY KEY,
+        codigo_fornecedor VARCHAR(255) UNIQUE,
+        cnpj VARCHAR(255),
+        nome VARCHAR(255) UNIQUE NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS romaneios (
+        id SERIAL PRIMARY KEY,
+        numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
+        loja VARCHAR(255) NOT NULL,
+        loja_origem VARCHAR(255),
+        loja_destino VARCHAR(255),
+        data_recebimento VARCHAR(50) NOT NULL,
+        fornecedor VARCHAR(255),
+        codigo_fornecedor VARCHAR(255),
+        telefone_fornecedor VARCHAR(255),
+        conferente VARCHAR(255) NOT NULL,
+        pagamento_a_vista VARCHAR(50) NOT NULL,
+        data_pagamento VARCHAR(50),
+        caminho_foto TEXT,
+        assinatura_conferente TEXT,
+        assinatura_entregador TEXT,
+        status_nota VARCHAR(50) DEFAULT 'Pendente',
+        tipo_operacao VARCHAR(50) DEFAULT 'Compra',
+        observacoes TEXT,
+        foto_b64 TEXT,
+        ass_conf_b64 TEXT,
+        ass_ent_b64 TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS romaneio_itens (
+        id SERIAL PRIMARY KEY,
+        romaneio_id INTEGER NOT NULL REFERENCES romaneios(id) ON DELETE CASCADE,
+        produto VARCHAR(255) NOT NULL,
+        quantidade REAL NOT NULL,
+        unidade VARCHAR(50) NOT NULL,
+        valor_unitario REAL,
+        valor_total REAL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bonificacoes (
+        id SERIAL PRIMARY KEY,
+        numero_nota VARCHAR(255) NOT NULL,
+        loja VARCHAR(255) NOT NULL,
+        data_entrada VARCHAR(50) NOT NULL,
+        valor_bonificacao REAL NOT NULL,
+        status VARCHAR(100) NOT NULL,
+        produto_hortifruti VARCHAR(255) NOT NULL,
+        caminho_anexo TEXT,
+        tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação',
+        anexo_b64 TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS baixas_avarias (
+        id SERIAL PRIMARY KEY,
+        loja_baixa VARCHAR(255) NOT NULL,
+        data_baixa VARCHAR(50) NOT NULL,
+        ref_bon_transferen VARCHAR(255) NOT NULL,
+        nf_baixa TEXT,
+        nf_b_entrada VARCHAR(255) NOT NULL,
+        produto_hortifruti VARCHAR(255) NOT NULL,
+        quantidade_kg_cx REAL NOT NULL,
+        valor_total_avaria REAL NOT NULL,
+        saldo_restante_nota REAL NOT NULL,
+        saldo_total_disponivel REAL NOT NULL,
+        nf_baixa_b64 TEXT
+    )
+    """)
+    for alt_sql2 in [
+        "ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT",
+        "ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT",
+        "ALTER TABLE baixas_avarias ADD COLUMN IF NOT EXISTS nf_baixa_b64 TEXT",
+    ]:
+        try:
+            cursor.execute(alt_sql2)
+        except Exception:
+            pass
+
+    cursor.execute("SELECT 1 FROM usuarios WHERE login = %s", ("908",))
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop) VALUES (%s, %s, %s, %s, %s, %s)",
+            ("Administrador", "908", gerar_hash_senha("0332"), "Gestor", "Logomarca Oficial Supernova", 0),
+        )
+
+
+def _garantir_tabelas_controle_contingencia(conn_reserva):
+    cur = conn_reserva.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS _contingencia_sync_log (
+        id SERIAL PRIMARY KEY,
+        tabela VARCHAR(100) NOT NULL,
+        chave_unica VARCHAR(500) NOT NULL,
+        operacao VARCHAR(30) DEFAULT 'UPSERT',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sincronizado INTEGER DEFAULT 0,
+        sincronizado_em TIMESTAMP NULL,
+        UNIQUE(tabela, chave_unica)
+    )
+    """)
+    conn_reserva.commit()
+
+
+def _registrar_pendencia_contingencia(conn_reserva, tabela, chave_unica, operacao="UPSERT"):
+    _garantir_tabelas_controle_contingencia(conn_reserva)
+    cur = conn_reserva.cursor()
+    cur.execute(
+        """
+        INSERT INTO _contingencia_sync_log (tabela, chave_unica, operacao, sincronizado, sincronizado_em, criado_em)
+        VALUES (%s, %s, %s, 0, NULL, CURRENT_TIMESTAMP)
+        ON CONFLICT (tabela, chave_unica) DO UPDATE SET
+            operacao = EXCLUDED.operacao,
+            sincronizado = 0,
+            sincronizado_em = NULL,
+            criado_em = CURRENT_TIMESTAMP
+        """,
+        (str(tabela), str(chave_unica), str(operacao)),
+    )
+
+
+def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
+    """
+    Sincroniza automaticamente (idempotente / sem duplicidade) os dados gravados
+    no Supabase durante contingência de volta para o Neon assim que o Neon volta.
+    """
+    _garantir_schema_postgres(conn_neon)
+    _garantir_schema_postgres(conn_supabase)
+    _garantir_tabelas_controle_contingencia(conn_supabase)
+
+    cur_sup = conn_supabase.cursor()
+    cur_neon = conn_neon.cursor()
+
+    cur_sup.execute(
+        "SELECT id, tabela, chave_unica, operacao FROM _contingencia_sync_log WHERE sincronizado = 0 ORDER BY id ASC"
+    )
+    pendentes = cur_sup.fetchall()
+    if not pendentes:
+        return 0
+
+    sincronizados_ids = []
+
+    for log_id, tabela, chave_unica, operacao in pendentes:
+        try:
+            if tabela == "usuarios":
+                cur_sup.execute(
+                    "SELECT nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios WHERE login = %s",
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (login) DO UPDATE SET
+                            nome = EXCLUDED.nome,
+                            senha = EXCLUDED.senha,
+                            perfil = EXCLUDED.perfil,
+                            tema_bg = EXCLUDED.tema_bg,
+                            notif_desktop = EXCLUDED.notif_desktop,
+                            custom_bg_b64 = EXCLUDED.custom_bg_b64
+                        """,
+                        row,
+                    )
+
+            elif tabela == "wallpapers":
+                cur_sup.execute("SELECT nome, b64_dados FROM wallpapers WHERE nome = %s", (chave_unica,))
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO wallpapers (nome, b64_dados)
+                        VALUES (%s, %s)
+                        ON CONFLICT (nome) DO UPDATE SET b64_dados = EXCLUDED.b64_dados
+                        """,
+                        row,
+                    )
+
+            elif tabela == "produtos":
+                cur_sup.execute(
+                    "SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos WHERE nome = %s",
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (nome) DO UPDATE SET
+                            codigo_barras = COALESCE(EXCLUDED.codigo_barras, produtos.codigo_barras),
+                            codigo_produto = COALESCE(EXCLUDED.codigo_produto, produtos.codigo_produto),
+                            unidade_padrao = EXCLUDED.unidade_padrao
+                        """,
+                        row,
+                    )
+
+            elif tabela == "fornecedores":
+                cur_sup.execute(
+                    "SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE nome = %s",
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (nome) DO UPDATE SET
+                            codigo_fornecedor = COALESCE(EXCLUDED.codigo_fornecedor, fornecedores.codigo_fornecedor),
+                            cnpj = COALESCE(EXCLUDED.cnpj, fornecedores.cnpj)
+                        """,
+                        row,
+                    )
+
+            elif tabela == "romaneios":
+                cur_sup.execute(
+                    """
+                    SELECT id, numero_romaneio, loja, loja_origem, loja_destino,
+                           data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor,
+                           conferente, pagamento_a_vista, data_pagamento, caminho_foto,
+                           assinatura_conferente, assinatura_entregador, status_nota,
+                           tipo_operacao, observacoes, foto_b64, ass_conf_b64, ass_ent_b64
+                    FROM romaneios WHERE numero_romaneio = %s
+                    """,
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    sup_rom_id = row[0]
+                    vals = row[1:]
+                    cur_neon.execute(
+                        """
+                        INSERT INTO romaneios (
+                            numero_romaneio, loja, loja_origem, loja_destino,
+                            data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor,
+                            conferente, pagamento_a_vista, data_pagamento, caminho_foto,
+                            assinatura_conferente, assinatura_entregador, status_nota,
+                            tipo_operacao, observacoes, foto_b64, ass_conf_b64, ass_ent_b64
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (numero_romaneio) DO UPDATE SET
+                            loja = EXCLUDED.loja,
+                            loja_origem = EXCLUDED.loja_origem,
+                            loja_destino = EXCLUDED.loja_destino,
+                            data_recebimento = EXCLUDED.data_recebimento,
+                            fornecedor = EXCLUDED.fornecedor,
+                            codigo_fornecedor = EXCLUDED.codigo_fornecedor,
+                            telefone_fornecedor = EXCLUDED.telefone_fornecedor,
+                            conferente = EXCLUDED.conferente,
+                            pagamento_a_vista = EXCLUDED.pagamento_a_vista,
+                            data_pagamento = EXCLUDED.data_pagamento,
+                            caminho_foto = EXCLUDED.caminho_foto,
+                            assinatura_conferente = EXCLUDED.assinatura_conferente,
+                            assinatura_entregador = EXCLUDED.assinatura_entregador,
+                            status_nota = EXCLUDED.status_nota,
+                            tipo_operacao = EXCLUDED.tipo_operacao,
+                            observacoes = EXCLUDED.observacoes,
+                            foto_b64 = COALESCE(NULLIF(EXCLUDED.foto_b64, ''), romaneios.foto_b64),
+                            ass_conf_b64 = COALESCE(NULLIF(EXCLUDED.ass_conf_b64, ''), romaneios.ass_conf_b64),
+                            ass_ent_b64 = COALESCE(NULLIF(EXCLUDED.ass_ent_b64, ''), romaneios.ass_ent_b64)
+                        RETURNING id
+                        """,
+                        vals,
+                    )
+                    neon_rom_id = cur_neon.fetchone()[0]
+                    cur_sup.execute(
+                        "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s ORDER BY id ASC",
+                        (sup_rom_id,),
+                    )
+                    itens_sup = cur_sup.fetchall()
+                    cur_neon.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s", (neon_rom_id,))
+                    for it in itens_sup:
+                        cur_neon.execute(
+                            "INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)",
+                            (neon_rom_id, it[0], it[1], it[2], it[3], it[4]),
+                        )
+
+            elif tabela == "bonificacoes":
+                # chave_unica = numero_nota||loja||data_entrada
+                partes = chave_unica.split("||", 2)
+                if len(partes) == 3:
+                    n_nota, n_loja, n_dt = partes
+                    cur_sup.execute(
+                        """
+                        SELECT numero_nota, loja, data_entrada, valor_bonificacao, status,
+                               produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+                        FROM bonificacoes
+                        WHERE numero_nota = %s AND loja = %s AND data_entrada = %s
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (n_nota, n_loja, n_dt),
+                    )
+                    row = cur_sup.fetchone()
+                    if row:
+                        cur_neon.execute(
+                            "SELECT id FROM bonificacoes WHERE numero_nota = %s AND loja = %s AND data_entrada = %s LIMIT 1",
+                            (n_nota, n_loja, n_dt),
+                        )
+                        ex = cur_neon.fetchone()
+                        if ex:
+                            cur_neon.execute(
+                                """
+                                UPDATE bonificacoes SET
+                                    valor_bonificacao = %s, status = %s, produto_hortifruti = %s,
+                                    caminho_anexo = %s, tipo_bonificacao = %s,
+                                    anexo_b64 = COALESCE(NULLIF(%s, ''), anexo_b64)
+                                WHERE id = %s
+                                """,
+                                (row[3], row[4], row[5], row[6], row[7], row[8], ex[0]),
+                            )
+                        else:
+                            cur_neon.execute(
+                                """
+                                INSERT INTO bonificacoes (
+                                    numero_nota, loja, data_entrada, valor_bonificacao, status,
+                                    produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """,
+                                row,
+                            )
+
+            elif tabela == "baixas_avarias":
+                # chave_unica = loja_baixa||data_baixa||ref_bon_transferen||nf_b_entrada
+                partes = chave_unica.split("||", 3)
+                if len(partes) == 4:
+                    b_loja, b_dt, b_ref, b_nf = partes
+                    cur_sup.execute(
+                        """
+                        SELECT loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada,
+                               produto_hortifruti, quantidade_kg_cx, valor_total_avaria,
+                               saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64
+                        FROM baixas_avarias
+                        WHERE loja_baixa = %s AND data_baixa = %s AND ref_bon_transferen = %s AND nf_b_entrada = %s
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (b_loja, b_dt, b_ref, b_nf),
+                    )
+                    row = cur_sup.fetchone()
+                    if row:
+                        cur_neon.execute(
+                            """
+                            SELECT id FROM baixas_avarias
+                            WHERE loja_baixa = %s AND data_baixa = %s AND ref_bon_transferen = %s AND nf_b_entrada = %s
+                            LIMIT 1
+                            """,
+                            (b_loja, b_dt, b_ref, b_nf),
+                        )
+                        ex = cur_neon.fetchone()
+                        if ex:
+                            cur_neon.execute(
+                                """
+                                UPDATE baixas_avarias SET
+                                    nf_baixa = %s, produto_hortifruti = %s, quantidade_kg_cx = %s,
+                                    valor_total_avaria = %s, saldo_restante_nota = %s,
+                                    saldo_total_disponivel = %s,
+                                    nf_baixa_b64 = COALESCE(NULLIF(%s, ''), nf_baixa_b64)
+                                WHERE id = %s
+                                """,
+                                (row[3], row[5], row[6], row[7], row[8], row[9], row[10], ex[0]),
+                            )
+                        else:
+                            cur_neon.execute(
+                                """
+                                INSERT INTO baixas_avarias (
+                                    loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada,
+                                    produto_hortifruti, quantidade_kg_cx, valor_total_avaria,
+                                    saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """,
+                                row,
+                            )
+
+            sincronizados_ids.append(log_id)
+        except Exception:
+            conn_neon.rollback()
+            raise
+
+    conn_neon.commit()
+    for lid in sincronizados_ids:
+        cur_sup.execute(
+            "UPDATE _contingencia_sync_log SET sincronizado = 1, sincronizado_em = CURRENT_TIMESTAMP WHERE id = %s",
+            (lid,),
+        )
+    conn_supabase.commit()
+    return len(sincronizados_ids)
+
+
+def _espelhar_base_para_reserva(conn_neon, conn_supabase):
+    """Mantém o banco reserva (Supabase) aquecido e espelhado com os dados mestres e recentes do Neon."""
+    _garantir_schema_postgres(conn_supabase)
+    cur_n = conn_neon.cursor()
+    cur_s = conn_supabase.cursor()
+
+    cur_n.execute("SELECT nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios")
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            """
+            INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (login) DO UPDATE SET
+                nome = EXCLUDED.nome, senha = EXCLUDED.senha, perfil = EXCLUDED.perfil,
+                tema_bg = EXCLUDED.tema_bg, notif_desktop = EXCLUDED.notif_desktop, custom_bg_b64 = EXCLUDED.custom_bg_b64
+            """,
+            r,
+        )
+
+    cur_n.execute("SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos")
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            """
+            INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (nome) DO UPDATE SET
+                codigo_barras = EXCLUDED.codigo_barras,
+                codigo_produto = EXCLUDED.codigo_produto,
+                unidade_padrao = EXCLUDED.unidade_padrao
+            """,
+            r,
+        )
+
+    cur_n.execute("SELECT codigo_fornecedor, cnpj, nome FROM fornecedores")
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            """
+            INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (nome) DO UPDATE SET
+                codigo_fornecedor = EXCLUDED.codigo_fornecedor,
+                cnpj = EXCLUDED.cnpj
+            """,
+            r,
+        )
+
+    cur_n.execute(
+        """
+        SELECT numero_nota, loja, data_entrada, valor_bonificacao, status,
+               produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+        FROM bonificacoes ORDER BY id DESC LIMIT 300
+        """
+    )
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            "SELECT id FROM bonificacoes WHERE numero_nota = %s AND loja = %s AND data_entrada = %s LIMIT 1",
+            (r[0], r[1], r[2]),
+        )
+        ex = cur_s.fetchone()
+        if ex:
+            cur_s.execute(
+                "UPDATE bonificacoes SET valor_bonificacao = %s, status = %s, produto_hortifruti = %s, tipo_bonificacao = %s WHERE id = %s",
+                (r[3], r[4], r[5], r[7], ex[0]),
+            )
+        else:
+            cur_s.execute(
+                """
+                INSERT INTO bonificacoes (
+                    numero_nota, loja, data_entrada, valor_bonificacao, status,
+                    produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                r,
+            )
+
+    conn_supabase.commit()
+
+
+class _CursorContingenciaWrapper:
+    def __init__(self, real_cursor, conn_reserva, em_contingencia):
+        self._cur = real_cursor
+        self._conn_reserva = conn_reserva
+        self._em_contingencia = em_contingencia
+        self._ultimo_romaneio_num = None
+
+    def _rastrear_escrita(self, sql, params):
+        if not self._em_contingencia or not sql:
+            return
+        sql_clean = " ".join(str(sql).strip().split())
+        sql_up = sql_clean.upper()
+        if not (sql_up.startswith("INSERT INTO") or sql_up.startswith("UPDATE ")):
+            return
+        p = tuple(params) if params is not None else ()
+        try:
+            if "INTO ROMANEIOS " in sql_up and len(p) >= 1:
+                self._ultimo_romaneio_num = str(p[0])
+                _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", str(p[0]))
+            elif "INTO ROMANEIO_ITENS " in sql_up and self._ultimo_romaneio_num:
+                _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", self._ultimo_romaneio_num)
+            elif "UPDATE ROMANEIOS " in sql_up and len(p) >= 1:
+                rid = p[-1]
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT numero_romaneio FROM romaneios WHERE id = %s", (rid,))
+                r_num = c_tmp.fetchone()
+                if r_num:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", str(r_num[0]))
+            elif "INTO BONIFICACOES " in sql_up and len(p) >= 3:
+                chave = f"{p[0]}||{p[1]}||{p[2]}"
+                _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", chave)
+            elif "UPDATE BONIFICACOES " in sql_up:
+                c_tmp = self._conn_reserva.cursor()
+                if "WHERE ID = %S" in sql_up and len(p) >= 1:
+                    c_tmp.execute("SELECT numero_nota, loja, data_entrada FROM bonificacoes WHERE id = %s", (p[-1],))
+                    rb = c_tmp.fetchone()
+                    if rb:
+                        _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", f"{rb[0]}||{rb[1]}||{rb[2]}")
+                elif "TRIM(NUMERO_NOTA)" in sql_up and len(p) >= 1:
+                    c_tmp.execute("SELECT numero_nota, loja, data_entrada FROM bonificacoes WHERE TRIM(numero_nota) = TRIM(%s)", (p[-1],))
+                    for rb in c_tmp.fetchall():
+                        _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", f"{rb[0]}||{rb[1]}||{rb[2]}")
+            elif "INTO BAIXAS_AVARIAS " in sql_up and len(p) >= 5:
+                chave = f"{p[0]}||{p[1]}||{p[2]}||{p[4]}"
+                _registrar_pendencia_contingencia(self._conn_reserva, "baixas_avarias", chave)
+            elif "UPDATE BAIXAS_AVARIAS " in sql_up and len(p) >= 1:
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT loja_baixa, data_baixa, ref_bon_transferen, nf_b_entrada FROM baixas_avarias WHERE id = %s", (p[-1],))
+                rbx = c_tmp.fetchone()
+                if rbx:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "baixas_avarias", f"{rbx[0]}||{rbx[1]}||{rbx[2]}||{rbx[3]}")
+            elif "INTO PRODUTOS " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "produtos", str(p[2]))
+            elif "UPDATE PRODUTOS " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "produtos", str(p[2]))
+            elif "INTO FORNECEDORES " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "fornecedores", str(p[2]))
+            elif "UPDATE FORNECEDORES " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "fornecedores", str(p[2]))
+            elif "INTO USUARIOS " in sql_up and len(p) >= 2:
+                _registrar_pendencia_contingencia(self._conn_reserva, "usuarios", str(p[1]))
+            elif "UPDATE USUARIOS " in sql_up and len(p) >= 2:
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT login FROM usuarios WHERE id = %s", (p[-1],))
+                ru = c_tmp.fetchone()
+                if ru:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "usuarios", str(ru[0]))
+            elif "INTO WALLPAPERS " in sql_up and len(p) >= 1:
+                _registrar_pendencia_contingencia(self._conn_reserva, "wallpapers", str(p[0]))
+        except Exception:
+            pass
+
+    def execute(self, sql, params=None):
+        res = self._cur.execute(sql, params) if params is not None else self._cur.execute(sql)
+        self._rastrear_escrita(sql, params)
+        return res
+
+    def executemany(self, sql, seq_of_params):
+        res = self._cur.executemany(sql, seq_of_params)
+        for p in seq_of_params:
+            self._rastrear_escrita(sql, p)
+        return res
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class _ConnContingenciaWrapper:
+    def __init__(self, real_conn, em_contingencia=False):
+        self._conn = real_conn
+        self._em_contingencia = em_contingencia
+
+    def cursor(self, *args, **kwargs):
+        return _CursorContingenciaWrapper(self._conn.cursor(*args, **kwargs), self._conn, self._em_contingencia)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def tentar_reconciliacao_automatica(forcar=False):
+    neon_url, supabase_url = _obter_urls_postgres()
+    if not neon_url or not supabase_url:
+        return 0
+    agora = time_module.time()
+    ultimo_check = st.session_state.get("_ultimo_sync_contingencia_ts", 0.0)
+    if not forcar and (agora - ultimo_check) < 20:
+        return 0
+    st.session_state["_ultimo_sync_contingencia_ts"] = agora
+
+    conn_n = None
+    conn_s = None
+    try:
+        conn_n = _conectar_pg_direto(neon_url, timeout=12, tentativas=1)
+        conn_s = _conectar_pg_direto(supabase_url, timeout=12, tentativas=1)
+        qtd_sync = _sincronizar_reserva_para_principal(conn_n, conn_s)
+        if qtd_sync > 0:
+            st.session_state["_qtd_ultima_sincronizacao"] = qtd_sync
+            st.session_state["_banco_ativo_modo"] = "Neon (Principal)"
+        return qtd_sync
+    except Exception:
+        return 0
+    finally:
+        if conn_n:
             try:
-                conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=20)
-                return conn, "postgres"
-            except Exception as e:
-                ultimo_erro = e
-                time_module.sleep(1.0)
+                conn_n.close()
+            except Exception:
+                pass
+        if conn_s:
+            try:
+                conn_s.close()
+            except Exception:
+                pass
+
+
+def get_db_connection(ping_only=False):
+    neon_url, supabase_url = _obter_urls_postgres()
+    if neon_url:
+        erro_neon = None
+        try:
+            conn_neon = _conectar_pg_direto(neon_url, timeout=18, tentativas=2)
+            st.session_state["_banco_ativo_modo"] = "Neon (Principal)"
+            # Se havia dados gravados no Supabase durante uma queda anterior, sincroniza automaticamente agora
+            if not ping_only and supabase_url:
+                try:
+                    conn_sup_tmp = _conectar_pg_direto(supabase_url, timeout=8, tentativas=1)
+                    try:
+                        qtd_sinc = _sincronizar_reserva_para_principal(conn_neon, conn_sup_tmp)
+                        if qtd_sinc > 0:
+                            st.session_state["_qtd_ultima_sincronizacao"] = qtd_sinc
+                    finally:
+                        conn_sup_tmp.close()
+                except Exception:
+                    pass
+            return _ConnContingenciaWrapper(conn_neon, em_contingencia=False), "postgres"
+        except Exception as e_neon:
+            erro_neon = e_neon
+
+        # Fallback automático para Supabase (Reserva)
+        if supabase_url:
+            try:
+                conn_sup = _conectar_pg_direto(supabase_url, timeout=18, tentativas=2)
+                _garantir_schema_postgres(conn_sup)
+                _garantir_tabelas_controle_contingencia(conn_sup)
+                conn_sup.commit()
+                st.session_state["_banco_ativo_modo"] = "Supabase (Contingência Ativa)"
+                if not ping_only:
+                    st.warning("⚠️ Neon indisponível no momento. Modo contingência ativado no Supabase — tudo que for salvo será sincronizado automaticamente para o Neon assim que ele voltar.")
+                return _ConnContingenciaWrapper(conn_sup, em_contingencia=True), "postgres"
+            except Exception as e_sup:
+                if not ping_only:
+                    st.error(f"Erro crítico: Neon ({erro_neon}) e Supabase reserva ({e_sup}) indisponíveis.")
+                raise e_sup
+
         if not ping_only:
-            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {ultimo_erro}")
-        raise ultimo_erro
+            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {erro_neon}")
+        raise erro_neon
+
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
 
+
 def executar_keep_alive_banco():
+    neon_url, supabase_url = _obter_urls_postgres()
+    status_detalhes = []
+    if neon_url:
+        conn_n = None
+        conn_s = None
+        try:
+            conn_n = _conectar_pg_direto(neon_url, timeout=15, tentativas=2)
+            cur_n = conn_n.cursor()
+            cur_n.execute("SELECT 1")
+            cur_n.fetchone()
+            conn_n.commit()
+            status_detalhes.append("neon:ok")
+        except Exception as e_n:
+            status_detalhes.append(f"neon:err({e_n})")
+
+        if supabase_url:
+            try:
+                conn_s = _conectar_pg_direto(supabase_url, timeout=15, tentativas=2)
+                cur_s = conn_s.cursor()
+                cur_s.execute("SELECT 1")
+                cur_s.fetchone()
+                conn_s.commit()
+                status_detalhes.append("supabase:ok")
+                # Aproveita o ping periódico do UptimeRobot para reconciliar pendências e espelhar dados mestres
+                if conn_n is not None:
+                    sinc = _sincronizar_reserva_para_principal(conn_n, conn_s)
+                    if sinc > 0:
+                        status_detalhes.append(f"sync:{sinc}")
+                    _espelhar_base_para_reserva(conn_n, conn_s)
+                    status_detalhes.append("mirror:ok")
+            except Exception as e_s:
+                status_detalhes.append(f"supabase:err({e_s})")
+            finally:
+                if conn_s:
+                    try:
+                        conn_s.close()
+                    except Exception:
+                        pass
+        if conn_n:
+            try:
+                conn_n.close()
+            except Exception:
+                pass
+        return True, " | ".join(status_detalhes)
+
     conn, db_type = get_db_connection(ping_only=True)
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT 1")
         cursor.fetchone()
-        if db_type == "postgres":
-            conn.commit()
         return True, db_type
     finally:
         conn.close()
 
+
 if st.query_params.get("ping") == "1":
     try:
         _, _db_t = executar_keep_alive_banco()
-        st.write(f"OK - keep-alive ativo ({_db_t})")
+        st.write(f"OK - keep-alive & sync ativo ({_db_t})")
         st.stop()
     except Exception as _err_ping:
         st.write(f"PING_ERR: {_err_ping}")
         st.stop()
+
 
 def parse_float_ptbr(valor_str):
     if not valor_str or not str(valor_str).strip():
@@ -1308,7 +2055,16 @@ else:
     col_info_usr, col_botoes_topo = st.columns([2.5, 2.5], vertical_alignment="center")
     with col_info_usr:
         tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
-        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
+        modo_bd_atual = st.session_state.get("_banco_ativo_modo", "Neon (Principal)")
+        cor_bd_badge = "#2e7d32" if "Principal" in modo_bd_atual else "#ed6c02"
+        st.markdown(
+            f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt} &nbsp;|&nbsp; "
+            f"<span style='background:{cor_bd_badge};color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;'>🗄️ {modo_bd_atual}</span>",
+            unsafe_allow_html=True,
+        )
+        qtd_sync_recente = st.session_state.pop("_qtd_ultima_sincronizacao", 0)
+        if qtd_sync_recente > 0:
+            st.success(f"🔄 {qtd_sync_recente} registro(s) salvos na contingência (Supabase) foram sincronizados automaticamente para o Neon!")
     
     with col_botoes_topo:
         c_btn1, c_btn2 = st.columns([1.2, 1])
@@ -3212,7 +3968,7 @@ else:
                                     conn_del_f, db_tdf = get_db_connection()
                                     try:
                                         cur_delf = conn_del_f.cursor()
-                                        cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
+                                        cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
                                         conn_del_f.commit()
                                         carregar_fornecedores_cached.clear()
                                         st.success("Fornecedor excluído com sucesso!")
