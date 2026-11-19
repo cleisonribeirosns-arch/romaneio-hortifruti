@@ -49,7 +49,7 @@ st.set_page_config(
 # ---------------------------------------------------------
 def buscar_caminho_logo():
     for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
+        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo"]:
             pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
             if os.path.exists(pos_p):
                 return pos_p
@@ -1134,10 +1134,30 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     return ""
 
 img_padrao_fundo = None
-for nome_img in ["tela de login padrao.jpeg", "tela de login padrao.jpg", "tela de login padrao.png", "Tela de login.jpeg.jpeg", "Tela de login.jpeg", "image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
-    if os.path.exists(nome_img):
-        img_padrao_fundo = nome_img
+# Busca exata e case-insensitive pelo arquivo 'tela de login padrao' na pasta raiz
+arquivos_raiz = os.listdir(".") if os.path.exists(".") else []
+candidatos_prioritarios = [
+    "tela de login padrao.jpeg",
+    "tela de login padrao.jpg",
+    "tela de login padrao.png",
+    "tela de login padrao.jpeg.jpeg",
+    "tela_de_login_padrao.jpeg",
+    "tela_de_login_padrao.jpg",
+    "tela_de_login_padrao.png",
+]
+for cand in candidatos_prioritarios:
+    for arq in arquivos_raiz:
+        if arq.lower() == cand.lower():
+            img_padrao_fundo = arq
+            break
+    if img_padrao_fundo:
         break
+
+if not img_padrao_fundo:
+    for arq in arquivos_raiz:
+        if "tela de login padrao" in arq.lower() or "tela_de_login_padrao" in arq.lower():
+            img_padrao_fundo = arq
+            break
 
 b64_padrao_global = ""
 if img_padrao_fundo:
