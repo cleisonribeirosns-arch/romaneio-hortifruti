@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime, time, timedelta
+import time as time_module
 import io
 import os
 import sqlite3
@@ -118,7 +119,51 @@ header {{visibility: hidden;}}
 </style>
 """, unsafe_allow_html=True)
 
-def spinner_supernova(mensagem="Processando transição..."):
+# Script JS para acionar a transição visual ao clicar em abas (pastas) e botões no frontend
+img_tag_js = f'<img src="data:image/png;base64,{logo_b64_global_overlay}" class="supernova-logo-pulse" />' if logo_b64_global_overlay else '<div style="font-size: 40px; margin-bottom: 20px;">📦</div>'
+components.html(f"""
+<script>
+(function() {{
+    const parentDoc = window.parent.document;
+    if (parentDoc.getElementById('supernova-js-transition-hook')) return;
+    const marker = parentDoc.createElement('div');
+    marker.id = 'supernova-js-transition-hook';
+    marker.style.display = 'none';
+    parentDoc.body.appendChild(marker);
+
+    function dispararOverlayJS(texto) {{
+        let existing = parentDoc.getElementById('supernova-dynamic-overlay');
+        if (existing) existing.remove();
+        const ov = parentDoc.createElement('div');
+        ov.id = 'supernova-dynamic-overlay';
+        ov.className = 'supernova-transition-overlay';
+        ov.innerHTML = `{img_tag_js}<h3 style="color: #FFFFFF; font-weight: 600; letter-spacing: 0.5px;">${{texto}}</h3>`;
+        parentDoc.body.appendChild(ov);
+        setTimeout(() => {{
+            if (ov && ov.parentNode) ov.remove();
+        }}, 550);
+    }}
+
+    parentDoc.addEventListener('click', function(e) {{
+        const tabBtn = e.target.closest('button[data-baseweb="tab"]');
+        if (tabBtn) {{
+            const label = tabBtn.innerText ? tabBtn.innerText.trim() : 'aba';
+            dispararOverlayJS('Carregando ' + label + '...');
+            return;
+        }}
+        const actionBtn = e.target.closest('button[kind="primary"], button[kind="secondary"]');
+        if (actionBtn) {{
+            const txt = actionBtn.innerText ? actionBtn.innerText.trim() : '';
+            if (txt && !txt.includes('Descarregar') && !txt.includes('Baixar')) {{
+                dispararOverlayJS('Processando...');
+            }}
+        }}
+    }}, true);
+}})();
+</script>
+""", height=0)
+
+def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.45):
     # Componente visual personalizado garantindo a exibição da transição com a logo
     img_tag = f'<img src="data:image/png;base64,{logo_b64_global_overlay}" class="supernova-logo-pulse" />' if logo_b64_global_overlay else '<div style="font-size: 40px; margin-bottom: 20px;">📦</div>'
     
@@ -131,9 +176,14 @@ def spinner_supernova(mensagem="Processando transição..."):
     """, unsafe_allow_html=True)
     
     class SpinnerContext:
+        def __init__(self):
+            self.start_time = time_module.time()
         def __enter__(self):
             return self
         def __exit__(self, exc_type, exc_val, exc_tb):
+            elapsed = time_module.time() - self.start_time
+            if elapsed < duracao_minima:
+                time_module.sleep(duracao_minima - elapsed)
             placeholder.empty()
             
     return SpinnerContext()
@@ -1362,9 +1412,16 @@ else:
         "Menu de Navegação Principal",
         list(opcoes_menu_map.keys()),
         horizontal=True,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="menu_navegacao_principal_radio"
     )
     menu = opcoes_menu_map[menu_selecionado_label]
+    if "ultimo_menu_ativo" not in st.session_state:
+        st.session_state["ultimo_menu_ativo"] = menu
+    elif st.session_state["ultimo_menu_ativo"] != menu:
+        st.session_state["ultimo_menu_ativo"] = menu
+        with spinner_supernova(f"Abrindo {menu_selecionado_label}...", duracao_minima=0.5):
+            pass
     st.markdown("---")
     
     if menu == "Romaneio de Recebimento - Hortifrúti":
@@ -1459,7 +1516,7 @@ else:
                     if len(raw) >= 3: fmt += f") {raw[2:7]}"
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
-                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", value="", placeholder="(00) 00000-0000", key=tel_key, on_change=formatar_tel)
+                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", placeholder="", key=tel_key, on_change=formatar_tel)
             with col_tel2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, placeholder="Selecione...", key=f"pag_vista_{k_suffix}")
             
@@ -1481,9 +1538,9 @@ else:
             und_padrao = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
             und_sel = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=(["KG", "UNID", "GRM", "CX"].index(und_padrao) if und_padrao in ["KG", "UNID", "GRM", "CX"] else 0), key=f"und_sel_{k_suffix}_{i_suffix}")
         with col_p3:
-            qtd_str_input = st.text_input("Qtd / Peso", value="", placeholder="0,000", key=f"qtd_{k_suffix}_{i_suffix}")
+            qtd_str_input = st.text_input("Qtd / Peso", placeholder="", key=f"qtd_{k_suffix}_{i_suffix}")
         with col_p4:
-            val_unit_str_input = st.text_input("Valor Unit. (R$)", value="", placeholder="0,00", key=f"vunit_{k_suffix}_{i_suffix}")
+            val_unit_str_input = st.text_input("Valor Unit. (R$)", placeholder="", key=f"vunit_{k_suffix}_{i_suffix}")
         with col_p5:
             st.write("")
             st.write("")
@@ -1524,7 +1581,7 @@ else:
         fotos_upload = st.file_uploader("Foto da Mercadoria / Nota Fiscal", type=["jpg", "jpeg", "png", "pdf"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
 
         st.subheader("4. Informações Adicionais / Observações")
-        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", value="", placeholder="Insira observações relevantes aqui...", key=f"obs_{k_suffix}")
+        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", placeholder="", key=f"obs_{k_suffix}")
 
         st.subheader("5. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
@@ -1948,28 +2005,32 @@ else:
             c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
             lista_opcoes_prod.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
+        if "bonf_form_suf" not in st.session_state:
+            st.session_state["bonf_form_suf"] = 0
+        bf_suf = st.session_state["bonf_form_suf"]
+
         with st.expander("➕ Cadastrar Nova Bonificação", expanded=False):
-            with st.form("form_cad_bonificacao", clear_on_submit=True):
+            with st.form(f"form_cad_bonificacao_{bf_suf}", clear_on_submit=False):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
-                    num_nota_bonf = st.text_input("N° Nota Fiscal", value="", placeholder="Número da nota...")
+                    num_nota_bonf = st.text_input("N° Nota Fiscal", placeholder="", key=f"bonf_nota_{bf_suf}")
                     lista_lojas_cad_b = ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_cad_b = lista_lojas_cad_b.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_cad_b else 0
-                    loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, placeholder="Selecione a loja...", key="loja_bonf_sel")
+                    loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, placeholder="Selecione a loja...", key=f"loja_bonf_sel_{bf_suf}")
                 with col_b2:
-                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="", placeholder="0,00")
-                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["", "Bonificação", "Transferência de Bonificação"], index=0, placeholder="Selecione o tipo...", key="tipo_bonf_input_sel")
+                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", placeholder="", key=f"bonf_val_{bf_suf}")
+                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["", "Bonificação", "Transferência de Bonificação"], index=0, placeholder="Selecione o tipo...", key=f"tipo_bonf_input_sel_{bf_suf}")
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0, placeholder="Selecione o produto...")
-                    anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0, placeholder="Selecione o produto...", key=f"bonf_prod_{bf_suf}")
+                    anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"], key=f"bonf_anx_{bf_suf}")
 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
-                with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
+                with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...", key=f"bonf_st_{bf_suf}")
                 with col_dt2: 
-                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", "cad_bonf_dt")
+                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", f"cad_bonf_dt_{bf_suf}")
                 with col_dt3:
                     hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
-                    st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
+                    st.text_input("Hora de Entrada", value=hora_auto, disabled=True, key=f"bonf_hr_{bf_suf}")
 
                 dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
                 if st.form_submit_button("✅ Salvar Bonificação", type="primary"):
@@ -2010,6 +2071,7 @@ else:
                                 )
                                 chat_bonificacao_enviado = enviar_notificacao_google_chat(mensagem_bonificacao_chat)
                                 status_chat_bonf = " Google Chat notificado." if chat_bonificacao_enviado else " (Google Chat não notificado; confira os Secrets)."
+                                st.session_state["bonf_form_suf"] += 1
                                 st.success("Bonificação salva com sucesso com anexo persistido!" + status_chat_bonf)
                                 st.rerun()
                             except Exception as e:
@@ -2340,7 +2402,7 @@ else:
             lista_opcoes_prod_v.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
         with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=False):
-            with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=True):
+            with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=False):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
                     lista_lojas_reg = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
@@ -2878,13 +2940,16 @@ else:
             st.title("🛒 Gerenciamento e Cadastro (Produtos & Fornecedores)")
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🏢 Cadastro de Fornecedores"])
         with tab_prod:
+            if "prod_form_suf" not in st.session_state:
+                st.session_state["prod_form_suf"] = 0
+            pf_suf = st.session_state["prod_form_suf"]
             with st.expander("➕ Cadastrar Novo Produto", expanded=False):
-                with st.form("cad_prod_form", clear_on_submit=True):
+                with st.form(f"cad_prod_form_{pf_suf}", clear_on_submit=False):
                     col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="", placeholder="Cód...")
-                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="", placeholder="Código de barras...")
-                    with col_cp3: nome_p = st.text_input("Nome do Produto *", value="", placeholder="Nome do produto...")
-                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
+                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", placeholder="", key=f"cp_cod_{pf_suf}")
+                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", placeholder="", key=f"cp_bar_{pf_suf}")
+                    with col_cp3: nome_p = st.text_input("Nome do Produto *", placeholder="", key=f"cp_nome_{pf_suf}")
+                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0, key=f"cp_und_{pf_suf}")
                     if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                         if not nome_p.strip(): st.error("O Nome é obrigatório.")
                         else:
@@ -2895,6 +2960,7 @@ else:
                                     cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
                                     conn.commit()
                                     carregar_produtos_cached.clear()
+                                    st.session_state["prod_form_suf"] += 1
                                     st.success("Cadastrado com sucesso!")
                                     st.rerun()
                                 except Exception as e:
@@ -2998,12 +3064,15 @@ else:
             else: st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
+            if "forn_form_suf" not in st.session_state:
+                st.session_state["forn_form_suf"] = 0
+            ff_suf = st.session_state["forn_form_suf"]
             with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
-                with st.form("cad_forn_form", clear_on_submit=True):
+                with st.form(f"cad_forn_form_{ff_suf}", clear_on_submit=False):
                     col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                    with col_fc1: f_cod_input = st.text_input("Código", value="", placeholder="Código...")
-                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="", placeholder="00.000.000/0000-00")
-                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="", placeholder="Razão social...")
+                    with col_fc1: f_cod_input = st.text_input("Código", placeholder="", key=f"cf_cod_{ff_suf}")
+                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", placeholder="", key=f"cf_cnpj_{ff_suf}")
+                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", placeholder="", key=f"cf_nome_{ff_suf}")
                     if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
                         if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
                         else:
@@ -3014,6 +3083,7 @@ else:
                                     cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper()))
                                     conn.commit()
                                     carregar_fornecedores_cached.clear()
+                                    st.session_state["forn_form_suf"] += 1
                                     st.success("Cadastrado com sucesso!")
                                     st.rerun()
                                 except Exception as e:
@@ -3100,13 +3170,16 @@ else:
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
         with spinner_supernova("Carregando usuários..."):
             st.title("👥 Gerenciamento de Usuários e Permissões (Com Hashing de Senhas)")
+        if "usr_form_suf" not in st.session_state:
+            st.session_state["usr_form_suf"] = 0
+        uf_suf = st.session_state["usr_form_suf"]
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
-            with st.form("cad_usuario_form", clear_on_submit=True):
+            with st.form(f"cad_usuario_form_{uf_suf}", clear_on_submit=False):
                 col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 2])
-                with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
-                with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
-                with col_u3: nova_senha = st.text_input("Senha", type="password", value="", placeholder="Senha...")
-                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"], index=0, placeholder="Selecione...")
+                with col_u1: novo_nome = st.text_input("Nome Completo", placeholder="", key=f"cu_nome_{uf_suf}")
+                with col_u2: novo_login = st.text_input("Login", placeholder="", key=f"cu_login_{uf_suf}")
+                with col_u3: nova_senha = st.text_input("Senha", type="password", placeholder="", key=f"cu_senha_{uf_suf}")
+                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"], index=0, placeholder="Selecione...", key=f"cu_perfil_{uf_suf}")
                 if st.form_submit_button("➕ Cadastrar", type="primary"):
                     if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
                         st.error("Preencha todos os campos.")
@@ -3121,6 +3194,7 @@ else:
                                     (novo_nome.strip(), novo_login.strip(), senha_segura_hash, novo_perfil)
                                 )
                                 conn.commit()
+                                st.session_state["usr_form_suf"] += 1
                                 st.success("Cadastrado com sucesso!")
                                 st.rerun()
                             except Exception as e:
