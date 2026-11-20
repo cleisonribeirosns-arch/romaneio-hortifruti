@@ -2175,7 +2175,23 @@ else:
             st.success(f"🔄 {qtd_sync_recente} registro(s) salvos na contingência (Supabase) foram sincronizados automaticamente para o Neon!")
     
     with col_botoes_topo:
-        c_btn1, c_btn2 = st.columns([1.2, 1])
+        c_btn_upd, c_btn1, c_btn2 = st.columns([1.0, 1.2, 0.9])
+        with c_btn_upd:
+            if st.button("🔄 Atualizar", type="secondary", key="btn_atualizar_app_topo", help="Recarregar dados e sincronizar com o banco"):
+                with spinner_supernova("Atualizando dados...", duracao_minima=0.35):
+                    try:
+                        carregar_produtos_cached.clear()
+                    except Exception:
+                        pass
+                    try:
+                        carregar_fornecedores_cached.clear()
+                    except Exception:
+                        pass
+                    try:
+                        tentar_reconciliacao_automatica(forcar=True)
+                    except Exception:
+                        pass
+                st.rerun()
         with c_btn1:
             if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo"):
                 st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
