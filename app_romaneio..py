@@ -221,6 +221,72 @@ def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.45
             
     return SpinnerContext()
 
+
+
+# ---------------------------------------------------------
+# CSS MOBILE / WEBVIEW (CORREÇÃO DE FONTES E CONTRASTE NO APP)
+# ---------------------------------------------------------
+st.markdown("""
+<style>
+html, body, .stApp, [data-testid="stAppViewContainer"] {
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    overscroll-behavior-y: none !important;
+}
+
+/* Garante legibilidade de rótulos, menus e textos sobre fundos escuros ou imagens */
+.stApp p, .stApp label, .stApp span, .stApp div, .stApp li {
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+.stApp h1 {
+    font-size: 1.65rem !important;
+    line-height: 1.25 !important;
+}
+
+.stApp h2 {
+    font-size: 1.35rem !important;
+    line-height: 1.25 !important;
+}
+
+.stApp h3 {
+    font-size: 1.15rem !important;
+    line-height: 1.3 !important;
+}
+
+/* Melhora contraste dos campos e botões dentro do WebView Android */
+[data-testid="stExpander"] summary,
+[data-testid="stRadio"] label,
+[data-baseweb="select"] > div,
+input, textarea {
+    font-size: 15px !important;
+    opacity: 1 !important;
+}
+
+@media (max-width: 768px) {
+    .stApp .main .block-container {
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
+        padding-top: 0.75rem !important;
+    }
+
+    .stApp h1 {
+        font-size: 1.4rem !important;
+    }
+
+    .stApp h2 {
+        font-size: 1.2rem !important;
+    }
+
+    .stApp button {
+        min-height: 42px !important;
+        font-size: 14px !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PWA (USANDO icone_app.jpg)
 # ---------------------------------------------------------
