@@ -60,7 +60,7 @@ def obter_logo_transparente_b64(caminho_imagem):
         return ""
     try:
         img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
+        datas = list(img.getdata())
         newData = []
         for item in datas:
             if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -590,7 +590,6 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
                         )
 
             elif tabela == "bonificacoes":
-                # chave_unica = numero_nota||loja||data_entrada
                 partes = chave_unica.split("||", 2)
                 if len(partes) == 3:
                     n_nota, n_loja, n_dt = partes
@@ -634,7 +633,6 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
                             )
 
             elif tabela == "baixas_avarias":
-                # chave_unica = loja_baixa||data_baixa||ref_bon_transferen||nf_b_entrada
                 partes = chave_unica.split("||", 3)
                 if len(partes) == 4:
                     b_loja, b_dt, b_ref, b_nf = partes
@@ -918,7 +916,6 @@ def get_db_connection(ping_only=False):
         try:
             conn_neon = _conectar_pg_direto(neon_url, timeout=18, tentativas=2)
             st.session_state["_banco_ativo_modo"] = "Neon (Principal)"
-            # Se havia dados gravados no Supabase durante uma queda anterior, sincroniza automaticamente agora
             if not ping_only and supabase_url:
                 try:
                     conn_sup_tmp = _conectar_pg_direto(supabase_url, timeout=8, tentativas=1)
@@ -934,7 +931,6 @@ def get_db_connection(ping_only=False):
         except Exception as e_neon:
             erro_neon = e_neon
 
-        # Fallback automático para Supabase (Reserva)
         if supabase_url:
             try:
                 conn_sup = _conectar_pg_direto(supabase_url, timeout=18, tentativas=2)
@@ -982,7 +978,6 @@ def executar_keep_alive_banco():
                 cur_s.fetchone()
                 conn_s.commit()
                 status_detalhes.append("supabase:ok")
-                # Aproveita o ping periódico do UptimeRobot para reconciliar pendências e espelhar dados mestres
                 if conn_n is not None:
                     sinc = _sincronizar_reserva_para_principal(conn_n, conn_s)
                     if sinc > 0:
@@ -1131,7 +1126,7 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_imagem
     try:
         img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
+        datas = list(img.getdata())
         newData = []
         for item in datas:
             if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -1597,7 +1592,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
             img_bytes = base64.b64decode(b64_conf)
             img_io = io.BytesIO(img_bytes)
             img_pil = Image.open(img_io).convert("RGBA")
-            datas = img_pil.getdata()
+            datas = list(img_pil.getdata())
             newData = []
             for item in datas:
                 if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -1627,7 +1622,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
             img_bytes_e = base64.b64decode(b64_ent)
             img_io_e = io.BytesIO(img_bytes_e)
             img_pil_e = Image.open(img_io_e).convert("RGBA")
-            datas_e = img_pil_e.getdata()
+            datas_e = list(img_pil_e.getdata())
             newData_e = []
             for item in datas_e:
                 if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -1918,7 +1913,6 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     return ""
 
 img_padrao_fundo = None
-# Busca exata e case-insensitive pelo arquivo 'tela de login padrao' na pasta raiz
 arquivos_raiz = os.listdir(".") if os.path.exists(".") else []
 candidatos_prioritarios = [
     "tela de login padrao.jpeg",
@@ -2291,7 +2285,7 @@ else:
                     data_hoje_str = datetime.now(ZoneInfo("America/Manaus")).strftime("%Y%m%d%H%M%S")
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
-                tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
+                tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...")
             with col2:
                 data_rec_val = seletor_data_unificado("Data do Recebimento (Livre - A partir de 2000)", f"rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
@@ -3855,7 +3849,7 @@ else:
                                         st.rerun()
                                     except Exception as e:
                                         conn_up_p.rollback()
-                                        st.error(f"Erro ao atualizar o produto: {e}")
+                                        st.error(f"Erro ao atualizar produto: {e}")
                                     finally:
                                         conn_up_p.close()
 
@@ -3864,17 +3858,22 @@ else:
                                     conn_del_p, db_tdp = get_db_connection()
                                     try:
                                         cur_delp = conn_del_p.cursor()
-                                        cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
+                                        r_id_delp = int(id_p_ed) if db_tdp == "postgres" else id_p_ed
+                                        cur_delp.execute(
+                                            "DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?",
+                                            (r_id_delp,)
+                                        )
                                         conn_del_p.commit()
                                         carregar_produtos_cached.clear()
                                         st.success("Produto excluído com sucesso!")
                                         st.rerun()
                                     except Exception as e:
                                         conn_del_p.rollback()
-                                        st.error(f"Erro ao excluir: {e}")
+                                        st.error(f"Erro ao excluir produto: {e}")
                                     finally:
                                         conn_del_p.close()
-            else: st.info("Nenhum produto cadastrado.")
+            else:
+                st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
             if "forn_form_suf" not in st.session_state:
@@ -3882,22 +3881,22 @@ else:
             ff_suf = st.session_state["forn_form_suf"]
             with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
                 with st.form(f"cad_forn_form_{ff_suf}", clear_on_submit=False):
-                    col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                    with col_fc1: f_cod_input = st.text_input("Código", placeholder="", key=f"cf_cod_{ff_suf}")
-                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", placeholder="", key=f"cf_cnpj_{ff_suf}")
-                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", placeholder="", key=f"cf_nome_{ff_suf}")
+                    col_f1, col_f2, col_f3 = st.columns([2, 2, 3])
+                    with col_f1: cod_forn_input = st.text_input("Código do Fornecedor", placeholder="", key=f"cf_cod_{ff_suf}")
+                    with col_f2: cnpj_forn_input = st.text_input("CNPJ", placeholder="", key=f"cf_cnpj_{ff_suf}")
+                    with col_f3: nome_forn_input = st.text_input("Nome do Fornecedor *", placeholder="", key=f"cf_nome_{ff_suf}")
                     if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
-                        if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
+                        if not nome_forn_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
                         else:
                             with spinner_supernova("Cadastrando fornecedor..."):
                                 conn, db_type = get_db_connection()
                                 try:
                                     cursor = conn.cursor()
-                                    cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper()))
+                                    cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (cod_forn_input.strip() if cod_forn_input else None, cnpj_forn_input.strip() if cnpj_forn_input else None, nome_forn_input.strip().upper()))
                                     conn.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.session_state["forn_form_suf"] += 1
-                                    st.success("Cadastrado com sucesso!")
+                                    st.success("Fornecedor cadastrado!")
                                     st.rerun()
                                 except Exception as e:
                                     conn.rollback()
@@ -3905,110 +3904,100 @@ else:
                                 finally:
                                     conn.close()
             st.markdown("---")
-            fornecedores_cadastrados = carregar_fornecedores_cached()
+            conn, db_type = get_db_connection()
+            try:
+                forns_cadastrados = pd.read_sql_query("SELECT id, codigo_fornecedor, cnpj, nome FROM fornecedores ORDER BY id DESC", conn)
+            finally:
+                conn.close()
 
-            if fornecedores_cadastrados:
-                forn_com_id_ajustado = [(i, f[1], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
-                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "Nome do Fornecedor"])
-                st.dataframe(df_forn_show[["ID", "Código", "Nome do Fornecedor"]], use_container_width=True, hide_index=True, height=250)
+            if not forns_cadastrados.empty:
+                forns_cadastrados_show = forns_cadastrados.copy()
+                forns_cadastrados_show["ID"] = range(1, len(forns_cadastrados_show) + 1)
+                st.dataframe(forns_cadastrados_show[["ID", "codigo_fornecedor", "cnpj", "nome"]].rename(columns={"codigo_fornecedor": "Código do Fornecedor", "cnpj": "CNPJ", "nome": "Nome do Fornecedor"}), use_container_width=True, hide_index=True, height=250)
 
                 st.markdown("### ✏️ Editar ou Excluir Fornecedor")
-                conn_f_ed, db_tfed = get_db_connection()
-                try:
-                    cur_fe = conn_f_ed.cursor()
-                    cur_fe.execute("SELECT id, nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
-                    forns_para_edit = cur_fe.fetchall()
-                finally:
-                    conn_f_ed.close()
-
-                opcoes_edit_forn = [(f[0], f"{f[1]} (Cód: {f[2] or 'S/Cód'})") for f in forns_para_edit]
+                opcoes_edit_forn = [(row["id"], f"{row['nome']} (Cód: {row['codigo_fornecedor'] or 'S/Cód'})") for _, row in forns_cadastrados.iterrows()]
                 forn_sel_ed = st.selectbox("Selecione o fornecedor para editar ou excluir", options=opcoes_edit_forn, format_func=lambda x: x[1], key="sel_forn_editar")
                 if forn_sel_ed:
                     id_f_ed = forn_sel_ed[0]
-                    conn_f_det, db_tf_det = get_db_connection()
-                    try:
-                        cur_fd = conn_f_det.cursor()
-                        r_id_fd = int(id_f_ed) if db_tf_det == "postgres" else id_f_ed
-                        cur_fd.execute("SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = %s" if db_tf_det == "postgres" else "SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = ?", (r_id_fd,))
-                        dados_f_atual = cur_fd.fetchone()
-                    finally:
-                        conn_f_det.close()
+                    dados_f_atual = forns_cadastrados[forns_cadastrados["id"] == id_f_ed].iloc[0]
 
-                    if dados_f_atual:
-                        with st.form("form_edit_fornecedor"):
-                            ef_cod = st.text_input("Código do Fornecedor", value=dados_f_atual[0] or "")
-                            ef_cnpj = st.text_input("CNPJ", value=dados_f_atual[1] or "")
-                            ef_nome = st.text_input("Nome / Razão Social", value=dados_f_atual[2] or "")
-                            col_bf1, col_bf2 = st.columns(2)
-                            with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                            with col_bf2: btn_excluir_forn = st.form_submit_button("🗑️ Excluir Fornecedor", type="secondary")
+                    with st.form("form_edit_fornecedor"):
+                        ef_cod = st.text_input("Código do Fornecedor", value=str(dados_f_atual["codigo_fornecedor"] or ""))
+                        ef_cnpj = st.text_input("CNPJ", value=str(dados_f_atual["cnpj"] or ""))
+                        ef_nome = st.text_input("Nome do Fornecedor", value=str(dados_f_atual["nome"] or ""))
+                        col_bf1, col_bf2 = st.columns(2)
+                        with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                        with col_bf2: btn_excluir_forn = st.form_submit_button("🗑️ Excluir Fornecedor", type="secondary")
 
-                            if btn_salvar_forn:
-                                with spinner_supernova("Atualizando fornecedor..."):
-                                    conn_up_f, db_tupf = get_db_connection()
-                                    try:
-                                        cur_upf = conn_up_f.cursor()
-                                        r_id_upf = int(id_f_ed) if db_tupf == "postgres" else id_f_ed
-                                        cur_upf.execute(
-                                            "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s WHERE id = %s" if db_tupf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ? WHERE id = ?",
-                                            (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), r_id_upf)
-                                        )
-                                        conn_up_f.commit()
-                                        carregar_fornecedores_cached.clear()
-                                        st.success("Fornecedor atualizado com sucesso!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        conn_up_f.rollback()
-                                        st.error(f"Erro ao atualizar: {e}")
-                                    finally:
-                                        conn_up_f.close()
+                        if btn_salvar_forn:
+                            with spinner_supernova("Atualizando fornecedor..."):
+                                conn_up_f, db_tuf = get_db_connection()
+                                try:
+                                    cur_upf = conn_up_f.cursor()
+                                    r_id_upf = int(id_f_ed) if db_tuf == "postgres" else id_f_ed
+                                    cur_upf.execute(
+                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s WHERE id = %s" if db_tuf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ? WHERE id = ?",
+                                        (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), r_id_upf)
+                                    )
+                                    conn_up_f.commit()
+                                    carregar_fornecedores_cached.clear()
+                                    st.success("Fornecedor atualizado com sucesso!")
+                                    st.rerun()
+                                except Exception as e:
+                                    conn_up_f.rollback()
+                                    st.error(f"Erro ao atualizar fornecedor: {e}")
+                                finally:
+                                    conn_up_f.close()
 
-                            if btn_excluir_forn:
-                                with spinner_supernova("Excluindo fornecedor..."):
-                                    conn_del_f, db_tdf = get_db_connection()
-                                    try:
-                                        cur_delf = conn_del_f.cursor()
-                                        cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_f_ed) if db_tdf == "postgres" else id_f_ed,))
-                                        conn_del_f.commit()
-                                        carregar_fornecedores_cached.clear()
-                                        st.success("Fornecedor excluído com sucesso!")
-                                        st.rerun()
-                                    except Exception as e:
-                                        conn_del_f.rollback()
-                                        st.error(f"Erro ao excluir: {e}")
-                                    finally:
-                                        conn_del_f.close()
-            else: st.info("Nenhum fornecedor cadastrado.")
+                        if btn_excluir_forn:
+                            with spinner_supernova("Excluindo fornecedor..."):
+                                conn_del_f, db_tdf = get_db_connection()
+                                try:
+                                    cur_delf = conn_del_f.cursor()
+                                    r_id_delf = int(id_f_ed) if db_tdf == "postgres" else id_f_ed
+                                    cur_delf.execute(
+                                        "DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?",
+                                        (r_id_delf,)
+                                    )
+                                    conn_del_f.commit()
+                                    carregar_fornecedores_cached.clear()
+                                    st.success("Fornecedor excluído com sucesso!")
+                                    st.rerun()
+                                except Exception as e:
+                                    conn_del_f.rollback()
+                                    st.error(f"Erro ao excluir fornecedor: {e}")
+                                finally:
+                                    conn_del_f.close()
+            else:
+                st.info("Nenhum fornecedor cadastrado.")
 
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
-        with spinner_supernova("Carregando usuários..."):
-            st.title("👥 Gerenciamento de Usuários e Permissões (Com Hashing de Senhas)")
+        with spinner_supernova("Carregando usuários e permissões..."):
+            st.title("👥 Gerenciar Usuários & Permissões")
+        st.markdown("Defina os acessos ao sistema: **Conferente** (apenas digita o romaneio) ou **Gestor / Assistente** (acesso completo ao BI, bonificações, cadastros e usuários).")
         if "usr_form_suf" not in st.session_state:
             st.session_state["usr_form_suf"] = 0
         uf_suf = st.session_state["usr_form_suf"]
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
-            with st.form(f"cad_usuario_form_{uf_suf}", clear_on_submit=False):
-                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 2])
-                with col_u1: novo_nome = st.text_input("Nome Completo", placeholder="", key=f"cu_nome_{uf_suf}")
-                with col_u2: novo_login = st.text_input("Login", placeholder="", key=f"cu_login_{uf_suf}")
-                with col_u3: nova_senha = st.text_input("Senha", type="password", placeholder="", key=f"cu_senha_{uf_suf}")
-                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"], index=0, placeholder="Selecione...", key=f"cu_perfil_{uf_suf}")
-                if st.form_submit_button("➕ Cadastrar", type="primary"):
-                    if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
-                        st.error("Preencha todos os campos.")
+            with st.form(f"cad_usr_form_{uf_suf}", clear_on_submit=False):
+                u_col1, u_col2, u_col3, u_col4 = st.columns(4)
+                with u_col1: nome_usr = st.text_input("Nome Completo *", placeholder="", key=f"cu_nome_{uf_suf}")
+                with u_col2: login_usr = st.text_input("Login / Usuário *", placeholder="", key=f"cu_login_{uf_suf}")
+                with u_col3: senha_usr = st.text_input("Senha *", type="password", placeholder="", key=f"cu_senha_{uf_suf}")
+                with u_col4: perfil_usr = st.selectbox("Perfil de Acesso", ["Conferente", "Auxiliar", "Gestor"], index=0, key=f"cu_perfil_{uf_suf}")
+                if st.form_submit_button("✅ Criar Usuário", type="primary"):
+                    if not nome_usr.strip() or not login_usr.strip() or not senha_usr.strip(): st.error("Preencha todos os campos.")
                     else:
-                        with spinner_supernova("Cadastrando usuário..."):
-                            senha_segura_hash = gerar_hash_senha(nova_senha.strip())
+                        with spinner_supernova("Criando usuário..."):
                             conn, db_type = get_db_connection()
                             try:
                                 cursor = conn.cursor()
-                                cursor.execute(
-                                    "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)",
-                                    (novo_nome.strip(), novo_login.strip(), senha_segura_hash, novo_perfil)
-                                )
+                                senha_hash = gerar_hash_senha(senha_usr.strip())
+                                cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr))
                                 conn.commit()
                                 st.session_state["usr_form_suf"] += 1
-                                st.success("Cadastrado com sucesso!")
+                                st.success(f"Usuário {nome_usr} criado!")
                                 st.rerun()
                             except Exception as e:
                                 conn.rollback()
@@ -4018,84 +4007,84 @@ else:
         st.markdown("---")
         conn, db_type = get_db_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id DESC")
-            usuarios_cadastrados = cursor.fetchall()
+            df_users = pd.read_sql_query("SELECT id, nome, login, perfil FROM usuarios ORDER BY id ASC", conn)
         finally:
             conn.close()
+        if not df_users.empty:
+            df_users_show = df_users.copy()
+            df_users_show["ID"] = range(1, len(df_users_show) + 1)
+            st.dataframe(df_users_show[["ID", "nome", "login", "perfil"]].rename(columns={"nome": "Nome", "login": "Login", "perfil": "Perfil"}), use_container_width=True, hide_index=True, height=250)
 
-        if usuarios_cadastrados:
-            usuarios_com_id_ajustado = [(i, u[1], u[2], "••••••••", u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
-            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha Protegida", "Perfil", "ID_Real"])
-            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha Protegida", "Perfil"]], use_container_width=True, hide_index=True, height=250)
-
-            st.markdown("### ✏️ Editar ou Excluir Utilizador")
-            opcoes_edit_usr = [(u[5], f"{u[1]} (Login: {u[2]})") for u in usuarios_com_id_ajustado]
-            usr_sel_ed = st.selectbox("Selecione o utilizador para editar ou excluir", options=opcoes_edit_usr, format_func=lambda x: x[1], key="sel_usr_editar")
+            st.markdown("### ✏️ Editar ou Excluir Usuário")
+            opcoes_edit_usr = [(row["id"], f"{row['nome']} (Login: {row['login']} | Perfil: {row['perfil']})") for _, row in df_users.iterrows()]
+            usr_sel_ed = st.selectbox("Selecione o usuário para editar ou excluir", options=opcoes_edit_usr, format_func=lambda x: x[1], key="sel_usr_editar")
             if usr_sel_ed:
                 id_u_ed = usr_sel_ed[0]
-                conn_u_det, db_tu_det = get_db_connection()
-                try:
-                    cur_ud = conn_u_det.cursor()
-                    r_id_ud = int(id_u_ed) if db_tu_det == "postgres" else id_u_ed
-                    cur_ud.execute("SELECT nome, login, senha, perfil FROM usuarios WHERE id = %s" if db_tu_det == "postgres" else "SELECT nome, login, senha, perfil FROM usuarios WHERE id = ?", (r_id_ud,))
-                    dados_u_atual = cur_ud.fetchone()
-                finally:
-                    conn_u_det.close()
+                dados_u_atual = df_users[df_users["id"] == id_u_ed].iloc[0]
 
-                if dados_u_atual:
-                    with st.form("form_edit_usuario"):
-                        eu_nome = st.text_input("Nome Completo", value=dados_u_atual[0] or "")
-                        eu_login = st.text_input("Login", value=dados_u_atual[1] or "")
-                        eu_senha = st.text_input("Nova Senha (deixe em branco se não quiser alterar)", type="password", value="")
-                        perfis_lst = ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"]
-                        idx_per = perfis_lst.index(dados_u_atual[3]) if dados_u_atual[3] in perfis_lst else 0
-                        eu_perfil = st.selectbox("Perfil", perfis_lst, index=idx_per)
-                        col_bu1, col_bu2 = st.columns(2)
-                        with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                        with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Utilizador", type="secondary")
+                with st.form("form_edit_usuario"):
+                    eu_nome = st.text_input("Nome Completo", value=str(dados_u_atual["nome"]))
+                    eu_login = st.text_input("Login / Usuário", value=str(dados_u_atual["login"]))
+                    eu_senha = st.text_input("Nova Senha (Deixe em branco para manter a atual)", type="password")
+                    perfis_disponiveis = ["Conferente", "Auxiliar", "Gestor"]
+                    idx_perf = perfis_disponiveis.index(dados_u_atual["perfil"]) if dados_u_atual["perfil"] in perfis_disponiveis else 0
+                    eu_perfil = st.selectbox("Perfil de Acesso", perfis_disponiveis, index=idx_perf)
+                    col_bu1, col_bu2 = st.columns(2)
+                    with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                    with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Usuário", type="secondary")
 
-                        if btn_salvar_usr:
-                            with spinner_supernova("Atualizando utilizador..."):
-                                conn_up_u, db_tupu = get_db_connection()
-                                try:
-                                    cur_upu = conn_up_u.cursor()
-                                    r_id_upu = int(id_u_ed) if db_tupu == "postgres" else id_u_ed
-                                    if eu_senha.strip():
-                                        hash_nova = gerar_hash_senha(eu_senha.strip())
-                                        cur_upu.execute(
-                                            "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
-                                            (eu_nome.strip(), eu_login.strip(), hash_nova, eu_perfil, r_id_upu)
-                                        )
-                                    else:
-                                        cur_upu.execute(
-                                            "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
-                                            (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
-                                        )
-                                    conn_up_u.commit()
-                                    st.success("Utilizador atualizado com sucesso!")
-                                    st.rerun()
-                                except Exception as e:
-                                    conn_up_u.rollback()
-                                    st.error(f"Erro ao atualizar: {e}")
-                                finally:
-                                    conn_up_u.close()
+                    if btn_salvar_usr:
+                        with spinner_supernova("Atualizando usuário..."):
+                            conn_up_u, db_tuu = get_db_connection()
+                            try:
+                                cur_upu = conn_up_u.cursor()
+                                r_id_upu = int(id_u_ed) if db_tuu == "postgres" else id_u_ed
+                                if eu_senha.strip():
+                                    hash_nova_s = gerar_hash_senha(eu_senha.strip())
+                                    cur_upu.execute(
+                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), hash_nova_s, eu_perfil, r_id_upu)
+                                    )
+                                else:
+                                    cur_upu.execute(
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
+                                    )
+                                conn_up_u.commit()
+                                st.success("Usuário atualizado com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                conn_up_u.rollback()
+                                st.error(f"Erro ao atualizar usuário: {e}")
+                            finally:
+                                conn_up_u.close()
 
-                        if btn_excluir_usr:
-                            with spinner_supernova("Excluindo utilizador..."):
+                    if btn_excluir_usr:
+                        if str(dados_u_atual["login"]).lower() == "908":
+                            st.error("Não é permitido excluir o usuário Administrador padrão (908).")
+                        else:
+                            with spinner_supernova("Excluindo usuário..."):
                                 conn_del_u, db_tdu = get_db_connection()
                                 try:
                                     cur_delu = conn_del_u.cursor()
+                                    r_id_delu = int(id_u_ed) if db_tdu == "postgres" else id_u_ed
                                     cur_delu.execute(
                                         "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
-                                        (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,)
+                                        (r_id_delu,)
                                     )
                                     conn_del_u.commit()
-                                    st.success("Excluído com sucesso!")
+                                    st.success("Usuário excluído com sucesso!")
                                     st.rerun()
                                 except Exception as e:
                                     conn_del_u.rollback()
-                                    st.error(f"Erro ao excluir: {e}")
+                                    st.error(f"Erro ao excluir usuário: {e}")
                                 finally:
                                     conn_del_u.close()
-        else: st.info("Nenhum usuário cadastrado.")
+        else:
+            st.info("Nenhum usuário cadastrado.")
+
+st.markdown("""
+<div style="text-align: center; color: gray; font-size: 0.8em; margin-top: 30px; padding: 10px; border-top: 1px solid rgba(128,128,128,0.2);">
+    HortiControl Supernova • Sistema de Recebimento de Hortifrúti
+</div>
+""", unsafe_allow_html=True)
