@@ -28,12 +28,56 @@ def verificar_senha(senha_digitada: str, senha_banco: str) -> bool:
     return gerar_hash_senha(senha_digitada) == senha_banco
 
 # ---------------------------------------------------------
+# FUNÇÕES DE ÍCONE, LOGO E BASE64
+# ---------------------------------------------------------
+def buscar_caminho_icone_app():
+    candidatos = [
+        "icone_app.jpg",
+        "icone_app.jpeg",
+        "icone_app.png",
+        "icone_app.jpg.jpeg",
+        "logo_romaneio.png.jpg",
+        "logo_romaneio.png",
+        "logo_romaneio.jpg",
+        "logo.png",
+        "logo.jpg",
+    ]
+    for nome in candidatos:
+        if os.path.exists(nome) and os.path.isfile(nome):
+            return nome
+    return None
+
+def buscar_caminho_logo():
+    icone_app = buscar_caminho_icone_app()
+    if icone_app:
+        return icone_app
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["icone_app", "logo_romaneio.png", "logo_romaneio", "logo"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                return pos_p
+    return None
+
+def obter_arquivo_b64_e_mime(caminho_imagem):
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return "", "image/jpeg"
+    try:
+        ext = os.path.splitext(caminho_imagem)[1].lower()
+        mime = "image/png" if ext == ".png" else "image/jpeg"
+        with open(caminho_imagem, "rb") as f_img:
+            b64_str = base64.b64encode(f_img.read()).decode("utf-8")
+        return b64_str, mime
+    except Exception:
+        return "", "image/jpeg"
+
+# ---------------------------------------------------------
 # CONFIGURAÇÃO DE PÁGINA (ÍCONE E TÍTULO PERSONALIZADOS)
 # ---------------------------------------------------------
+icone_path_global = buscar_caminho_icone_app()
 icone_pagina = "📦"
-if os.path.exists("logo_romaneio.png.jpg"):
+if icone_path_global:
     try:
-        icone_pagina = Image.open("logo_romaneio.png.jpg")
+        icone_pagina = Image.open(icone_path_global)
     except Exception:
         icone_pagina = "📦"
 
@@ -43,17 +87,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
-
-# ---------------------------------------------------------
-# FUNÇÕES DE LOGO E BASE64
-# ---------------------------------------------------------
-def buscar_caminho_logo():
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                return pos_p
-    return None
 
 def obter_logo_transparente_b64(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
@@ -189,24 +222,38 @@ def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.45
     return SpinnerContext()
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PWA
+# CONFIGURAÇÃO DE PWA (USANDO icone_app.jpg)
 # ---------------------------------------------------------
-pwa_manifest_code = """
-<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{
-  'name': 'HortiControl Supernova',
-  'short_name': 'HortiControl',
-  'start_url': '.',
-  'display': 'standalone',
-  'background_color': '#0E140C',
-  'theme_color': '#2E7D32',
-  'icons': [
-    {
-      'src': 'logo_romaneio.png.jpg',
-      'sizes': '512x512',
-      'type': 'image/jpeg'
-    }
-  ]
-}">
+icone_b64, icone_mime = obter_arquivo_b64_e_mime(icone_path_global)
+icone_src_pwa = f"data:{icone_mime};base64,{icone_b64}" if icone_b64 else (icone_path_global or "icone_app.jpg")
+
+pwa_manifest_json = json.dumps({
+    "name": "HortiControl Supernova",
+    "short_name": "HortiControl",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0E140C",
+    "theme_color": "#2E7D32",
+    "icons": [
+        {
+            "src": icone_src_pwa,
+            "sizes": "192x192",
+            "type": icone_mime
+        },
+        {
+            "src": icone_src_pwa,
+            "sizes": "512x512",
+            "type": icone_mime
+        }
+    ]
+}, ensure_ascii=False)
+
+pwa_manifest_code = f"""
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{pwa_manifest_json}">
+<link rel="apple-touch-icon" href="{icone_src_pwa}">
+<meta name="theme-color" content="#2E7D32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HortiControl">
 """
 st.markdown(pwa_manifest_code, unsafe_allow_html=True)
 
@@ -1958,11 +2005,12 @@ if st.session_state["usuario_logado"] is None:
     if css_login:
         st.markdown(css_login, unsafe_allow_html=True)
 
-    logo_display = None
-    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "tela de login padrao.jpeg", "Tela de login.jpeg.jpeg"]:
-        if os.path.exists(nome):
-            logo_display = nome
-            break
+    logo_display = buscar_caminho_icone_app()
+    if not logo_display:
+        for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "tela de login padrao.jpeg", "Tela de login.jpeg.jpeg"]:
+            if os.path.exists(nome):
+                logo_display = nome
+                break
             
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
