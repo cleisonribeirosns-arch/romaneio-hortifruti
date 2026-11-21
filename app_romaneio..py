@@ -12,6 +12,8 @@ from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 import hashlib
 import json
+import uuid
+import re
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
 
@@ -87,6 +89,17 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Identificador persistente deste navegador/aparelho. Não identifica a pessoa;
+# permite guardar preferências locais no banco mesmo após trocar de usuário.
+try:
+    _device_id = str(st.query_params.get("hc_device", "")).strip()
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", _device_id):
+        _device_id = str(uuid.uuid4())
+        st.query_params["hc_device"] = _device_id
+except Exception:
+    _device_id = st.session_state.get("_hc_device_id") or str(uuid.uuid4())
+    st.session_state["_hc_device_id"] = _device_id
 
 def obter_logo_transparente_b64(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
@@ -1395,6 +1408,84 @@ def seletor_data_unificado(label_titulo, key_prefix):
     )
     return data_selecionada
 
+def garantir_tabela_configuracoes_dispositivo():
+    """Cria a tabela de preferências visuais vinculadas ao navegador/aparelho."""
+    conn, db_type = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS configuracoes_dispositivo (
+                    device_id VARCHAR(64) PRIMARY KEY,
+                    fonte_cor VARCHAR(20) NOT NULL DEFAULT '#F8FAFC',
+                    fonte_tamanho INTEGER NOT NULL DEFAULT 16,
+                    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS configuracoes_dispositivo (
+                    device_id TEXT PRIMARY KEY,
+                    fonte_cor TEXT NOT NULL DEFAULT '#F8FAFC',
+                    fonte_tamanho INTEGER NOT NULL DEFAULT 16,
+                    atualizado_em TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def carregar_configuracoes_dispositivo(device_id):
+    padrao = {"fonte_cor": "#F8FAFC", "fonte_tamanho": 16}
+    conn, db_type = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT fonte_cor, fonte_tamanho FROM configuracoes_dispositivo WHERE device_id = %s" if db_type == "postgres" else
+            "SELECT fonte_cor, fonte_tamanho FROM configuracoes_dispositivo WHERE device_id = ?",
+            (device_id,)
+        )
+        row = cur.fetchone()
+        if row:
+            cor = str(row[0] or padrao["fonte_cor"])
+            tamanho = max(12, min(24, int(row[1] or 16)))
+            return {"fonte_cor": cor, "fonte_tamanho": tamanho}
+        return padrao
+    finally:
+        conn.close()
+
+
+def salvar_configuracoes_dispositivo(device_id, fonte_cor, fonte_tamanho):
+    conn, db_type = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                INSERT INTO configuracoes_dispositivo (device_id, fonte_cor, fonte_tamanho, atualizado_em)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (device_id) DO UPDATE SET
+                    fonte_cor = EXCLUDED.fonte_cor,
+                    fonte_tamanho = EXCLUDED.fonte_tamanho,
+                    atualizado_em = CURRENT_TIMESTAMP
+            """, (device_id, fonte_cor, int(fonte_tamanho)))
+        else:
+            cur.execute("""
+                INSERT INTO configuracoes_dispositivo (device_id, fonte_cor, fonte_tamanho, atualizado_em)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    fonte_cor = excluded.fonte_cor,
+                    fonte_tamanho = excluded.fonte_tamanho,
+                    atualizado_em = CURRENT_TIMESTAMP
+            """, (device_id, fonte_cor, int(fonte_tamanho)))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def init_db():
     conn, db_type = get_db_connection()
     try:
@@ -1668,6 +1759,7 @@ def manter_sessao_ativa_periodica():
             pass
 
 init_db()
+garantir_tabela_configuracoes_dispositivo()
 manter_sessao_ativa_periodica()
 
 if "usuario_logado" not in st.session_state:
@@ -2233,10 +2325,20 @@ else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     
-    is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
+    # Apenas o administrador/gestor pode alterar as preferências deste aparelho.
+    is_admin = (str(user_info.get("login", "")).lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db)
     is_auxiliar = ("auxiliar" in perfil_db)
     is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
-    
+
+    # Preferências são carregadas pelo ID do navegador, não pelo usuário logado.
+    # Assim, após o administrador salvar e sair, o conferente verá o mesmo padrão.
+    try:
+        _prefs_device = carregar_configuracoes_dispositivo(_device_id)
+    except Exception as _prefs_error:
+        print(f"CONFIG DISPOSITIVO: não foi possível carregar preferências: {_prefs_error}")
+        _prefs_device = {"fonte_cor": "#F8FAFC", "fonte_tamanho": 16}
+    st.session_state["_fonte_cor_dispositivo"] = _prefs_device["fonte_cor"]
+    st.session_state["_fonte_tamanho_dispositivo"] = _prefs_device["fonte_tamanho"]
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
@@ -2249,6 +2351,17 @@ else:
     css_fundo_dinamico = obter_css_fundo(tema_selecionado_usuario, custom_bg_b64_usuario)
     if css_fundo_dinamico:
         st.markdown(css_fundo_dinamico, unsafe_allow_html=True)
+
+    # Aplicar depois do tema para que a preferência do administrador prevaleça.
+    st.markdown(f"""<style>
+    .stApp, .stApp p, .stApp label, .stApp span, .stApp li,
+    .stApp div[data-testid="stMarkdownContainer"],
+    .stApp input, .stApp textarea, .stApp select,
+    .stApp [data-testid="stMetricValue"] {{
+        color: {_prefs_device['fonte_cor']} !important;
+        font-size: {_prefs_device['fonte_tamanho']}px !important;
+    }}
+    </style>""", unsafe_allow_html=True)
 
     st.markdown("---")
     tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
@@ -2263,33 +2376,60 @@ else:
     if qtd_sync_recente > 0:
         st.success(f"🔄 {qtd_sync_recente} registro(s) salvos na contingência (Supabase) foram sincronizados automaticamente para o Neon!")
 
-    c_btn_upd, c_btn1, c_btn2 = st.columns([1.2, 1.3, 1.0], vertical_alignment="center")
-    with c_btn_upd:
-        if st.button("🔄 Atualizar", type="secondary", key="btn_atualizar_app_topo", use_container_width=True, help="Recarregar dados e sincronizar com o banco"):
-            with spinner_supernova("Atualizando dados...", duracao_minima=0.35):
+    _colunas_topo = st.columns([1.2, 1.2, 1.0] if is_admin else [1.2, 1.0], vertical_alignment="center")
+    with _colunas_topo[0]:
+        if st.button("🔄 Atualizar aplicativo", type="secondary", key="btn_atualizar_app_topo", use_container_width=True, help="Limpar caches, sincronizar e recarregar os dados"):
+            with spinner_supernova("Atualizando aplicativo e dados...", duracao_minima=0.5):
                 try:
-                    carregar_produtos_cached.clear()
+                    st.cache_data.clear()
                 except Exception:
-                    pass
-                try:
-                    carregar_fornecedores_cached.clear()
-                except Exception:
-                    pass
+                    for _cache_fn in (carregar_produtos_cached, carregar_fornecedores_cached):
+                        try:
+                            _cache_fn.clear()
+                        except Exception:
+                            pass
                 try:
                     tentar_reconciliacao_automatica(forcar=True)
-                except Exception:
-                    pass
+                except Exception as _refresh_error:
+                    print(f"ATUALIZAR APP: falha na sincronização: {_refresh_error}")
             st.rerun()
-    with c_btn1:
-        if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo", use_container_width=True):
-            st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
-    with c_btn2:
+    if is_admin:
+        with _colunas_topo[1]:
+            if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo", use_container_width=True):
+                st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
+    with _colunas_topo[-1]:
         if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal", use_container_width=True):
             st.session_state["usuario_logado"] = None
+            st.session_state["exibir_modal_config"] = False
             st.rerun()
 
-    if st.session_state.get("exibir_modal_config", False):
+    if is_admin and st.session_state.get("exibir_modal_config", False):
         with st.expander("⚙️ Configurações do Aplicativo & Planos de Fundo Múltiplos", expanded=True):
+            st.markdown("### 🔤 Aparência das fontes deste aparelho")
+            st.caption("Estas preferências ficam salvas neste navegador/aparelho. O administrador configura uma vez; depois o conferente pode entrar com o próprio usuário.")
+            _prefs_atuais = carregar_configuracoes_dispositivo(_device_id)
+            cfg_cor_fonte = st.color_picker("Cor das fontes", value=_prefs_atuais["fonte_cor"], key="cfg_cor_fonte_device")
+            cfg_tamanho_fonte = st.slider("Tamanho das fontes", min_value=12, max_value=24, value=int(_prefs_atuais["fonte_tamanho"]), step=1, key="cfg_tamanho_fonte_device")
+            if st.button("💾 Salvar aparência neste aparelho", type="primary", key="btn_salvar_aparencia_device"):
+                try:
+                    salvar_configuracoes_dispositivo(_device_id, cfg_cor_fonte, cfg_tamanho_fonte)
+                    st.success("Aparência salva neste aparelho. Ela continuará ativa após sair do administrador e entrar com o usuário do conferente.")
+                    st.rerun()
+                except Exception as _save_style_error:
+                    st.error(f"Não foi possível salvar a aparência: {_save_style_error}")
+
+            st.markdown("---")
+            st.markdown("### 📣 Teste de envio para o Google Chat")
+            if st.button("Enviar mensagem de teste ao Google Chat", key="btn_testar_google_chat"):
+                _teste_chat_ok = enviar_notificacao_google_chat(
+                    f"✅ Teste do HortiControl Supernova realizado em {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}."
+                )
+                if _teste_chat_ok:
+                    st.success("O Google Chat aceitou a mensagem. Confira o espaço configurado.")
+                else:
+                    st.error("O envio falhou. Abra os Logs do Streamlit Cloud e procure por GOOGLE CHAT para ver o motivo.")
+
+            st.markdown("---")
             st.markdown("### 🔔 Notificações Nativas")
             notif_desktop_toggle = st.toggle(
                 "Ativar Notificações na Tela (Desktop / Navegador)", 
@@ -3541,9 +3681,10 @@ else:
                                         f"Valor da avaria: R$ {val_avaria_f:,.2f}\n"
                                         f"Saldo restante da nota: R$ {novo_saldo_restante_nota:,.2f}"
                                     )
-                                    enviar_notificacao_google_chat(mensagem_baixa_chat)
+                                    _baixa_chat_ok = enviar_notificacao_google_chat(mensagem_baixa_chat)
                                     st.session_state["baixa_form_suffix"] += 1
-                                    st.success("Baixa registrada com sucesso e saldo atualizado!")
+                                    _status_baixa_chat = " Aviso enviado ao Google Chat." if _baixa_chat_ok else " Atenção: aviso não enviado ao Google Chat; consulte os Logs."
+                                    st.success("Baixa registrada com sucesso e saldo atualizado!" + _status_baixa_chat)
                                     st.rerun()
                                 except Exception as e:
                                     conn_ins.rollback()
