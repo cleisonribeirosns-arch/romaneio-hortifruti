@@ -1196,20 +1196,60 @@ def emitir_notificacao_desktop_web(titulo, mensagem):
     components.html(js_code, height=0)
 
 def enviar_notificacao_google_chat(mensagem):
+    """Envia uma mensagem ao espaço do Google Chat e registra o resultado nos Logs."""
     try:
         webhook_url = st.secrets["google_chat"]["webhook_url"]
-        if not webhook_url or not str(webhook_url).startswith("https://chat.googleapis.com/"):
+
+        if not webhook_url:
+            print("GOOGLE CHAT ERRO: webhook_url está vazio nos Secrets.")
             return False
-        payload = json.dumps({"text": str(mensagem)}, ensure_ascii=False).encode("utf-8")
+
+        webhook_url = str(webhook_url).strip()
+        if not webhook_url.startswith("https://chat.googleapis.com/"):
+            print("GOOGLE CHAT ERRO: endereço do webhook inválido. Verifique os Secrets.")
+            return False
+
+        payload = json.dumps(
+            {"text": str(mensagem)},
+            ensure_ascii=False
+        ).encode("utf-8")
+
         requisicao = Request(
-            str(webhook_url),
+            webhook_url,
             data=payload,
             headers={"Content-Type": "application/json; charset=UTF-8"},
             method="POST"
         )
-        with urlopen(requisicao, timeout=15) as resposta:
-            return 200 <= resposta.status < 300
-    except Exception:
+
+        print("GOOGLE CHAT: iniciando envio da notificação...")
+        with urlopen(requisicao, timeout=20) as resposta:
+            status = resposta.status
+            if 200 <= status < 300:
+                print(f"GOOGLE CHAT SUCESSO: mensagem aceita. HTTP {status}.")
+                return True
+
+            print(f"GOOGLE CHAT ERRO: resposta HTTP {status}.")
+            return False
+
+    except KeyError as erro:
+        print(f"GOOGLE CHAT ERRO: configuração ausente nos Secrets ({erro}).")
+        return False
+    except HTTPError as erro:
+        # Não registrar a URL do webhook para evitar expor a chave/token nos Logs.
+        try:
+            detalhe = erro.read().decode("utf-8", errors="replace")
+        except Exception:
+            detalhe = "Não foi possível ler o detalhe da resposta."
+        print(f"GOOGLE CHAT ERRO HTTP: código {erro.code}. Detalhe: {detalhe[:1000]}")
+        return False
+    except URLError as erro:
+        print(f"GOOGLE CHAT ERRO DE CONEXÃO: {erro.reason}")
+        return False
+    except TimeoutError:
+        print("GOOGLE CHAT ERRO: tempo limite de conexão excedido.")
+        return False
+    except Exception as erro:
+        print(f"GOOGLE CHAT ERRO INESPERADO: {type(erro).__name__}: {erro}")
         return False
 
 def disparar_notificacao_sistema(romaneio_dados, itens_lista):
