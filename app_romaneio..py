@@ -228,60 +228,92 @@ def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.45
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-html, body, .stApp, [data-testid="stAppViewContainer"] {
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
     -webkit-text-size-adjust: 100% !important;
     text-size-adjust: 100% !important;
     overscroll-behavior-y: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
-/* Garante legibilidade de rótulos, menus e textos sobre fundos escuros ou imagens */
-.stApp p, .stApp label, .stApp span, .stApp div, .stApp li {
-    font-size: 15px;
-    line-height: 1.4;
+/* Garante legibilidade, tamanho e contraste das fontes no WebView Android */
+.stApp,
+.stApp p,
+.stApp label,
+.stApp li,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] label,
+[data-testid="stWidgetLabel"] span {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
 }
 
-.stApp h1 {
+.stApp h1, [data-testid="stHeading"] h1 {
     font-size: 1.65rem !important;
     line-height: 1.25 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
 }
 
-.stApp h2 {
+.stApp h2, [data-testid="stHeading"] h2 {
     font-size: 1.35rem !important;
     line-height: 1.25 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
 }
 
-.stApp h3 {
+.stApp h3, [data-testid="stHeading"] h3 {
     font-size: 1.15rem !important;
     line-height: 1.3 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
 }
 
-/* Melhora contraste dos campos e botões dentro do WebView Android */
+/* Campos, selects e botões com texto sempre legível no APK */
 [data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p,
 [data-testid="stRadio"] label,
+[data-testid="stRadio"] label p,
+[data-testid="stRadio"] label span,
 [data-baseweb="select"] > div,
-input, textarea {
+[data-baseweb="select"] span,
+input, textarea,
+.stApp button,
+.stApp button p,
+.stApp button span {
     font-size: 15px !important;
     opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.stApp button {
+    min-height: 44px !important;
+    font-weight: 600 !important;
 }
 
 @media (max-width: 768px) {
     .stApp .main .block-container {
-        padding-left: 0.85rem !important;
-        padding-right: 0.85rem !important;
-        padding-top: 0.75rem !important;
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 0.7rem !important;
     }
 
-    .stApp h1 {
-        font-size: 1.4rem !important;
+    .stApp h1, [data-testid="stHeading"] h1 {
+        font-size: 1.35rem !important;
     }
 
-    .stApp h2 {
-        font-size: 1.2rem !important;
+    .stApp h2, [data-testid="stHeading"] h2 {
+        font-size: 1.15rem !important;
     }
 
-    .stApp button {
-        min-height: 42px !important;
-        font-size: 14px !important;
+    .stApp h3, [data-testid="stHeading"] h3 {
+        font-size: 1.05rem !important;
     }
 }
 </style>
@@ -1976,54 +2008,73 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     if tema_selecionado == "Fundo Branco":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #FFFFFF !important;
-            color: #1A202C !important;
+            color: #111827 !important;
         }
-        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label {
-            color: #1A202C !important;
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #111827 !important;
         }
         </style>
         """
     elif tema_selecionado == "Verde Supernova (Escuro)":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #0E140C !important;
-            color: #FFFFFF !important;
+            color: #F8FAFC !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #F8FAFC !important;
         }
         </style>
         """
     elif tema_selecionado == "Azul Corporativo Executivo":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #0A192F !important;
-            color: #FFFFFF !important;
+            color: #F8FAFC !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #F8FAFC !important;
         }
         </style>
         """
     elif tema_selecionado == "Grafite High-Tech":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #181A1B !important;
-            color: #FFFFFF !important;
+            color: #F8FAFC !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #F8FAFC !important;
         }
         </style>
         """
     elif custom_b64:
         return f"""
         <style>
-        .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{custom_b64}");
+        .stApp, [data-testid="stAppViewContainer"] {{
+            background-image: linear-gradient(rgba(0,0,0,0.72), rgba(0,0,0,0.72)), url("data:image/jpeg;base64,{custom_b64}");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
+            color: #F8FAFC !important;
+        }}
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {{
+            color: #F8FAFC !important;
         }}
         </style>
         """
-    return ""
+    return """
+    <style>
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+        color: #F8FAFC !important;
+    }
+    </style>
+    """
 
 img_padrao_fundo = None
 arquivos_raiz = os.listdir(".") if os.path.exists(".") else []
@@ -2160,45 +2211,42 @@ else:
         st.markdown(css_fundo_dinamico, unsafe_allow_html=True)
 
     st.markdown("---")
-    col_info_usr, col_botoes_topo = st.columns([2.5, 2.5], vertical_alignment="center")
-    with col_info_usr:
-        tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
-        modo_bd_atual = st.session_state.get("_banco_ativo_modo", "Neon (Principal)")
-        cor_bd_badge = "#2e7d32" if "Principal" in modo_bd_atual else "#ed6c02"
-        st.markdown(
-            f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt} &nbsp;|&nbsp; "
-            f"<span style='background:{cor_bd_badge};color:#fff;padding:2px 8px;border-radius:10px;font-size:12px;'>🗄️ {modo_bd_atual}</span>",
-            unsafe_allow_html=True,
-        )
-        qtd_sync_recente = st.session_state.pop("_qtd_ultima_sincronizacao", 0)
-        if qtd_sync_recente > 0:
-            st.success(f"🔄 {qtd_sync_recente} registro(s) salvos na contingência (Supabase) foram sincronizados automaticamente para o Neon!")
-    
-    with col_botoes_topo:
-        c_btn_upd, c_btn1, c_btn2 = st.columns([1.0, 1.2, 0.9])
-        with c_btn_upd:
-            if st.button("🔄 Atualizar", type="secondary", key="btn_atualizar_app_topo", help="Recarregar dados e sincronizar com o banco"):
-                with spinner_supernova("Atualizando dados...", duracao_minima=0.35):
-                    try:
-                        carregar_produtos_cached.clear()
-                    except Exception:
-                        pass
-                    try:
-                        carregar_fornecedores_cached.clear()
-                    except Exception:
-                        pass
-                    try:
-                        tentar_reconciliacao_automatica(forcar=True)
-                    except Exception:
-                        pass
-                st.rerun()
-        with c_btn1:
-            if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo"):
-                st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
-        with c_btn2:
-            if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
-                st.session_state["usuario_logado"] = None
-                st.rerun()
+    tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
+    modo_bd_atual = st.session_state.get("_banco_ativo_modo", "Neon (Principal)")
+    cor_bd_badge = "#2e7d32" if "Principal" in modo_bd_atual else "#ed6c02"
+    st.markdown(
+        f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt} &nbsp;|&nbsp; "
+        f"<span style='background:{cor_bd_badge};color:#fff;padding:2px 8px;border-radius:10px;font-size:13px;'>🗄️ {modo_bd_atual}</span>",
+        unsafe_allow_html=True,
+    )
+    qtd_sync_recente = st.session_state.pop("_qtd_ultima_sincronizacao", 0)
+    if qtd_sync_recente > 0:
+        st.success(f"🔄 {qtd_sync_recente} registro(s) salvos na contingência (Supabase) foram sincronizados automaticamente para o Neon!")
+
+    c_btn_upd, c_btn1, c_btn2 = st.columns([1.2, 1.3, 1.0], vertical_alignment="center")
+    with c_btn_upd:
+        if st.button("🔄 Atualizar", type="secondary", key="btn_atualizar_app_topo", use_container_width=True, help="Recarregar dados e sincronizar com o banco"):
+            with spinner_supernova("Atualizando dados...", duracao_minima=0.35):
+                try:
+                    carregar_produtos_cached.clear()
+                except Exception:
+                    pass
+                try:
+                    carregar_fornecedores_cached.clear()
+                except Exception:
+                    pass
+                try:
+                    tentar_reconciliacao_automatica(forcar=True)
+                except Exception:
+                    pass
+            st.rerun()
+    with c_btn1:
+        if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo", use_container_width=True):
+            st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
+    with c_btn2:
+        if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal", use_container_width=True):
+            st.session_state["usuario_logado"] = None
+            st.rerun()
 
     if st.session_state.get("exibir_modal_config", False):
         with st.expander("⚙️ Configurações do Aplicativo & Planos de Fundo Múltiplos", expanded=True):
