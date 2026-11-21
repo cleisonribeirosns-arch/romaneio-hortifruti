@@ -2326,7 +2326,7 @@ else:
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     
     # Apenas o administrador/gestor pode alterar as preferências deste aparelho.
-    is_admin = (str(user_info.get("login", "")).lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db)
+    is_admin = (str(user_info.get("login", "")).lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
     is_auxiliar = ("auxiliar" in perfil_db)
     is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
 
