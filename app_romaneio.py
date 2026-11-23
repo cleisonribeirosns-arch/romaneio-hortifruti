@@ -49,16 +49,36 @@ def buscar_caminho_icone_app():
             return nome
     return None
 
-def buscar_caminho_logo():
-    icone_app = buscar_caminho_icone_app()
-    if icone_app:
-        return icone_app
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["icone_app", "logo_romaneio.png", "logo_romaneio", "logo"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                return pos_p
+def buscar_caminho_logo_empresa():
+    candidatos_logo = [
+        "logo_romaneio.png",
+        "logo_romaneio.jpg",
+        "logo_romaneio.png.jpg",
+        "logo.png",
+        "logo.jpg",
+        "logo.jpeg",
+        "tela de login padrao.jpeg",
+        "tela de login padrao.jpg",
+        "tela de login padrao.png",
+    ]
+    for nome in candidatos_logo:
+        if os.path.exists(nome) and os.path.isfile(nome):
+            return nome
+
+    if os.path.exists("."):
+        for arq in os.listdir("."):
+            baixo = arq.lower()
+            if os.path.isfile(arq) and "logo" in baixo and "icone" not in baixo:
+                if baixo.endswith((".png", ".jpg", ".jpeg")):
+                    return arq
     return None
+
+
+def buscar_caminho_logo():
+    logo_emp = buscar_caminho_logo_empresa()
+    if logo_emp:
+        return logo_emp
+    return buscar_caminho_icone_app()
 
 def obter_arquivo_b64_e_mime(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
@@ -361,9 +381,12 @@ pwa_manifest_json = json.dumps({
 
 pwa_manifest_code = f"""
 <link rel="manifest" href="data:application/manifest+json;charset=utf-8,{pwa_manifest_json}">
-<link rel="apple-touch-icon" href="{icone_src_pwa}">
+<link rel="apple-touch-icon" sizes="180x180" href="{icone_src_pwa}">
+<link rel="icon" type="{icone_mime}" href="{icone_src_pwa}">
 <meta name="theme-color" content="#2E7D32">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="HortiControl">
 """
 st.markdown(pwa_manifest_code, unsafe_allow_html=True)
@@ -1380,7 +1403,7 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
     st.warning("Arquivo de anexo não encontrado no servidor ou formato inválido.")
 
 def desenhar_fundo_pdf(canvas_doc, doc_obj):
-    logo_p = buscar_caminho_logo()
+    logo_p = buscar_caminho_logo_empresa() or buscar_caminho_logo()
     if logo_p and os.path.exists(logo_p):
         try:
             canvas_doc.saveState()
