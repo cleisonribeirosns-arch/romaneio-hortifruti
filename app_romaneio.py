@@ -1,5 +1,6 @@
 import base64
 from datetime import datetime, time, timedelta
+import time as time_module
 import io
 import os
 import sqlite3
@@ -10,6 +11,11 @@ import streamlit.components.v1 as components
 from streamlit_drawable_canvas import st_canvas
 from zoneinfo import ZoneInfo
 import hashlib
+import json
+import uuid
+import re
+from urllib.request import Request, urlopen
+from urllib.error import URLError, HTTPError
 
 # ---------------------------------------------------------
 # SISTEMA DE SEGURANÇA E HASH DE SENHAS
@@ -24,12 +30,56 @@ def verificar_senha(senha_digitada: str, senha_banco: str) -> bool:
     return gerar_hash_senha(senha_digitada) == senha_banco
 
 # ---------------------------------------------------------
+# FUNÇÕES DE ÍCONE, LOGO E BASE64
+# ---------------------------------------------------------
+def buscar_caminho_icone_app():
+    candidatos = [
+        "icone_app.jpg",
+        "icone_app.jpeg",
+        "icone_app.png",
+        "icone_app.jpg.jpeg",
+        "logo_romaneio.png.jpg",
+        "logo_romaneio.png",
+        "logo_romaneio.jpg",
+        "logo.png",
+        "logo.jpg",
+    ]
+    for nome in candidatos:
+        if os.path.exists(nome) and os.path.isfile(nome):
+            return nome
+    return None
+
+def buscar_caminho_logo():
+    icone_app = buscar_caminho_icone_app()
+    if icone_app:
+        return icone_app
+    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
+        for prefixo in ["icone_app", "logo_romaneio.png", "logo_romaneio", "logo"]:
+            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
+            if os.path.exists(pos_p):
+                return pos_p
+    return None
+
+def obter_arquivo_b64_e_mime(caminho_imagem):
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return "", "image/jpeg"
+    try:
+        ext = os.path.splitext(caminho_imagem)[1].lower()
+        mime = "image/png" if ext == ".png" else "image/jpeg"
+        with open(caminho_imagem, "rb") as f_img:
+            b64_str = base64.b64encode(f_img.read()).decode("utf-8")
+        return b64_str, mime
+    except Exception:
+        return "", "image/jpeg"
+
+# ---------------------------------------------------------
 # CONFIGURAÇÃO DE PÁGINA (ÍCONE E TÍTULO PERSONALIZADOS)
 # ---------------------------------------------------------
+icone_path_global = buscar_caminho_icone_app()
 icone_pagina = "📦"
-if os.path.exists("logo_romaneio.png.jpg"):
+if icone_path_global:
     try:
-        icone_pagina = Image.open("logo_romaneio.png.jpg")
+        icone_pagina = Image.open(icone_path_global)
     except Exception:
         icone_pagina = "📦"
 
@@ -40,38 +90,281 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Identificador persistente deste navegador/aparelho. Não identifica a pessoa;
+# permite guardar preferências locais no banco mesmo após trocar de usuário.
+try:
+    _device_id = str(st.query_params.get("hc_device", "")).strip()
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", _device_id):
+        _device_id = str(uuid.uuid4())
+        st.query_params["hc_device"] = _device_id
+except Exception:
+    _device_id = st.session_state.get("_hc_device_id") or str(uuid.uuid4())
+    st.session_state["_hc_device_id"] = _device_id
+
+def obter_logo_transparente_b64(caminho_imagem):
+    if not caminho_imagem or not os.path.exists(caminho_imagem):
+        return ""
+    try:
+        img = Image.open(caminho_imagem).convert("RGBA")
+        datas = list(img.getdata())
+        newData = []
+        for item in datas:
+            if item[0] > 180 and item[1] > 180 and item[2] > 180:
+                newData.append((255, 255, 255, 0))
+            else:
+                newData.append(item)
+        img.putdata(newData)
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
+    except Exception:
+        return ""
+
+logo_path_global = buscar_caminho_logo()
+logo_b64_global_overlay = obter_logo_transparente_b64(logo_path_global) if logo_path_global else ""
+
 # ---------------------------------------------------------
-# CSS GLOBAL PARA OCULTAR O MENU DE FORK/GITHUB DO STREAMLIT
+# CSS GLOBAL & ESTILO DA TELA DE TRANSIÇÃO COM A LOGO CORRIGIDA
+# ---------------------------------------------------------
+st.markdown(f"""
+<style>
+#MainMenu {{visibility: hidden;}}
+footer {{visibility: hidden;}}
+header {{visibility: hidden;}}
+.stDeployButton {{display:none;}}
+[data-testid="stToolbar"] {{display: none !important;}}
+
+/* Overlay de transição robusto com a logo centralizada */
+.supernova-transition-overlay {{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(14, 20, 12, 0.95);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 999999;
+    color: #FFFFFF;
+    font-family: sans-serif;
+}}
+.supernova-logo-pulse {{
+    width: 120px;
+    height: auto;
+    margin-bottom: 20px;
+    animation: pulseLogo 1.2s infinite ease-in-out;
+    filter: drop-shadow(0px 15px 25px rgba(0,0,0,0.85)) drop-shadow(0px 5px 10px rgba(0,200,0,0.35));
+}}
+@keyframes pulseLogo {{
+    0% {{ transform: scale(0.95); opacity: 0.8; }}
+    50% {{ transform: scale(1.1); opacity: 1; }}
+    100% {{ transform: scale(0.95); opacity: 0.8; }}
+}}
+</style>
+""", unsafe_allow_html=True)
+
+# Script JS para acionar a transição visual ao clicar em abas (pastas) e botões no frontend
+img_tag_js = f'<img src="data:image/png;base64,{logo_b64_global_overlay}" class="supernova-logo-pulse" />' if logo_b64_global_overlay else '<div style="font-size: 40px; margin-bottom: 20px;">📦</div>'
+components.html(f"""
+<script>
+(function() {{
+    const parentDoc = window.parent.document;
+    if (parentDoc.getElementById('supernova-js-transition-hook')) return;
+    const marker = parentDoc.createElement('div');
+    marker.id = 'supernova-js-transition-hook';
+    marker.style.display = 'none';
+    parentDoc.body.appendChild(marker);
+
+    function dispararOverlayJS(texto) {{
+        let existing = parentDoc.getElementById('supernova-dynamic-overlay');
+        if (existing) existing.remove();
+        const ov = parentDoc.createElement('div');
+        ov.id = 'supernova-dynamic-overlay';
+        ov.className = 'supernova-transition-overlay';
+        ov.innerHTML = `{img_tag_js}<h3 style="color: #FFFFFF; font-weight: 600; letter-spacing: 0.5px;">${{texto}}</h3>`;
+        parentDoc.body.appendChild(ov);
+        setTimeout(() => {{
+            if (ov && ov.parentNode) ov.remove();
+        }}, 550);
+    }}
+
+    parentDoc.addEventListener('click', function(e) {{
+        const tabBtn = e.target.closest('button[data-baseweb="tab"]');
+        if (tabBtn) {{
+            const label = tabBtn.innerText ? tabBtn.innerText.trim() : 'aba';
+            dispararOverlayJS('Carregando ' + label + '...');
+            return;
+        }}
+        const actionBtn = e.target.closest('button[kind="primary"], button[kind="secondary"]');
+        if (actionBtn) {{
+            const txt = actionBtn.innerText ? actionBtn.innerText.trim() : '';
+            if (txt && !txt.includes('Descarregar') && !txt.includes('Baixar')) {{
+                dispararOverlayJS('Processando...');
+            }}
+        }}
+    }}, true);
+}})();
+</script>
+""", height=0)
+
+def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.45):
+    # Componente visual personalizado garantindo a exibição da transição com a logo
+    img_tag = f'<img src="data:image/png;base64,{logo_b64_global_overlay}" class="supernova-logo-pulse" />' if logo_b64_global_overlay else '<div style="font-size: 40px; margin-bottom: 20px;">📦</div>'
+    
+    placeholder = st.empty()
+    placeholder.markdown(f"""
+    <div class="supernova-transition-overlay">
+        {img_tag}
+        <h3 style="color: #FFFFFF; font-weight: 600; letter-spacing: 0.5px;">{mensagem}</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    class SpinnerContext:
+        def __init__(self):
+            self.start_time = time_module.time()
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            elapsed = time_module.time() - self.start_time
+            if elapsed < duracao_minima:
+                time_module.sleep(duracao_minima - elapsed)
+            placeholder.empty()
+            
+    return SpinnerContext()
+
+
+
+# ---------------------------------------------------------
+# CSS MOBILE / WEBVIEW (CORREÇÃO DE FONTES E CONTRASTE NO APP)
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-.stDeployButton {display:none;}
-[data-testid="stToolbar"] {display: none !important;}
+html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {
+    -webkit-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    overscroll-behavior-y: none !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+/* Garante legibilidade, tamanho e contraste das fontes no WebView Android */
+.stApp,
+.stApp p,
+.stApp label,
+.stApp li,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stMarkdownContainer"] span,
+[data-testid="stMarkdownContainer"] li,
+[data-testid="stWidgetLabel"] p,
+[data-testid="stWidgetLabel"] label,
+[data-testid="stWidgetLabel"] span {
+    font-size: 15px !important;
+    line-height: 1.45 !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.stApp h1, [data-testid="stHeading"] h1 {
+    font-size: 1.65rem !important;
+    line-height: 1.25 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+.stApp h2, [data-testid="stHeading"] h2 {
+    font-size: 1.35rem !important;
+    line-height: 1.25 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+.stApp h3, [data-testid="stHeading"] h3 {
+    font-size: 1.15rem !important;
+    line-height: 1.3 !important;
+    font-weight: 700 !important;
+    opacity: 1 !important;
+}
+
+/* Campos, selects e botões com texto sempre legível no APK */
+[data-testid="stExpander"] summary,
+[data-testid="stExpander"] summary span,
+[data-testid="stExpander"] summary p,
+[data-testid="stRadio"] label,
+[data-testid="stRadio"] label p,
+[data-testid="stRadio"] label span,
+[data-baseweb="select"] > div,
+[data-baseweb="select"] span,
+input, textarea,
+.stApp button,
+.stApp button p,
+.stApp button span {
+    font-size: 15px !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+
+.stApp button {
+    min-height: 44px !important;
+    font-weight: 600 !important;
+}
+
+@media (max-width: 768px) {
+    .stApp .main .block-container {
+        padding-left: 0.75rem !important;
+        padding-right: 0.75rem !important;
+        padding-top: 0.7rem !important;
+    }
+
+    .stApp h1, [data-testid="stHeading"] h1 {
+        font-size: 1.35rem !important;
+    }
+
+    .stApp h2, [data-testid="stHeading"] h2 {
+        font-size: 1.15rem !important;
+    }
+
+    .stApp h3, [data-testid="stHeading"] h3 {
+        font-size: 1.05rem !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# CONFIGURAÇÃO DE PWA
+# CONFIGURAÇÃO DE PWA (USANDO icone_app.jpg)
 # ---------------------------------------------------------
-pwa_manifest_code = """
-<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{
-  'name': 'HortiControl Supernova',
-  'short_name': 'HortiControl',
-  'start_url': '.',
-  'display': 'standalone',
-  'background_color': '#0E140C',
-  'theme_color': '#2E7D32',
-  'icons': [
-    {
-      'src': 'logo_romaneio.png.jpg',
-      'sizes': '512x512',
-      'type': 'image/jpeg'
-    }
-  ]
-}">
+icone_b64, icone_mime = obter_arquivo_b64_e_mime(icone_path_global)
+icone_src_pwa = f"data:{icone_mime};base64,{icone_b64}" if icone_b64 else (icone_path_global or "icone_app.jpg")
+
+pwa_manifest_json = json.dumps({
+    "name": "HortiControl Supernova",
+    "short_name": "HortiControl",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#0E140C",
+    "theme_color": "#2E7D32",
+    "icons": [
+        {
+            "src": icone_src_pwa,
+            "sizes": "192x192",
+            "type": icone_mime
+        },
+        {
+            "src": icone_src_pwa,
+            "sizes": "512x512",
+            "type": icone_mime
+        }
+    ]
+}, ensure_ascii=False)
+
+pwa_manifest_code = f"""
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,{pwa_manifest_json}">
+<link rel="apple-touch-icon" href="{icone_src_pwa}">
+<meta name="theme-color" content="#2E7D32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="HortiControl">
 """
 st.markdown(pwa_manifest_code, unsafe_allow_html=True)
 
@@ -103,18 +396,786 @@ except ImportError:
     HAS_POSTGRES = False
 
 # ---------------------------------------------------------
-# FUNÇÕES DE CONEXÃO E AUXILIARES
+# FUNÇÕES DE CONEXÃO, CONTINGÊNCIA (NEON -> SUPABASE) E SINCRONIZAÇÃO AUTOMÁTICA
 # ---------------------------------------------------------
-def get_db_connection():
-    if HAS_POSTGRES and "database" in st.secrets and "db_url" in st.secrets["database"]:
+def _obter_urls_postgres():
+    if not HAS_POSTGRES or "database" not in st.secrets:
+        return None, None
+    db_sec = st.secrets["database"]
+    neon_url = str(db_sec.get("db_url", "")).strip() or None
+    supabase_url = (
+        str(db_sec.get("backup_db_url", "")).strip()
+        or str(db_sec.get("supabase_url", "")).strip()
+        or str(db_sec.get("supabase_db_url", "")).strip()
+        or None
+    )
+    return neon_url, supabase_url
+
+
+def _conectar_pg_direto(url, timeout=15, tentativas=2):
+    ultimo_erro = None
+    for _ in range(tentativas):
         try:
-            conn = psycopg2.connect(st.secrets["database"]["db_url"], connect_timeout=5)
-            return conn, "postgres"
+            conn = psycopg2.connect(url, connect_timeout=timeout)
+            return conn
         except Exception as e:
-            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {e}")
-            raise e
+            ultimo_erro = e
+            time_module.sleep(0.8)
+    raise ultimo_erro
+
+
+def _garantir_schema_postgres(conn):
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) NOT NULL,
+        login VARCHAR(255) UNIQUE NOT NULL,
+        senha VARCHAR(255) NOT NULL,
+        perfil VARCHAR(255) NOT NULL,
+        tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova',
+        notif_desktop INTEGER DEFAULT 0,
+        custom_bg_b64 TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS wallpapers (
+        id SERIAL PRIMARY KEY,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        b64_dados TEXT NOT NULL
+    )
+    """)
+    for alt_sql in [
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS custom_bg_b64 TEXT",
+    ]:
+        try:
+            cursor.execute(alt_sql)
+        except Exception:
+            pass
+
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS produtos (
+        id SERIAL PRIMARY KEY,
+        codigo_barras VARCHAR(255),
+        codigo_produto VARCHAR(255) UNIQUE,
+        nome VARCHAR(255) UNIQUE NOT NULL,
+        unidade_padrao VARCHAR(50) NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fornecedores (
+        id SERIAL PRIMARY KEY,
+        codigo_fornecedor VARCHAR(255) UNIQUE,
+        cnpj VARCHAR(255),
+        nome VARCHAR(255) UNIQUE NOT NULL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS romaneios (
+        id SERIAL PRIMARY KEY,
+        numero_romaneio VARCHAR(255) UNIQUE NOT NULL,
+        loja VARCHAR(255) NOT NULL,
+        loja_origem VARCHAR(255),
+        loja_destino VARCHAR(255),
+        data_recebimento VARCHAR(50) NOT NULL,
+        fornecedor VARCHAR(255),
+        codigo_fornecedor VARCHAR(255),
+        telefone_fornecedor VARCHAR(255),
+        conferente VARCHAR(255) NOT NULL,
+        pagamento_a_vista VARCHAR(50) NOT NULL,
+        data_pagamento VARCHAR(50),
+        caminho_foto TEXT,
+        assinatura_conferente TEXT,
+        assinatura_entregador TEXT,
+        status_nota VARCHAR(50) DEFAULT 'Pendente',
+        tipo_operacao VARCHAR(50) DEFAULT 'Compra',
+        observacoes TEXT,
+        foto_b64 TEXT,
+        ass_conf_b64 TEXT,
+        ass_ent_b64 TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS romaneio_itens (
+        id SERIAL PRIMARY KEY,
+        romaneio_id INTEGER NOT NULL REFERENCES romaneios(id) ON DELETE CASCADE,
+        produto VARCHAR(255) NOT NULL,
+        quantidade REAL NOT NULL,
+        unidade VARCHAR(50) NOT NULL,
+        valor_unitario REAL,
+        valor_total REAL
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS bonificacoes (
+        id SERIAL PRIMARY KEY,
+        numero_nota VARCHAR(255) NOT NULL,
+        loja VARCHAR(255) NOT NULL,
+        data_entrada VARCHAR(50) NOT NULL,
+        valor_bonificacao REAL NOT NULL,
+        status VARCHAR(100) NOT NULL,
+        produto_hortifruti VARCHAR(255) NOT NULL,
+        caminho_anexo TEXT,
+        tipo_bonificacao VARCHAR(100) DEFAULT 'Bonificação',
+        anexo_b64 TEXT
+    )
+    """)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS baixas_avarias (
+        id SERIAL PRIMARY KEY,
+        loja_baixa VARCHAR(255) NOT NULL,
+        data_baixa VARCHAR(50) NOT NULL,
+        ref_bon_transferen VARCHAR(255) NOT NULL,
+        nf_baixa TEXT,
+        nf_b_entrada VARCHAR(255) NOT NULL,
+        produto_hortifruti VARCHAR(255) NOT NULL,
+        quantidade_kg_cx REAL NOT NULL,
+        valor_total_avaria REAL NOT NULL,
+        saldo_restante_nota REAL NOT NULL,
+        saldo_total_disponivel REAL NOT NULL,
+        nf_baixa_b64 TEXT
+    )
+    """)
+    for alt_sql2 in [
+        "ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT",
+        "ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT",
+        "ALTER TABLE baixas_avarias ADD COLUMN IF NOT EXISTS nf_baixa_b64 TEXT",
+    ]:
+        try:
+            cursor.execute(alt_sql2)
+        except Exception:
+            pass
+
+    cursor.execute("SELECT 1 FROM usuarios WHERE login = %s", ("908",))
+    if not cursor.fetchone():
+        cursor.execute(
+            "INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop) VALUES (%s, %s, %s, %s, %s, %s)",
+            ("Administrador", "908", gerar_hash_senha("0332"), "Gestor", "Logomarca Oficial Supernova", 0),
+        )
+
+
+def _garantir_tabelas_controle_contingencia(conn_reserva):
+    cur = conn_reserva.cursor()
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS _contingencia_sync_log (
+        id SERIAL PRIMARY KEY,
+        tabela VARCHAR(100) NOT NULL,
+        chave_unica VARCHAR(500) NOT NULL,
+        operacao VARCHAR(30) DEFAULT 'UPSERT',
+        criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        sincronizado INTEGER DEFAULT 0,
+        sincronizado_em TIMESTAMP NULL,
+        UNIQUE(tabela, chave_unica)
+    )
+    """)
+    conn_reserva.commit()
+
+
+def _registrar_pendencia_contingencia(conn_reserva, tabela, chave_unica, operacao="UPSERT"):
+    _garantir_tabelas_controle_contingencia(conn_reserva)
+    cur = conn_reserva.cursor()
+    cur.execute(
+        """
+        INSERT INTO _contingencia_sync_log (tabela, chave_unica, operacao, sincronizado, sincronizado_em, criado_em)
+        VALUES (%s, %s, %s, 0, NULL, CURRENT_TIMESTAMP)
+        ON CONFLICT (tabela, chave_unica) DO UPDATE SET
+            operacao = EXCLUDED.operacao,
+            sincronizado = 0,
+            sincronizado_em = NULL,
+            criado_em = CURRENT_TIMESTAMP
+        """,
+        (str(tabela), str(chave_unica), str(operacao)),
+    )
+
+
+def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
+    """
+    Sincroniza automaticamente (idempotente / sem duplicidade) os dados gravados
+    no Supabase durante contingência de volta para o Neon assim que o Neon volta.
+    """
+    _garantir_schema_postgres(conn_neon)
+    _garantir_schema_postgres(conn_supabase)
+    _garantir_tabelas_controle_contingencia(conn_supabase)
+
+    cur_sup = conn_supabase.cursor()
+    cur_neon = conn_neon.cursor()
+
+    cur_sup.execute(
+        "SELECT id, tabela, chave_unica, operacao FROM _contingencia_sync_log WHERE sincronizado = 0 ORDER BY id ASC"
+    )
+    pendentes = cur_sup.fetchall()
+    if not pendentes:
+        return 0
+
+    sincronizados_ids = []
+
+    for log_id, tabela, chave_unica, operacao in pendentes:
+        try:
+            if tabela == "usuarios":
+                cur_sup.execute(
+                    "SELECT nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios WHERE login = %s",
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (login) DO UPDATE SET
+                            nome = EXCLUDED.nome,
+                            senha = EXCLUDED.senha,
+                            perfil = EXCLUDED.perfil,
+                            tema_bg = EXCLUDED.tema_bg,
+                            notif_desktop = EXCLUDED.notif_desktop,
+                            custom_bg_b64 = EXCLUDED.custom_bg_b64
+                        """,
+                        row,
+                    )
+
+            elif tabela == "wallpapers":
+                cur_sup.execute("SELECT nome, b64_dados FROM wallpapers WHERE nome = %s", (chave_unica,))
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO wallpapers (nome, b64_dados)
+                        VALUES (%s, %s)
+                        ON CONFLICT (nome) DO UPDATE SET b64_dados = EXCLUDED.b64_dados
+                        """,
+                        row,
+                    )
+
+            elif tabela == "produtos":
+                cur_sup.execute(
+                    "SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos WHERE nome = %s",
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (nome) DO UPDATE SET
+                            codigo_barras = COALESCE(EXCLUDED.codigo_barras, produtos.codigo_barras),
+                            codigo_produto = COALESCE(EXCLUDED.codigo_produto, produtos.codigo_produto),
+                            unidade_padrao = EXCLUDED.unidade_padrao
+                        """,
+                        row,
+                    )
+
+            elif tabela == "fornecedores":
+                cur_sup.execute(
+                    "SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE nome = %s",
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    cur_neon.execute(
+                        """
+                        INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (nome) DO UPDATE SET
+                            codigo_fornecedor = COALESCE(EXCLUDED.codigo_fornecedor, fornecedores.codigo_fornecedor),
+                            cnpj = COALESCE(EXCLUDED.cnpj, fornecedores.cnpj)
+                        """,
+                        row,
+                    )
+
+            elif tabela == "romaneios":
+                cur_sup.execute(
+                    """
+                    SELECT id, numero_romaneio, loja, loja_origem, loja_destino,
+                           data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor,
+                           conferente, pagamento_a_vista, data_pagamento, caminho_foto,
+                           assinatura_conferente, assinatura_entregador, status_nota,
+                           tipo_operacao, observacoes, foto_b64, ass_conf_b64, ass_ent_b64
+                    FROM romaneios WHERE numero_romaneio = %s
+                    """,
+                    (chave_unica,),
+                )
+                row = cur_sup.fetchone()
+                if row:
+                    sup_rom_id = row[0]
+                    vals = row[1:]
+                    cur_neon.execute(
+                        """
+                        INSERT INTO romaneios (
+                            numero_romaneio, loja, loja_origem, loja_destino,
+                            data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor,
+                            conferente, pagamento_a_vista, data_pagamento, caminho_foto,
+                            assinatura_conferente, assinatura_entregador, status_nota,
+                            tipo_operacao, observacoes, foto_b64, ass_conf_b64, ass_ent_b64
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (numero_romaneio) DO UPDATE SET
+                            loja = EXCLUDED.loja,
+                            loja_origem = EXCLUDED.loja_origem,
+                            loja_destino = EXCLUDED.loja_destino,
+                            data_recebimento = EXCLUDED.data_recebimento,
+                            fornecedor = EXCLUDED.fornecedor,
+                            codigo_fornecedor = EXCLUDED.codigo_fornecedor,
+                            telefone_fornecedor = EXCLUDED.telefone_fornecedor,
+                            conferente = EXCLUDED.conferente,
+                            pagamento_a_vista = EXCLUDED.pagamento_a_vista,
+                            data_pagamento = EXCLUDED.data_pagamento,
+                            caminho_foto = EXCLUDED.caminho_foto,
+                            assinatura_conferente = EXCLUDED.assinatura_conferente,
+                            assinatura_entregador = EXCLUDED.assinatura_entregador,
+                            status_nota = EXCLUDED.status_nota,
+                            tipo_operacao = EXCLUDED.tipo_operacao,
+                            observacoes = EXCLUDED.observacoes,
+                            foto_b64 = COALESCE(NULLIF(EXCLUDED.foto_b64, ''), romaneios.foto_b64),
+                            ass_conf_b64 = COALESCE(NULLIF(EXCLUDED.ass_conf_b64, ''), romaneios.ass_conf_b64),
+                            ass_ent_b64 = COALESCE(NULLIF(EXCLUDED.ass_ent_b64, ''), romaneios.ass_ent_b64)
+                        RETURNING id
+                        """,
+                        vals,
+                    )
+                    neon_rom_id = cur_neon.fetchone()[0]
+                    cur_sup.execute(
+                        "SELECT produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens WHERE romaneio_id = %s ORDER BY id ASC",
+                        (sup_rom_id,),
+                    )
+                    itens_sup = cur_sup.fetchall()
+                    cur_neon.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s", (neon_rom_id,))
+                    for it in itens_sup:
+                        cur_neon.execute(
+                            "INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)",
+                            (neon_rom_id, it[0], it[1], it[2], it[3], it[4]),
+                        )
+
+            elif tabela == "bonificacoes":
+                partes = chave_unica.split("||", 2)
+                if len(partes) == 3:
+                    n_nota, n_loja, n_dt = partes
+                    cur_sup.execute(
+                        """
+                        SELECT numero_nota, loja, data_entrada, valor_bonificacao, status,
+                               produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+                        FROM bonificacoes
+                        WHERE numero_nota = %s AND loja = %s AND data_entrada = %s
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (n_nota, n_loja, n_dt),
+                    )
+                    row = cur_sup.fetchone()
+                    if row:
+                        cur_neon.execute(
+                            "SELECT id FROM bonificacoes WHERE numero_nota = %s AND loja = %s AND data_entrada = %s LIMIT 1",
+                            (n_nota, n_loja, n_dt),
+                        )
+                        ex = cur_neon.fetchone()
+                        if ex:
+                            cur_neon.execute(
+                                """
+                                UPDATE bonificacoes SET
+                                    valor_bonificacao = %s, status = %s, produto_hortifruti = %s,
+                                    caminho_anexo = %s, tipo_bonificacao = %s,
+                                    anexo_b64 = COALESCE(NULLIF(%s, ''), anexo_b64)
+                                WHERE id = %s
+                                """,
+                                (row[3], row[4], row[5], row[6], row[7], row[8], ex[0]),
+                            )
+                        else:
+                            cur_neon.execute(
+                                """
+                                INSERT INTO bonificacoes (
+                                    numero_nota, loja, data_entrada, valor_bonificacao, status,
+                                    produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """,
+                                row,
+                            )
+
+            elif tabela == "baixas_avarias":
+                partes = chave_unica.split("||", 3)
+                if len(partes) == 4:
+                    b_loja, b_dt, b_ref, b_nf = partes
+                    cur_sup.execute(
+                        """
+                        SELECT loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada,
+                               produto_hortifruti, quantidade_kg_cx, valor_total_avaria,
+                               saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64
+                        FROM baixas_avarias
+                        WHERE loja_baixa = %s AND data_baixa = %s AND ref_bon_transferen = %s AND nf_b_entrada = %s
+                        ORDER BY id DESC LIMIT 1
+                        """,
+                        (b_loja, b_dt, b_ref, b_nf),
+                    )
+                    row = cur_sup.fetchone()
+                    if row:
+                        cur_neon.execute(
+                            """
+                            SELECT id FROM baixas_avarias
+                            WHERE loja_baixa = %s AND data_baixa = %s AND ref_bon_transferen = %s AND nf_b_entrada = %s
+                            LIMIT 1
+                            """,
+                            (b_loja, b_dt, b_ref, b_nf),
+                        )
+                        ex = cur_neon.fetchone()
+                        if ex:
+                            cur_neon.execute(
+                                """
+                                UPDATE baixas_avarias SET
+                                    nf_baixa = %s, produto_hortifruti = %s, quantidade_kg_cx = %s,
+                                    valor_total_avaria = %s, saldo_restante_nota = %s,
+                                    saldo_total_disponivel = %s,
+                                    nf_baixa_b64 = COALESCE(NULLIF(%s, ''), nf_baixa_b64)
+                                WHERE id = %s
+                                """,
+                                (row[3], row[5], row[6], row[7], row[8], row[9], row[10], ex[0]),
+                            )
+                        else:
+                            cur_neon.execute(
+                                """
+                                INSERT INTO baixas_avarias (
+                                    loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada,
+                                    produto_hortifruti, quantidade_kg_cx, valor_total_avaria,
+                                    saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                """,
+                                row,
+                            )
+
+            sincronizados_ids.append(log_id)
+        except Exception:
+            conn_neon.rollback()
+            raise
+
+    conn_neon.commit()
+    for lid in sincronizados_ids:
+        cur_sup.execute(
+            "UPDATE _contingencia_sync_log SET sincronizado = 1, sincronizado_em = CURRENT_TIMESTAMP WHERE id = %s",
+            (lid,),
+        )
+    conn_supabase.commit()
+    return len(sincronizados_ids)
+
+
+def _espelhar_base_para_reserva(conn_neon, conn_supabase):
+    """Mantém o banco reserva (Supabase) aquecido e espelhado com os dados mestres e recentes do Neon."""
+    _garantir_schema_postgres(conn_supabase)
+    cur_n = conn_neon.cursor()
+    cur_s = conn_supabase.cursor()
+
+    cur_n.execute("SELECT nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios")
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            """
+            INSERT INTO usuarios (nome, login, senha, perfil, tema_bg, notif_desktop, custom_bg_b64)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (login) DO UPDATE SET
+                nome = EXCLUDED.nome, senha = EXCLUDED.senha, perfil = EXCLUDED.perfil,
+                tema_bg = EXCLUDED.tema_bg, notif_desktop = EXCLUDED.notif_desktop, custom_bg_b64 = EXCLUDED.custom_bg_b64
+            """,
+            r,
+        )
+
+    cur_n.execute("SELECT codigo_barras, codigo_produto, nome, unidade_padrao FROM produtos")
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            """
+            INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (nome) DO UPDATE SET
+                codigo_barras = EXCLUDED.codigo_barras,
+                codigo_produto = EXCLUDED.codigo_produto,
+                unidade_padrao = EXCLUDED.unidade_padrao
+            """,
+            r,
+        )
+
+    cur_n.execute("SELECT codigo_fornecedor, cnpj, nome FROM fornecedores")
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            """
+            INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (nome) DO UPDATE SET
+                codigo_fornecedor = EXCLUDED.codigo_fornecedor,
+                cnpj = EXCLUDED.cnpj
+            """,
+            r,
+        )
+
+    cur_n.execute(
+        """
+        SELECT numero_nota, loja, data_entrada, valor_bonificacao, status,
+               produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+        FROM bonificacoes ORDER BY id DESC LIMIT 300
+        """
+    )
+    for r in cur_n.fetchall():
+        cur_s.execute(
+            "SELECT id FROM bonificacoes WHERE numero_nota = %s AND loja = %s AND data_entrada = %s LIMIT 1",
+            (r[0], r[1], r[2]),
+        )
+        ex = cur_s.fetchone()
+        if ex:
+            cur_s.execute(
+                "UPDATE bonificacoes SET valor_bonificacao = %s, status = %s, produto_hortifruti = %s, tipo_bonificacao = %s WHERE id = %s",
+                (r[3], r[4], r[5], r[7], ex[0]),
+            )
+        else:
+            cur_s.execute(
+                """
+                INSERT INTO bonificacoes (
+                    numero_nota, loja, data_entrada, valor_bonificacao, status,
+                    produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """,
+                r,
+            )
+
+    conn_supabase.commit()
+
+
+class _CursorContingenciaWrapper:
+    def __init__(self, real_cursor, conn_reserva, em_contingencia):
+        self._cur = real_cursor
+        self._conn_reserva = conn_reserva
+        self._em_contingencia = em_contingencia
+        self._ultimo_romaneio_num = None
+
+    def _rastrear_escrita(self, sql, params):
+        if not self._em_contingencia or not sql:
+            return
+        sql_clean = " ".join(str(sql).strip().split())
+        sql_up = sql_clean.upper()
+        if not (sql_up.startswith("INSERT INTO") or sql_up.startswith("UPDATE ")):
+            return
+        p = tuple(params) if params is not None else ()
+        try:
+            if "INTO ROMANEIOS " in sql_up and len(p) >= 1:
+                self._ultimo_romaneio_num = str(p[0])
+                _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", str(p[0]))
+            elif "INTO ROMANEIO_ITENS " in sql_up and self._ultimo_romaneio_num:
+                _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", self._ultimo_romaneio_num)
+            elif "UPDATE ROMANEIOS " in sql_up and len(p) >= 1:
+                rid = p[-1]
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT numero_romaneio FROM romaneios WHERE id = %s", (rid,))
+                r_num = c_tmp.fetchone()
+                if r_num:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", str(r_num[0]))
+            elif "INTO BONIFICACOES " in sql_up and len(p) >= 3:
+                chave = f"{p[0]}||{p[1]}||{p[2]}"
+                _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", chave)
+            elif "UPDATE BONIFICACOES " in sql_up:
+                c_tmp = self._conn_reserva.cursor()
+                if "WHERE ID = %S" in sql_up and len(p) >= 1:
+                    c_tmp.execute("SELECT numero_nota, loja, data_entrada FROM bonificacoes WHERE id = %s", (p[-1],))
+                    rb = c_tmp.fetchone()
+                    if rb:
+                        _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", f"{rb[0]}||{rb[1]}||{rb[2]}")
+                elif "TRIM(NUMERO_NOTA)" in sql_up and len(p) >= 1:
+                    c_tmp.execute("SELECT numero_nota, loja, data_entrada FROM bonificacoes WHERE TRIM(numero_nota) = TRIM(%s)", (p[-1],))
+                    for rb in c_tmp.fetchall():
+                        _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", f"{rb[0]}||{rb[1]}||{rb[2]}")
+            elif "INTO BAIXAS_AVARIAS " in sql_up and len(p) >= 5:
+                chave = f"{p[0]}||{p[1]}||{p[2]}||{p[4]}"
+                _registrar_pendencia_contingencia(self._conn_reserva, "baixas_avarias", chave)
+            elif "UPDATE BAIXAS_AVARIAS " in sql_up and len(p) >= 1:
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT loja_baixa, data_baixa, ref_bon_transferen, nf_b_entrada FROM baixas_avarias WHERE id = %s", (p[-1],))
+                rbx = c_tmp.fetchone()
+                if rbx:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "baixas_avarias", f"{rbx[0]}||{rbx[1]}||{rbx[2]}||{rbx[3]}")
+            elif "INTO PRODUTOS " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "produtos", str(p[2]))
+            elif "UPDATE PRODUTOS " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "produtos", str(p[2]))
+            elif "INTO FORNECEDORES " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "fornecedores", str(p[2]))
+            elif "UPDATE FORNECEDORES " in sql_up and len(p) >= 3:
+                _registrar_pendencia_contingencia(self._conn_reserva, "fornecedores", str(p[2]))
+            elif "INTO USUARIOS " in sql_up and len(p) >= 2:
+                _registrar_pendencia_contingencia(self._conn_reserva, "usuarios", str(p[1]))
+            elif "UPDATE USUARIOS " in sql_up and len(p) >= 2:
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT login FROM usuarios WHERE id = %s", (p[-1],))
+                ru = c_tmp.fetchone()
+                if ru:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "usuarios", str(ru[0]))
+            elif "INTO WALLPAPERS " in sql_up and len(p) >= 1:
+                _registrar_pendencia_contingencia(self._conn_reserva, "wallpapers", str(p[0]))
+        except Exception:
+            pass
+
+    def execute(self, sql, params=None):
+        res = self._cur.execute(sql, params) if params is not None else self._cur.execute(sql)
+        self._rastrear_escrita(sql, params)
+        return res
+
+    def executemany(self, sql, seq_of_params):
+        res = self._cur.executemany(sql, seq_of_params)
+        for p in seq_of_params:
+            self._rastrear_escrita(sql, p)
+        return res
+
+    def __getattr__(self, name):
+        return getattr(self._cur, name)
+
+
+class _ConnContingenciaWrapper:
+    def __init__(self, real_conn, em_contingencia=False):
+        self._conn = real_conn
+        self._em_contingencia = em_contingencia
+
+    def cursor(self, *args, **kwargs):
+        return _CursorContingenciaWrapper(self._conn.cursor(*args, **kwargs), self._conn, self._em_contingencia)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def tentar_reconciliacao_automatica(forcar=False):
+    neon_url, supabase_url = _obter_urls_postgres()
+    if not neon_url or not supabase_url:
+        return 0
+    agora = time_module.time()
+    ultimo_check = st.session_state.get("_ultimo_sync_contingencia_ts", 0.0)
+    if not forcar and (agora - ultimo_check) < 20:
+        return 0
+    st.session_state["_ultimo_sync_contingencia_ts"] = agora
+
+    conn_n = None
+    conn_s = None
+    try:
+        conn_n = _conectar_pg_direto(neon_url, timeout=12, tentativas=1)
+        conn_s = _conectar_pg_direto(supabase_url, timeout=12, tentativas=1)
+        qtd_sync = _sincronizar_reserva_para_principal(conn_n, conn_s)
+        if qtd_sync > 0:
+            st.session_state["_qtd_ultima_sincronizacao"] = qtd_sync
+            st.session_state["_banco_ativo_modo"] = "Neon (Principal)"
+        return qtd_sync
+    except Exception:
+        return 0
+    finally:
+        if conn_n:
+            try:
+                conn_n.close()
+            except Exception:
+                pass
+        if conn_s:
+            try:
+                conn_s.close()
+            except Exception:
+                pass
+
+
+def get_db_connection(ping_only=False):
+    neon_url, supabase_url = _obter_urls_postgres()
+    if neon_url:
+        erro_neon = None
+        try:
+            conn_neon = _conectar_pg_direto(neon_url, timeout=18, tentativas=2)
+            st.session_state["_banco_ativo_modo"] = "Neon (Principal)"
+            if not ping_only and supabase_url:
+                try:
+                    conn_sup_tmp = _conectar_pg_direto(supabase_url, timeout=8, tentativas=1)
+                    try:
+                        qtd_sinc = _sincronizar_reserva_para_principal(conn_neon, conn_sup_tmp)
+                        if qtd_sinc > 0:
+                            st.session_state["_qtd_ultima_sincronizacao"] = qtd_sinc
+                    finally:
+                        conn_sup_tmp.close()
+                except Exception:
+                    pass
+            return _ConnContingenciaWrapper(conn_neon, em_contingencia=False), "postgres"
+        except Exception as e_neon:
+            erro_neon = e_neon
+
+        if supabase_url:
+            try:
+                conn_sup = _conectar_pg_direto(supabase_url, timeout=18, tentativas=2)
+                _garantir_schema_postgres(conn_sup)
+                _garantir_tabelas_controle_contingencia(conn_sup)
+                conn_sup.commit()
+                st.session_state["_banco_ativo_modo"] = "Supabase (Contingência Ativa)"
+                if not ping_only:
+                    st.warning("⚠️ Neon indisponível no momento. Modo contingência ativado no Supabase — tudo que for salvo será sincronizado automaticamente para o Neon assim que ele voltar.")
+                return _ConnContingenciaWrapper(conn_sup, em_contingencia=True), "postgres"
+            except Exception as e_sup:
+                if not ping_only:
+                    st.error(f"Erro crítico: Neon ({erro_neon}) e Supabase reserva ({e_sup}) indisponíveis.")
+                raise e_sup
+
+        if not ping_only:
+            st.error(f"Erro crítico ao conectar no PostgreSQL (Neon): {erro_neon}")
+        raise erro_neon
+
     conn = sqlite3.connect("romaneio_hortifruti.db", timeout=10)
     return conn, "sqlite"
+
+
+def executar_keep_alive_banco():
+    neon_url, supabase_url = _obter_urls_postgres()
+    status_detalhes = []
+    if neon_url:
+        conn_n = None
+        conn_s = None
+        try:
+            conn_n = _conectar_pg_direto(neon_url, timeout=15, tentativas=2)
+            cur_n = conn_n.cursor()
+            cur_n.execute("SELECT 1")
+            cur_n.fetchone()
+            conn_n.commit()
+            status_detalhes.append("neon:ok")
+        except Exception as e_n:
+            status_detalhes.append(f"neon:err({e_n})")
+
+        if supabase_url:
+            try:
+                conn_s = _conectar_pg_direto(supabase_url, timeout=15, tentativas=2)
+                cur_s = conn_s.cursor()
+                cur_s.execute("SELECT 1")
+                cur_s.fetchone()
+                conn_s.commit()
+                status_detalhes.append("supabase:ok")
+                if conn_n is not None:
+                    sinc = _sincronizar_reserva_para_principal(conn_n, conn_s)
+                    if sinc > 0:
+                        status_detalhes.append(f"sync:{sinc}")
+                    _espelhar_base_para_reserva(conn_n, conn_s)
+                    status_detalhes.append("mirror:ok")
+            except Exception as e_s:
+                status_detalhes.append(f"supabase:err({e_s})")
+            finally:
+                if conn_s:
+                    try:
+                        conn_s.close()
+                    except Exception:
+                        pass
+        if conn_n:
+            try:
+                conn_n.close()
+            except Exception:
+                pass
+        return True, " | ".join(status_detalhes)
+
+    conn, db_type = get_db_connection(ping_only=True)
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+        cursor.fetchone()
+        return True, db_type
+    finally:
+        conn.close()
+
+
+if st.query_params.get("ping") == "1":
+    try:
+        _, _db_t = executar_keep_alive_banco()
+        st.write(f"OK - keep-alive & sync ativo ({_db_t})")
+        st.stop()
+    except Exception as _err_ping:
+        st.write(f"PING_ERR: {_err_ping}")
+        st.stop()
+
 
 def parse_float_ptbr(valor_str):
     if not valor_str or not str(valor_str).strip():
@@ -147,6 +1208,63 @@ def emitir_notificacao_desktop_web(titulo, mensagem):
     """
     components.html(js_code, height=0)
 
+def enviar_notificacao_google_chat(mensagem):
+    """Envia uma mensagem ao espaço do Google Chat e registra o resultado nos Logs."""
+    try:
+        webhook_url = st.secrets["google_chat"]["webhook_url"]
+
+        if not webhook_url:
+            print("GOOGLE CHAT ERRO: webhook_url está vazio nos Secrets.")
+            return False
+
+        webhook_url = str(webhook_url).strip()
+        if not webhook_url.startswith("https://chat.googleapis.com/"):
+            print("GOOGLE CHAT ERRO: endereço do webhook inválido. Verifique os Secrets.")
+            return False
+
+        payload = json.dumps(
+            {"text": str(mensagem)},
+            ensure_ascii=False
+        ).encode("utf-8")
+
+        requisicao = Request(
+            webhook_url,
+            data=payload,
+            headers={"Content-Type": "application/json; charset=UTF-8"},
+            method="POST"
+        )
+
+        print("GOOGLE CHAT: iniciando envio da notificação...")
+        with urlopen(requisicao, timeout=20) as resposta:
+            status = resposta.status
+            if 200 <= status < 300:
+                print(f"GOOGLE CHAT SUCESSO: mensagem aceita. HTTP {status}.")
+                return True
+
+            print(f"GOOGLE CHAT ERRO: resposta HTTP {status}.")
+            return False
+
+    except KeyError as erro:
+        print(f"GOOGLE CHAT ERRO: configuração ausente nos Secrets ({erro}).")
+        return False
+    except HTTPError as erro:
+        # Não registrar a URL do webhook para evitar expor a chave/token nos Logs.
+        try:
+            detalhe = erro.read().decode("utf-8", errors="replace")
+        except Exception:
+            detalhe = "Não foi possível ler o detalhe da resposta."
+        print(f"GOOGLE CHAT ERRO HTTP: código {erro.code}. Detalhe: {detalhe[:1000]}")
+        return False
+    except URLError as erro:
+        print(f"GOOGLE CHAT ERRO DE CONEXÃO: {erro.reason}")
+        return False
+    except TimeoutError:
+        print("GOOGLE CHAT ERRO: tempo limite de conexão excedido.")
+        return False
+    except Exception as erro:
+        print(f"GOOGLE CHAT ERRO INESPERADO: {type(erro).__name__}: {erro}")
+        return False
+
 def disparar_notificacao_sistema(romaneio_dados, itens_lista):
     if HAS_PLYER:
         try:
@@ -167,8 +1285,8 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
                 app_name="HortiControl Supernova",
                 timeout=10
             )
-        except Exception as e:
-            print(f"Erro ao disparar notificação plyer: {e}")
+        except Exception:
+            pass
 
     if st.session_state.get("notif_desktop_toggle", False):
         total_itens = len(itens_lista)
@@ -178,10 +1296,6 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
             titulo=f"📋 Novo Romaneio {num_rom}!",
             mensagem=f"Fornecedor: {forn} | Total de itens: {total_itens}"
         )
-
-def spinner_supernova(mensagem="Carregando dados..."):
-    with st.spinner(mensagem):
-        pass
 
 @st.cache_data(ttl=60)
 def carregar_produtos_cached():
@@ -210,7 +1324,7 @@ def remover_fundo_branco(caminho_imagem):
         return caminho_imagem
     try:
         img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
+        datas = list(img.getdata())
         newData = []
         for item in datas:
             if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -224,26 +1338,25 @@ def remover_fundo_branco(caminho_imagem):
     except Exception:
         return caminho_imagem
 
-def obter_logo_transparente_b64(caminho_imagem):
-    if not caminho_imagem or not os.path.exists(caminho_imagem):
-        return ""
-    try:
-        img = Image.open(caminho_imagem).convert("RGBA")
-        datas = img.getdata()
-        newData = []
-        for item in datas:
-            if item[0] > 180 and item[1] > 180 and item[2] > 180:
-                newData.append((255, 255, 255, 0))
-            else:
-                newData.append(item)
-        img.putdata(newData)
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode("utf-8")
-    except Exception:
-        return ""
-
 def exibir_foto_modal(caminho_foto, b64_foto=None):
+    if b64_foto:
+        try:
+            img_data = base64.b64decode(b64_foto)
+            if img_data.startswith(b'%PDF'):
+                st.success("📄 Documento PDF identificado.")
+                st.download_button(
+                    label="📥 Baixar / Visualizar PDF Anexado",
+                    data=img_data,
+                    file_name="documento_anexado.pdf",
+                    mime="application/pdf"
+                )
+                return
+            else:
+                st.image(img_data, use_container_width=True)
+                return
+        except Exception:
+            pass
+
     if caminho_foto and caminho_foto.lower().endswith('.pdf'):
         if os.path.exists(caminho_foto):
             with open(caminho_foto, "rb") as f_pdf:
@@ -256,9 +1369,6 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
                 mime="application/pdf"
             )
             return
-        else:
-            st.warning("Arquivo PDF não encontrado no servidor.")
-            return
 
     if caminho_foto and os.path.exists(caminho_foto):
         try:
@@ -267,23 +1377,7 @@ def exibir_foto_modal(caminho_foto, b64_foto=None):
         except Exception:
             pass
             
-    if b64_foto:
-        try:
-            img_data = base64.b64decode(b64_foto)
-            st.image(img_data, use_container_width=True)
-            return
-        except Exception:
-            pass
-            
     st.warning("Arquivo de anexo não encontrado no servidor ou formato inválido.")
-
-def buscar_caminho_logo():
-    for ext in ["png", "jpg", "jpeg", "PNG", "JPG", "JPEG"]:
-        for prefixo in ["logo_romaneio.png", "logo_romaneio", "logo", "Tela de login", "tela_de_login"]:
-            pos_p = f"{prefixo}.{ext}" if not prefixo.endswith(f".{ext}") else prefixo
-            if os.path.exists(pos_p):
-                return pos_p
-    return None
 
 def desenhar_fundo_pdf(canvas_doc, doc_obj):
     logo_p = buscar_caminho_logo()
@@ -300,9 +1394,6 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
         except Exception:
             canvas_doc.restoreState()
 
-# ---------------------------------------------------------
-# SELETOR DE DATA ESTILO CISSPOWER (COMPACTO E CLÁSSICO)
-# ---------------------------------------------------------
 def seletor_data_unificado(label_titulo, key_prefix):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
     st.markdown(f"**{label_titulo}**")
@@ -317,9 +1408,84 @@ def seletor_data_unificado(label_titulo, key_prefix):
     )
     return data_selecionada
 
-# ---------------------------------------------------------
-# BANCO DE DADOS (PERSISTÊNCIA COMPLETA E MIGRAÇÃO)
-# ---------------------------------------------------------
+def garantir_tabela_configuracoes_dispositivo():
+    """Cria a tabela de preferências visuais vinculadas ao navegador/aparelho."""
+    conn, db_type = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS configuracoes_dispositivo (
+                    device_id VARCHAR(64) PRIMARY KEY,
+                    fonte_cor VARCHAR(20) NOT NULL DEFAULT '#F8FAFC',
+                    fonte_tamanho INTEGER NOT NULL DEFAULT 16,
+                    atualizado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS configuracoes_dispositivo (
+                    device_id TEXT PRIMARY KEY,
+                    fonte_cor TEXT NOT NULL DEFAULT '#F8FAFC',
+                    fonte_tamanho INTEGER NOT NULL DEFAULT 16,
+                    atualizado_em TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def carregar_configuracoes_dispositivo(device_id):
+    padrao = {"fonte_cor": "#F8FAFC", "fonte_tamanho": 16}
+    conn, db_type = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT fonte_cor, fonte_tamanho FROM configuracoes_dispositivo WHERE device_id = %s" if db_type == "postgres" else
+            "SELECT fonte_cor, fonte_tamanho FROM configuracoes_dispositivo WHERE device_id = ?",
+            (device_id,)
+        )
+        row = cur.fetchone()
+        if row:
+            cor = str(row[0] or padrao["fonte_cor"])
+            tamanho = max(12, min(24, int(row[1] or 16)))
+            return {"fonte_cor": cor, "fonte_tamanho": tamanho}
+        return padrao
+    finally:
+        conn.close()
+
+
+def salvar_configuracoes_dispositivo(device_id, fonte_cor, fonte_tamanho):
+    conn, db_type = get_db_connection()
+    try:
+        cur = conn.cursor()
+        if db_type == "postgres":
+            cur.execute("""
+                INSERT INTO configuracoes_dispositivo (device_id, fonte_cor, fonte_tamanho, atualizado_em)
+                VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (device_id) DO UPDATE SET
+                    fonte_cor = EXCLUDED.fonte_cor,
+                    fonte_tamanho = EXCLUDED.fonte_tamanho,
+                    atualizado_em = CURRENT_TIMESTAMP
+            """, (device_id, fonte_cor, int(fonte_tamanho)))
+        else:
+            cur.execute("""
+                INSERT INTO configuracoes_dispositivo (device_id, fonte_cor, fonte_tamanho, atualizado_em)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(device_id) DO UPDATE SET
+                    fonte_cor = excluded.fonte_cor,
+                    fonte_tamanho = excluded.fonte_tamanho,
+                    atualizado_em = CURRENT_TIMESTAMP
+            """, (device_id, fonte_cor, int(fonte_tamanho)))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def init_db():
     conn, db_type = get_db_connection()
     try:
@@ -434,6 +1600,13 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
             """)
+            try:
+                cursor.execute("ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT")
+                cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT")
+                cursor.execute("ALTER TABLE baixas_avarias ADD COLUMN IF NOT EXISTS nf_baixa_b64 TEXT")
+            except Exception:
+                pass
+
             cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
             usr_adm = cursor.fetchone()
             senha_hash_adm = gerar_hash_senha('0332')
@@ -464,13 +1637,7 @@ def init_db():
             """)
             try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova'")
-            except Exception:
-                pass
-            try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN notif_desktop INTEGER DEFAULT 0")
-            except Exception:
-                pass
-            try:
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN custom_bg_b64 TEXT")
             except Exception:
                 pass
@@ -559,6 +1726,13 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
             """)
+            try:
+                cursor.execute("ALTER TABLE bonificacoes ADD COLUMN anexo_b64 TEXT")
+                cursor.execute("ALTER TABLE romaneios ADD COLUMN foto_b64 TEXT")
+                cursor.execute("ALTER TABLE baixas_avarias ADD COLUMN nf_baixa_b64 TEXT")
+            except Exception:
+                pass
+
             cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
             usr_adm = cursor.fetchone()
             senha_hash_adm = gerar_hash_senha('0332')
@@ -574,7 +1748,19 @@ def init_db():
     finally:
         conn.close()
 
+def manter_sessao_ativa_periodica():
+    agora_ts = time_module.time()
+    ultimo_ping = st.session_state.get("ultimo_keep_alive_ts", 0.0)
+    if agora_ts - ultimo_ping >= 240:
+        st.session_state["ultimo_keep_alive_ts"] = agora_ts
+        try:
+            executar_keep_alive_banco()
+        except Exception:
+            pass
+
 init_db()
+garantir_tabela_configuracoes_dispositivo()
+manter_sessao_ativa_periodica()
 
 if "usuario_logado" not in st.session_state:
     st.session_state["usuario_logado"] = None
@@ -617,9 +1803,6 @@ def fmt_ptbr(val, decimais=2):
     except Exception:
         return "0,00"
 
-# ---------------------------------------------------------
-# GERADORES DE PDF
-# ---------------------------------------------------------
 def gerar_pdf_romaneio(romaneio_data, itens_data):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
@@ -686,7 +1869,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
             img_bytes = base64.b64decode(b64_conf)
             img_io = io.BytesIO(img_bytes)
             img_pil = Image.open(img_io).convert("RGBA")
-            datas = img_pil.getdata()
+            datas = list(img_pil.getdata())
             newData = []
             for item in datas:
                 if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -716,7 +1899,7 @@ def gerar_pdf_romaneio(romaneio_data, itens_data):
             img_bytes_e = base64.b64decode(b64_ent)
             img_io_e = io.BytesIO(img_bytes_e)
             img_pil_e = Image.open(img_io_e).convert("RGBA")
-            datas_e = img_pil_e.getdata()
+            datas_e = list(img_pil_e.getdata())
             newData_e = []
             for item in datas_e:
                 if item[0] > 180 and item[1] > 180 and item[2] > 180:
@@ -957,60 +2140,98 @@ def obter_css_fundo(tema_selecionado, custom_b64=""):
     if tema_selecionado == "Fundo Branco":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #FFFFFF !important;
-            color: #1A202C !important;
+            color: #111827 !important;
         }
-        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label {
-            color: #1A202C !important;
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #111827 !important;
         }
         </style>
         """
     elif tema_selecionado == "Verde Supernova (Escuro)":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #0E140C !important;
-            color: #FFFFFF !important;
+            color: #F8FAFC !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #F8FAFC !important;
         }
         </style>
         """
     elif tema_selecionado == "Azul Corporativo Executivo":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #0A192F !important;
-            color: #FFFFFF !important;
+            color: #F8FAFC !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #F8FAFC !important;
         }
         </style>
         """
     elif tema_selecionado == "Grafite High-Tech":
         return """
         <style>
-        .stApp {
+        .stApp, [data-testid="stAppViewContainer"] {
             background-color: #181A1B !important;
-            color: #FFFFFF !important;
+            color: #F8FAFC !important;
+        }
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+            color: #F8FAFC !important;
         }
         </style>
         """
     elif custom_b64:
         return f"""
         <style>
-        .stApp {{
-            background-image: linear-gradient(rgba(0,0,0,0.65), rgba(0,0,0,0.65)), url("data:image/jpeg;base64,{custom_b64}");
+        .stApp, [data-testid="stAppViewContainer"] {{
+            background-image: linear-gradient(rgba(0,0,0,0.72), rgba(0,0,0,0.72)), url("data:image/jpeg;base64,{custom_b64}");
             background-size: cover;
             background-position: center;
             background-attachment: fixed;
+            color: #F8FAFC !important;
+        }}
+        .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {{
+            color: #F8FAFC !important;
         }}
         </style>
         """
-    return ""
+    return """
+    <style>
+    .stApp h1, .stApp h2, .stApp h3, .stApp h4, .stApp p, .stApp span, .stApp label, .stApp li {
+        color: #F8FAFC !important;
+    }
+    </style>
+    """
 
 img_padrao_fundo = None
-for nome_img in ["Tela de login.jpeg.jpeg", "Tela de login.jpeg", "image_e68cb8.jpg", "image_e5a475.jpg", "logo_romaneio.png.jpg"]:
-    if os.path.exists(nome_img):
-        img_padrao_fundo = nome_img
+arquivos_raiz = os.listdir(".") if os.path.exists(".") else []
+candidatos_prioritarios = [
+    "tela de login padrao.jpeg",
+    "tela de login padrao.jpg",
+    "tela de login padrao.png",
+    "tela de login padrao.jpeg.jpeg",
+    "tela_de_login_padrao.jpeg",
+    "tela_de_login_padrao.jpg",
+    "tela_de_login_padrao.png",
+]
+for cand in candidatos_prioritarios:
+    for arq in arquivos_raiz:
+        if arq.lower() == cand.lower():
+            img_padrao_fundo = arq
+            break
+    if img_padrao_fundo:
         break
+
+if not img_padrao_fundo:
+    for arq in arquivos_raiz:
+        if "tela de login padrao" in arq.lower() or "tela_de_login_padrao" in arq.lower():
+            img_padrao_fundo = arq
+            break
 
 b64_padrao_global = ""
 if img_padrao_fundo:
@@ -1033,11 +2254,12 @@ if st.session_state["usuario_logado"] is None:
     if css_login:
         st.markdown(css_login, unsafe_allow_html=True)
 
-    logo_display = None
-    for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "Tela de login.jpeg.jpeg"]:
-        if os.path.exists(nome):
-            logo_display = nome
-            break
+    logo_display = buscar_caminho_icone_app()
+    if not logo_display:
+        for nome in ["logo_romaneio.png.jpg", "logo_romaneio.png", "logo.png", "tela de login padrao.jpeg", "Tela de login.jpeg.jpeg"]:
+            if os.path.exists(nome):
+                logo_display = nome
+                break
             
     col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
     with col_central:
@@ -1076,37 +2298,47 @@ if st.session_state["usuario_logado"] is None:
                 if not loja_login_sel:
                     st.error("Por favor, selecione a loja em que você está atuando antes de entrar.")
                 else:
-                    spinner_supernova("Validando acesso no Supernova...")
-                    usuario = fazer_login(login_input, senha_input)
-                    if usuario:
-                        st.session_state["usuario_logado"] = {
-                            "id": usuario[0],
-                            "nome": usuario[1],
-                            "perfil": usuario[2],
-                            "login": usuario[3],
-                            "loja_atual": loja_login_sel
-                        }
-                        tema_usr_db = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
-                        st.session_state["tema_bg_selecionado"] = tema_usr_db
-                        st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
-                        
-                        if usuario[6]:
-                            st.session_state["custom_bg_b64"] = usuario[6]
-                        elif tema_usr_db == "Logomarca Oficial Supernova":
-                            st.session_state["custom_bg_b64"] = b64_padrao_global
+                    with spinner_supernova("Validando acesso no Supernova..."):
+                        usuario = fazer_login(login_input, senha_input)
+                        if usuario:
+                            st.session_state["usuario_logado"] = {
+                                "id": usuario[0],
+                                "nome": usuario[1],
+                                "perfil": usuario[2],
+                                "login": usuario[3],
+                                "loja_atual": loja_login_sel
+                            }
+                            tema_usr_db = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
+                            st.session_state["tema_bg_selecionado"] = tema_usr_db
+                            st.session_state["notif_desktop_toggle"] = bool(usuario[5]) if usuario[5] is not None else False
+                            
+                            if usuario[6]:
+                                st.session_state["custom_bg_b64"] = usuario[6]
+                            elif tema_usr_db == "Logomarca Oficial Supernova":
+                                st.session_state["custom_bg_b64"] = b64_padrao_global
 
-                        st.success(f"Bem-vindo(a), {usuario[1]} na {loja_login_sel}!")
-                        st.rerun()
-                    else:
-                        st.error("Usuário ou senha incorretos.")
+                            st.success(f"Bem-vindo(a), {usuario[1]} na {loja_login_sel}!")
+                            st.rerun()
+                        else:
+                            st.error("Usuário ou senha incorretos.")
 else:
     user_info = st.session_state["usuario_logado"]
     perfil_db = str(user_info.get("perfil", "")).strip().lower()
     
-    is_admin = (user_info["login"].lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
+    # Apenas o administrador/gestor pode alterar as preferências deste aparelho.
+    is_admin = (str(user_info.get("login", "")).lower() == "908" or "gestor" in perfil_db or "adm" in perfil_db or "assistente" in perfil_db)
     is_auxiliar = ("auxiliar" in perfil_db)
     is_conferente = ("conferente" in perfil_db and not is_admin and not is_auxiliar)
-    
+
+    # Preferências são carregadas pelo ID do navegador, não pelo usuário logado.
+    # Assim, após o administrador salvar e sair, o conferente verá o mesmo padrão.
+    try:
+        _prefs_device = carregar_configuracoes_dispositivo(_device_id)
+    except Exception as _prefs_error:
+        print(f"CONFIG DISPOSITIVO: não foi possível carregar preferências: {_prefs_error}")
+        _prefs_device = {"fonte_cor": "#F8FAFC", "fonte_tamanho": 16}
+    st.session_state["_fonte_cor_dispositivo"] = _prefs_device["fonte_cor"]
+    st.session_state["_fonte_tamanho_dispositivo"] = _prefs_device["fonte_tamanho"]
     loja_atual_usuario = user_info.get("loja_atual", "Não definida")
 
     tema_selecionado_usuario = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
@@ -1120,24 +2352,84 @@ else:
     if css_fundo_dinamico:
         st.markdown(css_fundo_dinamico, unsafe_allow_html=True)
 
-    st.markdown("---")
-    col_info_usr, col_botoes_topo = st.columns([2.5, 2.5], vertical_alignment="center")
-    with col_info_usr:
-        tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
-        st.markdown(f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt}")
-    
-    with col_botoes_topo:
-        c_btn1, c_btn2 = st.columns([1.2, 1])
-        with c_btn1:
-            if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo"):
-                st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
-        with c_btn2:
-            if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal"):
-                st.session_state["usuario_logado"] = None
-                st.rerun()
+    # Aplicar depois do tema para que a preferência do administrador prevaleça.
+    st.markdown(f"""<style>
+    .stApp, .stApp p, .stApp label, .stApp span, .stApp li,
+    .stApp div[data-testid="stMarkdownContainer"],
+    .stApp input, .stApp textarea, .stApp select,
+    .stApp [data-testid="stMetricValue"] {{
+        color: {_prefs_device['fonte_cor']} !important;
+        font-size: {_prefs_device['fonte_tamanho']}px !important;
+    }}
+    </style>""", unsafe_allow_html=True)
 
-    if st.session_state.get("exibir_modal_config", False):
+    st.markdown("---")
+    tipo_perfil_txt = f"👤 {user_info.get('perfil', 'Usuário')} ({loja_atual_usuario})"
+    modo_bd_atual = st.session_state.get("_banco_ativo_modo", "Neon (Principal)")
+    cor_bd_badge = "#2e7d32" if "Principal" in modo_bd_atual else "#ed6c02"
+    st.markdown(
+        f"**Usuário:** {user_info['nome']} &nbsp;|&nbsp; **Perfil:** {tipo_perfil_txt} &nbsp;|&nbsp; "
+        f"<span style='background:{cor_bd_badge};color:#fff;padding:2px 8px;border-radius:10px;font-size:13px;'>🗄️ {modo_bd_atual}</span>",
+        unsafe_allow_html=True,
+    )
+    qtd_sync_recente = st.session_state.pop("_qtd_ultima_sincronizacao", 0)
+    if qtd_sync_recente > 0:
+        st.success(f"🔄 {qtd_sync_recente} registro(s) salvos na contingência (Supabase) foram sincronizados automaticamente para o Neon!")
+
+    _colunas_topo = st.columns([1.2, 1.2, 1.0] if is_admin else [1.2, 1.0], vertical_alignment="center")
+    with _colunas_topo[0]:
+        if st.button("🔄 Atualizar aplicativo", type="secondary", key="btn_atualizar_app_topo", use_container_width=True, help="Limpar caches, sincronizar e recarregar os dados"):
+            with spinner_supernova("Atualizando aplicativo e dados...", duracao_minima=0.5):
+                try:
+                    st.cache_data.clear()
+                except Exception:
+                    for _cache_fn in (carregar_produtos_cached, carregar_fornecedores_cached):
+                        try:
+                            _cache_fn.clear()
+                        except Exception:
+                            pass
+                try:
+                    tentar_reconciliacao_automatica(forcar=True)
+                except Exception as _refresh_error:
+                    print(f"ATUALIZAR APP: falha na sincronização: {_refresh_error}")
+            st.rerun()
+    if is_admin:
+        with _colunas_topo[1]:
+            if st.button("⚙️ Configurações", type="primary", key="btn_abrir_config_topo", use_container_width=True):
+                st.session_state["exibir_modal_config"] = not st.session_state.get("exibir_modal_config", False)
+    with _colunas_topo[-1]:
+        if st.button("🚪 Sair", type="secondary", key="btn_sair_sistema_principal", use_container_width=True):
+            st.session_state["usuario_logado"] = None
+            st.session_state["exibir_modal_config"] = False
+            st.rerun()
+
+    if is_admin and st.session_state.get("exibir_modal_config", False):
         with st.expander("⚙️ Configurações do Aplicativo & Planos de Fundo Múltiplos", expanded=True):
+            st.markdown("### 🔤 Aparência das fontes deste aparelho")
+            st.caption("Estas preferências ficam salvas neste navegador/aparelho. O administrador configura uma vez; depois o conferente pode entrar com o próprio usuário.")
+            _prefs_atuais = carregar_configuracoes_dispositivo(_device_id)
+            cfg_cor_fonte = st.color_picker("Cor das fontes", value=_prefs_atuais["fonte_cor"], key="cfg_cor_fonte_device")
+            cfg_tamanho_fonte = st.slider("Tamanho das fontes", min_value=12, max_value=24, value=int(_prefs_atuais["fonte_tamanho"]), step=1, key="cfg_tamanho_fonte_device")
+            if st.button("💾 Salvar aparência neste aparelho", type="primary", key="btn_salvar_aparencia_device"):
+                try:
+                    salvar_configuracoes_dispositivo(_device_id, cfg_cor_fonte, cfg_tamanho_fonte)
+                    st.success("Aparência salva neste aparelho. Ela continuará ativa após sair do administrador e entrar com o usuário do conferente.")
+                    st.rerun()
+                except Exception as _save_style_error:
+                    st.error(f"Não foi possível salvar a aparência: {_save_style_error}")
+
+            st.markdown("---")
+            st.markdown("### 📣 Teste de envio para o Google Chat")
+            if st.button("Enviar mensagem de teste ao Google Chat", key="btn_testar_google_chat"):
+                _teste_chat_ok = enviar_notificacao_google_chat(
+                    f"✅ Teste do HortiControl Supernova realizado em {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}."
+                )
+                if _teste_chat_ok:
+                    st.success("O Google Chat aceitou a mensagem. Confira o espaço configurado.")
+                else:
+                    st.error("O envio falhou. Abra os Logs do Streamlit Cloud e procure por GOOGLE CHAT para ver o motivo.")
+
+            st.markdown("---")
             st.markdown("### 🔔 Notificações Nativas")
             notif_desktop_toggle = st.toggle(
                 "Ativar Notificações na Tela (Desktop / Navegador)", 
@@ -1236,27 +2528,28 @@ else:
             col_salv_cfg1, col_salv_cfg2 = st.columns([2, 1])
             with col_salv_cfg1:
                 if st.button("💾 Aplicar e Salvar Configurações", type="primary", key="btn_fechar_cfg_painel"):
-                    conn_cfg, db_t_cfg = get_db_connection()
-                    try:
-                        cur_cfg = conn_cfg.cursor()
-                        u_id = int(user_info["id"]) if db_t_cfg == "postgres" else user_info["id"]
-                        bg_b64_val = st.session_state.get("custom_bg_b64", "")
-                        notif_val = 1 if st.session_state.get("notif_desktop_toggle", False) else 0
-                        tema_val = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
-                        
-                        cur_cfg.execute(
-                            "UPDATE usuarios SET tema_bg = %s, notif_desktop = %s, custom_bg_b64 = %s WHERE id = %s" if db_t_cfg == "postgres" else "UPDATE usuarios SET tema_bg = ?, notif_desktop = ?, custom_bg_b64 = ? WHERE id = ?",
-                            (tema_val, notif_val, bg_b64_val, u_id)
-                        )
-                        conn_cfg.commit()
-                        st.session_state["exibir_modal_config"] = False
-                        st.success("Configurações salvas permanentemente com sucesso!")
-                        st.rerun()
-                    except Exception as e:
-                        conn_cfg.rollback()
-                        st.error(f"Erro ao salvar configurações: {e}")
-                    finally:
-                        conn_cfg.close()
+                    with spinner_supernova("Salvando configurações..."):
+                        conn_cfg, db_t_cfg = get_db_connection()
+                        try:
+                            cur_cfg = conn_cfg.cursor()
+                            u_id = int(user_info["id"]) if db_t_cfg == "postgres" else user_info["id"]
+                            bg_b64_val = st.session_state.get("custom_bg_b64", "")
+                            notif_val = 1 if st.session_state.get("notif_desktop_toggle", False) else 0
+                            tema_val = st.session_state.get("tema_bg_selecionado", "Logomarca Oficial Supernova")
+                            
+                            cur_cfg.execute(
+                                "UPDATE usuarios SET tema_bg = %s, notif_desktop = %s, custom_bg_b64 = %s WHERE id = %s" if db_t_cfg == "postgres" else "UPDATE usuarios SET tema_bg = ?, notif_desktop = ?, custom_bg_b64 = ? WHERE id = ?",
+                                (tema_val, notif_val, bg_b64_val, u_id)
+                            )
+                            conn_cfg.commit()
+                            st.session_state["exibir_modal_config"] = False
+                            st.success("Configurações salvas permanentemente com sucesso!")
+                            st.rerun()
+                        except Exception as e:
+                            conn_cfg.rollback()
+                            st.error(f"Erro ao salvar configurações: {e}")
+                        finally:
+                            conn_cfg.close()
 
     if is_conferente:
         opcoes_menu_map = {
@@ -1284,9 +2577,16 @@ else:
         "Menu de Navegação Principal",
         list(opcoes_menu_map.keys()),
         horizontal=True,
-        label_visibility="collapsed"
+        label_visibility="collapsed",
+        key="menu_navegacao_principal_radio"
     )
     menu = opcoes_menu_map[menu_selecionado_label]
+    if "ultimo_menu_ativo" not in st.session_state:
+        st.session_state["ultimo_menu_ativo"] = menu
+    elif st.session_state["ultimo_menu_ativo"] != menu:
+        st.session_state["ultimo_menu_ativo"] = menu
+        with spinner_supernova(f"Abrindo {menu_selecionado_label}...", duracao_minima=0.5):
+            pass
     st.markdown("---")
     
     if menu == "Romaneio de Recebimento - Hortifrúti":
@@ -1305,8 +2605,9 @@ else:
         k_suffix = st.session_state["form_key_suffix"]
         i_suffix = st.session_state["item_key_suffix"]
 
-        produtos_lista = carregar_produtos_cached()
-        fornecedores_lista = carregar_fornecedores_cached()
+        with spinner_supernova("Carregando produtos e fornecedores..."):
+            produtos_lista = carregar_produtos_cached()
+            fornecedores_lista = carregar_fornecedores_cached()
 
         prod_dict = {}
         for p in produtos_lista:
@@ -1320,9 +2621,8 @@ else:
         forn_nomes_keys = []
         for f in fornecedores_lista:
             nome_f = f[0]
-            cod_f = str(f[1]).strip() if f[1] else ""
             forn_nomes_keys.append(nome_f)
-            forn_por_nome[nome_f] = cod_f
+            forn_por_nome[nome_f] = str(f[1]).strip() if f[1] else ""
 
         if f"val_cod_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_cod_forn_{k_suffix}"] = ""
         if f"val_sel_forn_{k_suffix}" not in st.session_state: st.session_state[f"val_sel_forn_{k_suffix}"] = ""
@@ -1343,7 +2643,7 @@ else:
                     data_hoje_str = datetime.now(ZoneInfo("America/Manaus")).strftime("%Y%m%d%H%M%S")
                     st.session_state[f"num_rom_auto_{k_suffix}"] = f"ROM-{data_hoje_str}"
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
-                tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...", on_change=lambda: st.rerun())
+                tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...")
             with col2:
                 data_rec_val = seletor_data_unificado("Data do Recebimento (Livre - A partir de 2000)", f"rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
@@ -1381,7 +2681,7 @@ else:
                     if len(raw) >= 3: fmt += f") {raw[2:7]}"
                     if len(raw) >= 8: fmt += f"-{raw[7:]}"
                     st.session_state[tel_key] = fmt
-                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", value="", placeholder="(00) 00000-0000", key=tel_key, on_change=formatar_tel)
+                tel_fornecedor = st.text_input("Telefone de Contato (Opcional)", placeholder="", key=tel_key, on_change=formatar_tel)
             with col_tel2:
                 pag_a_vista = st.selectbox("Pagamento à Vista?", ["", "SIM", "NÃO"], index=0, placeholder="Selecione...", key=f"pag_vista_{k_suffix}")
             
@@ -1403,9 +2703,9 @@ else:
             und_padrao = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
             und_sel = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=(["KG", "UNID", "GRM", "CX"].index(und_padrao) if und_padrao in ["KG", "UNID", "GRM", "CX"] else 0), key=f"und_sel_{k_suffix}_{i_suffix}")
         with col_p3:
-            qtd_str_input = st.text_input("Qtd / Peso", value="", placeholder="0,000", key=f"qtd_{k_suffix}_{i_suffix}")
+            qtd_str_input = st.text_input("Qtd / Peso", placeholder="", key=f"qtd_{k_suffix}_{i_suffix}")
         with col_p4:
-            val_unit_str_input = st.text_input("Valor Unit. (R$)", value="", placeholder="0,00", key=f"vunit_{k_suffix}_{i_suffix}")
+            val_unit_str_input = st.text_input("Valor Unit. (R$)", placeholder="", key=f"vunit_{k_suffix}_{i_suffix}")
         with col_p5:
             st.write("")
             st.write("")
@@ -1446,7 +2746,7 @@ else:
         fotos_upload = st.file_uploader("Foto da Mercadoria / Nota Fiscal", type=["jpg", "jpeg", "png", "pdf"], accept_multiple_files=True, key=f"fotos_{k_suffix}")
 
         st.subheader("4. Informações Adicionais / Observações")
-        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", value="", placeholder="Insira observações relevantes aqui...", key=f"obs_{k_suffix}")
+        observacoes_romaneio = st.text_area("Observações sobre a carga, qualidade ou divergências", placeholder="", key=f"obs_{k_suffix}")
 
         st.subheader("5. Assinatura Digital")
         col_ass1, col_ass2 = st.columns(2)
@@ -1474,102 +2774,120 @@ else:
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
             elif not st.session_state["itens_romaneio"]: st.error("Adicione itens ao romaneio.")
             else:
-                spinner_supernova("Salvando romaneio no Supernova...")
-                conn, db_type = get_db_connection()
-                try:
-                    if not os.path.exists("uploads"): os.makedirs("uploads")
-                    
-                    path_ass_conf = ""
-                    b64_conf_str = ""
-                    if canvas_conf.image_data is not None:
-                        img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
-                        path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
-                        img_c.save(path_ass_conf)
+                with spinner_supernova("Salvando romaneio no Supernova..."):
+                    conn, db_type = get_db_connection()
+                    try:
+                        if not os.path.exists("uploads"): os.makedirs("uploads")
                         
-                        buffered_c = io.BytesIO()
-                        img_c.save(buffered_c, format="PNG")
-                        b64_conf_str = base64.b64encode(buffered_c.getvalue()).decode("utf-8")
+                        path_ass_conf = ""
+                        b64_conf_str = ""
+                        if canvas_conf.image_data is not None:
+                            img_c = Image.fromarray(canvas_conf.image_data.astype("uint8"))
+                            path_ass_conf = os.path.join("uploads", f"ass_conf_{num_rom_final}.png")
+                            img_c.save(path_ass_conf)
+                            
+                            buffered_c = io.BytesIO()
+                            img_c.save(buffered_c, format="PNG")
+                            b64_conf_str = base64.b64encode(buffered_c.getvalue()).decode("utf-8")
 
-                    path_ass_ent = ""
-                    b64_ent_str = ""
-                    if canvas_ent.image_data is not None:
-                        img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
-                        path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
-                        img_e.save(path_ass_ent)
-                        
-                        buffered_e = io.BytesIO()
-                        img_e.save(buffered_e, format="PNG")
-                        b64_ent_str = base64.b64encode(buffered_e.getvalue()).decode("utf-8")
+                        path_ass_ent = ""
+                        b64_ent_str = ""
+                        if canvas_ent.image_data is not None:
+                            img_e = Image.fromarray(canvas_ent.image_data.astype("uint8"))
+                            path_ass_ent = os.path.join("uploads", f"ass_ent_{num_rom_final}.png")
+                            img_e.save(path_ass_ent)
+                            
+                            buffered_e = io.BytesIO()
+                            img_e.save(buffered_e, format="PNG")
+                            b64_ent_str = base64.b64encode(buffered_e.getvalue()).decode("utf-8")
 
-                    caminho_foto_salva = ""
-                    if fotos_upload:
-                        for f in fotos_upload:
-                            path_f = os.path.join("uploads", f.name)
-                            f_bytes = f.getbuffer()
-                            with open(path_f, "wb") as f_out: f_out.write(f_bytes)
-                            caminho_foto_salva = path_f
+                        caminho_foto_salva = ""
+                        b64_foto_str = ""
+                        if fotos_upload:
+                            for f in fotos_upload:
+                                path_f = os.path.join("uploads", f.name)
+                                f_bytes = f.getbuffer()
+                                with open(path_f, "wb") as f_out: f_out.write(f_bytes)
+                                caminho_foto_salva = path_f
+                                b64_foto_str = base64.b64encode(f_bytes).decode("utf-8")
 
-                    cursor = conn.cursor()
-                    if db_type == "postgres":
-                        cursor.execute("""
-                        INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino,
-                        data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista,
-                        data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao,
-                        observacoes, foto_b64, ass_conf_b64, ass_ent_b64)
-                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
-                        """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, "", b64_conf_str, b64_ent_str))
-                        romaneio_id = cursor.fetchone()[0]
-                    else:
-                        cursor.execute("""
-                        INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino,
-                        data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista,
-                        data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao,
-                        observacoes, foto_b64, ass_conf_b64, ass_ent_b64)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, "", b64_conf_str, b64_ent_str))
-                        romaneio_id = cursor.lastrowid
-
-                    itens_salvos_pdf = []
-                    for itm in st.session_state["itens_romaneio"]:
-                        q_val = float(itm["quantidade"])
-                        v_u_val = float(itm["valor_unitario"])
-                        v_t_val = float(itm["valor_total"])
-                        r_id_val = int(romaneio_id) if db_type == "postgres" else romaneio_id
-                        
+                        cursor = conn.cursor()
                         if db_type == "postgres":
-                            cursor.execute("INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)", (r_id_val, str(itm["produto"]), q_val, str(itm["unidade"]), v_u_val, v_t_val))
+                            cursor.execute("""
+                            INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino,
+                            data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista,
+                            data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao,
+                            observacoes, foto_b64, ass_conf_b64, ass_ent_b64)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                            """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, b64_foto_str, b64_conf_str, b64_ent_str))
+                            romaneio_id = cursor.fetchone()[0]
                         else:
-                            cursor.execute("INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (?, ?, ?, ?, ?, ?)", (r_id_val, str(itm["produto"]), q_val, str(itm["unidade"]), v_u_val, v_t_val))
-                        itens_salvos_pdf.append([None, itm["produto"], q_val, itm["unidade"], v_u_val, v_t_val])
+                            cursor.execute("""
+                            INSERT INTO romaneios (numero_romaneio, loja, loja_origem, loja_destino,
+                            data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista,
+                            data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao,
+                            observacoes, foto_b64, ass_conf_b64, ass_ent_b64)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (num_rom_final, loja, loja_origem, loja_destino, data_rec_str, forn_final, cod_forn_val, tel_fornecedor, user_info["nome"], pag_a_vista, data_pag_str, caminho_foto_salva, path_ass_conf, path_ass_ent, 'Pendente', tipo_operacao, observacoes_romaneio, b64_foto_str, b64_conf_str, b64_ent_str))
+                            romaneio_id = cursor.lastrowid
 
-                    conn.commit()
+                        itens_salvos_pdf = []
+                        for itm in st.session_state["itens_romaneio"]:
+                            q_val = float(itm["quantidade"])
+                            v_u_val = float(itm["valor_unitario"])
+                            v_t_val = float(itm["valor_total"])
+                            r_id_val = int(romaneio_id) if db_type == "postgres" else romaneio_id
+                            
+                            if db_type == "postgres":
+                                cursor.execute("INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)", (r_id_val, str(itm["produto"]), q_val, str(itm["unidade"]), v_u_val, v_t_val))
+                            else:
+                                cursor.execute("INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (?, ?, ?, ?, ?, ?)", (r_id_val, str(itm["produto"]), q_val, str(itm["unidade"]), v_u_val, v_t_val))
+                            itens_salvos_pdf.append([None, itm["produto"], q_val, itm["unidade"], v_u_val, v_t_val])
 
-                    romaneio_dict_atual = {
-                        "numero_romaneio": num_rom_final, "data_recebimento": data_rec_str,
-                        "fornecedor": forn_final, "codigo_fornecedor": cod_forn_val,
-                        "telefone_fornecedor": tel_fornecedor, "loja": loja,
-                        "loja_origem": loja_origem, "loja_destino": loja_destino,
-                        "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista,
-                        "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao,
-                        "observacoes": observacoes_romaneio,
-                        "ass_conf_b64": b64_conf_str, "ass_ent_b64": b64_ent_str
-                    }
+                        conn.commit()
 
-                    disparar_notificacao_sistema(romaneio_dict_atual, st.session_state["itens_romaneio"])
+                        romaneio_dict_atual = {
+                            "numero_romaneio": num_rom_final, "data_recebimento": data_rec_str,
+                            "fornecedor": forn_final, "codigo_fornecedor": cod_forn_val,
+                            "telefone_fornecedor": tel_fornecedor, "loja": loja,
+                            "loja_origem": loja_origem, "loja_destino": loja_destino,
+                            "conferente": user_info["nome"], "pagamento_a_vista": pag_a_vista,
+                            "data_pagamento": data_pag_str, "tipo_operacao": tipo_operacao,
+                            "observacoes": observacoes_romaneio,
+                            "ass_conf_b64": b64_conf_str, "ass_ent_b64": b64_ent_str
+                        }
 
-                    pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf)
-                    st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
-                    st.session_state["ultimo_num_romaneio"] = num_rom_final
-                    st.session_state["itens_romaneio"] = []
-                    st.session_state["form_key_suffix"] += 1
-                    st.session_state["item_key_suffix"] = 0
-                    st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso! Notificação enviada.")
-                    st.rerun()
-                except Exception as e:
-                    conn.rollback()
-                    st.error(f"Erro ao salvar romaneio: {e}")
-                finally:
-                    conn.close()
+                        disparar_notificacao_sistema(romaneio_dict_atual, st.session_state["itens_romaneio"])
+
+                        itens_romaneio_chat = st.session_state["itens_romaneio"]
+                        primeiro_item_chat = itens_romaneio_chat[0].get("produto", "Diversos") if itens_romaneio_chat else "Diversos"
+                        mensagem_romaneio_chat = (
+                            "📋 *NOVO ROMANEIO CADASTRADO*\n"
+                            f"Número: {num_rom_final}\n"
+                            f"Operação: {tipo_operacao}\n"
+                            f"Loja: {loja or loja_destino or 'Não informada'}\n"
+                            f"Fornecedor: {forn_final}\n"
+                            f"Conferente: {user_info['nome']}\n"
+                            f"Data de recebimento: {data_rec_str}\n"
+                            f"Itens: {len(itens_romaneio_chat)}\n"
+                            f"Primeiro item: {primeiro_item_chat}"
+                        )
+                        chat_romaneio_enviado = enviar_notificacao_google_chat(mensagem_romaneio_chat)
+
+                        pdf_buffer_novo = gerar_pdf_romaneio(romaneio_dict_atual, itens_salvos_pdf)
+                        st.session_state["ultimo_pdf_bytes"] = pdf_buffer_novo.getvalue()
+                        st.session_state["ultimo_num_romaneio"] = num_rom_final
+                        st.session_state["itens_romaneio"] = []
+                        st.session_state["form_key_suffix"] += 1
+                        st.session_state["item_key_suffix"] = 0
+                        status_chat_rom = " Google Chat notificado." if chat_romaneio_enviado else " (Google Chat não notificado; confira os Secrets)."
+                        st.success(f"Romaneio {num_rom_final} gerado e salvo com sucesso!" + status_chat_rom)
+                        st.rerun()
+                    except Exception as e:
+                        conn.rollback()
+                        st.error(f"Erro ao salvar romaneio: {e}")
+                    finally:
+                        conn.close()
 
         if "ultimo_pdf_bytes" in st.session_state and "ultimo_num_romaneio" in st.session_state:
             st.markdown("---")
@@ -1583,12 +2901,13 @@ else:
 
     elif menu == "Consultar Romaneios":
         st.title("🗂️ Consultar & Gerenciar Romaneios de Recebimento")
-        conn, db_type = get_db_connection()
-        try:
-            df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes, ass_conf_b64, ass_ent_b64 FROM romaneios ORDER BY id DESC", conn)
-            df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
-        finally:
-            conn.close()
+        with spinner_supernova("Carregando romaneios..."):
+            conn, db_type = get_db_connection()
+            try:
+                df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes, ass_conf_b64, ass_ent_b64 FROM romaneios ORDER BY id DESC", conn)
+                df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
+            finally:
+                conn.close()
 
         if df_rom.empty:
             st.info("Nenhum romaneio registrado no sistema.")
@@ -1670,7 +2989,7 @@ else:
                                 else:
                                     st.markdown(f"**Total de registros em '{tipo_op_val}':** {len(df_tipo_atual)}")
                                     df_planilha = df_tipo_atual.copy()
-                                    df_planilha["Anexo"] = df_planilha.apply(lambda r: "📎 Disponível" if (r.get("caminho_foto") and os.path.exists(str(r["caminho_foto"]))) else "Sem Anexo", axis=1)
+                                    df_planilha["Anexo"] = df_planilha.apply(lambda r: "📎 Disponível" if ((r.get("caminho_foto") and os.path.exists(str(r["caminho_foto"]))) or (r.get("foto_b64") and len(str(r["foto_b64"])) > 10)) else "Sem Anexo", axis=1)
                                     df_planilha["Valor Total"] = df_planilha["valor_total_rom"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
 
                                     df_planilha_show = df_planilha.rename(columns={
@@ -1701,16 +3020,17 @@ else:
                                         with col_anx:
                                             st.markdown("**📎 Coluna de Anexo**")
                                             cam_foto = row_sel.get('caminho_foto', '')
-                                            if cam_foto:
+                                            if cam_foto or row_sel.get('foto_b64'):
                                                 if st.button("🖼️ Visualizar Nota / Anexo", key=f"btn_ver_anx_grid_{chv_elem}", type="primary"):
-                                                    conn_b64, _ = get_db_connection()
-                                                    try:
-                                                        cur_b64 = conn_b64.cursor()
-                                                        cur_b64.execute("SELECT foto_b64 FROM romaneios WHERE id = %s" if HAS_POSTGRES else "SELECT foto_b64 FROM romaneios WHERE id = ?", (id_rom_sel,))
-                                                        res_b64 = cur_b64.fetchone()
-                                                    finally:
-                                                        conn_b64.close()
-                                                    exibir_foto_modal(cam_foto, res_b64[0] if res_b64 else None)
+                                                    with spinner_supernova("Carregando anexo..."):
+                                                        conn_b64, _ = get_db_connection()
+                                                        try:
+                                                            cur_b64 = conn_b64.cursor()
+                                                            cur_b64.execute("SELECT foto_b64 FROM romaneios WHERE id = %s" if HAS_POSTGRES else "SELECT foto_b64 FROM romaneios WHERE id = ?", (id_rom_sel,))
+                                                            res_b64 = cur_b64.fetchone()
+                                                        finally:
+                                                            conn_b64.close()
+                                                        exibir_foto_modal(cam_foto, res_b64[0] if res_b64 else row_sel.get('foto_b64'))
                                             else:
                                                 st.info("Sem anexo anexado.")
 
@@ -1724,23 +3044,23 @@ else:
                                                 novo_st_sel = st.selectbox("Status", opcoes_status_rom, index=idx_st_padr, key=f"sel_st_grid_{chv_elem}", label_visibility="collapsed")
                                             with col_btn_s:
                                                 if st.button("💾 Salvar Status", key=f"btn_st_grid_{chv_elem}"):
-                                                    spinner_supernova("Atualizando status...")
-                                                    conn_st, db_t_st = get_db_connection()
-                                                    try:
-                                                        cur_st = conn_st.cursor()
-                                                        r_id_st = int(id_rom_sel) if db_t_st == "postgres" else id_rom_sel
-                                                        cur_st.execute(
-                                                            "UPDATE romaneios SET status_nota = %s WHERE id = %s" if db_t_st == "postgres" else "UPDATE romaneios SET status_nota = ? WHERE id = ?",
-                                                            (str(novo_st_sel), r_id_st)
-                                                        )
-                                                        conn_st.commit()
-                                                        st.success("Status atualizado com sucesso!")
-                                                        st.rerun()
-                                                    except Exception as e:
-                                                        conn_st.rollback()
-                                                        st.error(f"Erro ao salvar status: {e}")
-                                                    finally:
-                                                        conn_st.close()
+                                                    with spinner_supernova("Atualizando status..."):
+                                                        conn_st, db_t_st = get_db_connection()
+                                                        try:
+                                                            cur_st = conn_st.cursor()
+                                                            r_id_st = int(id_rom_sel) if db_t_st == "postgres" else id_rom_sel
+                                                            cur_st.execute(
+                                                                "UPDATE romaneios SET status_nota = %s WHERE id = %s" if db_t_st == "postgres" else "UPDATE romaneios SET status_nota = ? WHERE id = ?",
+                                                                (str(novo_st_sel), r_id_st)
+                                                            )
+                                                            conn_st.commit()
+                                                            st.success("Status atualizado com sucesso!")
+                                                            st.rerun()
+                                                        except Exception as e:
+                                                            conn_st.rollback()
+                                                            st.error(f"Erro ao salvar status: {e}")
+                                                        finally:
+                                                            conn_st.close()
 
                                         with col_pdf_act:
                                             st.markdown("**📄 Relatório PDF / Exclusão**")
@@ -1761,21 +3081,21 @@ else:
                                             with col_del_p:
                                                 if is_admin:
                                                     if st.button("🗑️", key=f"btn_del_grid_{chv_elem}", help="Excluir Romaneio", type="secondary"):
-                                                        spinner_supernova("Excluindo romaneio...")
-                                                        conn_del, db_t_del = get_db_connection()
-                                                        try:
-                                                            cur_del = conn_del.cursor()
-                                                            r_id_del = int(id_rom_sel) if db_t_del == "postgres" else id_rom_sel
-                                                            cur_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s" if db_t_del == "postgres" else "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (r_id_del,))
-                                                            cur_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (r_id_del,))
-                                                            conn_del.commit()
-                                                            st.success("Excluído com sucesso!")
-                                                            st.rerun()
-                                                        except Exception as e:
-                                                            conn_del.rollback()
-                                                            st.error(f"Erro: {e}")
-                                                        finally:
-                                                            conn_del.close()
+                                                        with spinner_supernova("Excluindo romaneio..."):
+                                                            conn_del, db_t_del = get_db_connection()
+                                                            try:
+                                                                cur_del = conn_del.cursor()
+                                                                r_id_del = int(id_rom_sel) if db_t_del == "postgres" else id_rom_sel
+                                                                cur_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s" if db_t_del == "postgres" else "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (r_id_del,))
+                                                                cur_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (r_id_del,))
+                                                                conn_del.commit()
+                                                                st.success("Excluído com sucesso!")
+                                                                st.rerun()
+                                                            except Exception as e:
+                                                                conn_del.rollback()
+                                                                st.error(f"Erro: {e}")
+                                                            finally:
+                                                                conn_del.close()
 
                                         with st.expander(f"📋 Ver Itens Cadastrados no Romaneio {row_sel['numero_romaneio']}", expanded=False):
                                             if not df_itens_r.empty:
@@ -1806,40 +3126,43 @@ else:
                                                     btn_salvar_ed_rom = st.form_submit_button("💾 Salvar Alterações do Romaneio", type="primary")
 
                                                     if btn_salvar_ed_rom:
-                                                        spinner_supernova("Salvando alterações do romaneio...")
-                                                        conn_urom, db_turom = get_db_connection()
-                                                        try:
-                                                            path_foto_ed = row_sel.get("caminho_foto", "")
-                                                            if novo_anexo_rom_up:
-                                                                if not os.path.exists("uploads"): os.makedirs("uploads")
-                                                                path_foto_ed = os.path.join("uploads", f"ROM_EDIT_{row_sel['numero_romaneio']}_{novo_anexo_rom_up.name}")
-                                                                b_up_rom = novo_anexo_rom_up.getbuffer()
-                                                                with open(path_foto_ed, "wb") as f_out: f_out.write(b_up_rom)
+                                                        with spinner_supernova("Salvando alterações do romaneio..."):
+                                                            conn_urom, db_turom = get_db_connection()
+                                                            try:
+                                                                path_foto_ed = row_sel.get("caminho_foto", "")
+                                                                b64_foto_ed = row_sel.get("foto_b64", "")
+                                                                if novo_anexo_rom_up:
+                                                                    if not os.path.exists("uploads"): os.makedirs("uploads")
+                                                                    path_foto_ed = os.path.join("uploads", f"ROM_EDIT_{row_sel['numero_romaneio']}_{novo_anexo_rom_up.name}")
+                                                                    b_up_rom = novo_anexo_rom_up.getbuffer()
+                                                                    with open(path_foto_ed, "wb") as f_out: f_out.write(b_up_rom)
+                                                                    b64_foto_ed = base64.b64encode(b_up_rom).decode("utf-8")
 
-                                                            cur_urom = conn_urom.cursor()
-                                                            r_id_urom = int(id_rom_sel) if db_turom == "postgres" else id_rom_sel
-                                                            if novo_anexo_rom_up:
-                                                                cur_urom.execute(
-                                                                    "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s, caminho_foto = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ?, caminho_foto = ? WHERE id = ?",
-                                                                    (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), path_foto_ed, r_id_urom)
-                                                                )
-                                                            else:
-                                                                cur_urom.execute(
-                                                                    "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ? WHERE id = ?",
-                                                                    (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), r_id_urom)
-                                                                )
-                                                            conn_urom.commit()
-                                                            st.success("Romaneio atualizado com sucesso pelo administrador!")
-                                                            st.rerun()
-                                                        except Exception as e:
-                                                            conn_urom.rollback()
-                                                            st.error(f"Erro ao editar romaneio: {e}")
-                                                        finally:
-                                                            conn_urom.close()
+                                                                cur_urom = conn_urom.cursor()
+                                                                r_id_urom = int(id_rom_sel) if db_turom == "postgres" else id_rom_sel
+                                                                if novo_anexo_rom_up:
+                                                                    cur_urom.execute(
+                                                                        "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s, caminho_foto = %s, foto_b64 = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ?, caminho_foto = ?, foto_b64 = ? WHERE id = ?",
+                                                                        (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), path_foto_ed, b64_foto_ed, r_id_urom)
+                                                                    )
+                                                                else:
+                                                                    cur_urom.execute(
+                                                                        "UPDATE romaneios SET fornecedor = %s, codigo_fornecedor = %s, telefone_fornecedor = %s, tipo_operacao = %s, pagamento_a_vista = %s, data_pagamento = %s, observacoes = %s WHERE id = %s" if db_turom == "postgres" else "UPDATE romaneios SET fornecedor = ?, codigo_fornecedor = ?, telefone_fornecedor = ?, tipo_operacao = ?, pagamento_a_vista = ?, data_pagamento = ?, observacoes = ? WHERE id = ?",
+                                                                        (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), r_id_urom)
+                                                                    )
+                                                                conn_urom.commit()
+                                                                st.success("Romaneio atualizado com sucesso pelo administrador!")
+                                                                st.rerun()
+                                                            except Exception as e:
+                                                                conn_urom.rollback()
+                                                                st.error(f"Erro ao editar romaneio: {e}")
+                                                            finally:
+                                                                conn_urom.close()
 
     elif menu == "Controle de Bonificação":
-        st.title("🎁 Controle de Bonificação Hortifrúti")
-        prods_cad = carregar_produtos_cached()
+        with spinner_supernova("Carregando bonificações..."):
+            st.title("🎁 Controle de Bonificação Hortifrúti")
+            prods_cad = carregar_produtos_cached()
 
         lista_opcoes_prod = []
         for p in prods_cad:
@@ -1847,62 +3170,80 @@ else:
             c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
             lista_opcoes_prod.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
+        if "bonf_form_suf" not in st.session_state:
+            st.session_state["bonf_form_suf"] = 0
+        bf_suf = st.session_state["bonf_form_suf"]
+
         with st.expander("➕ Cadastrar Nova Bonificação", expanded=False):
-            with st.form("form_cad_bonificacao", clear_on_submit=True):
+            with st.form(f"form_cad_bonificacao_{bf_suf}", clear_on_submit=False):
                 col_b1, col_b2, col_b3 = st.columns([1.5, 1.5, 1.5])
                 with col_b1:
-                    num_nota_bonf = st.text_input("N° Nota Fiscal", value="", placeholder="Número da nota...")
+                    num_nota_bonf = st.text_input("N° Nota Fiscal", placeholder="", key=f"bonf_nota_{bf_suf}")
                     lista_lojas_cad_b = ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_cad_b = lista_lojas_cad_b.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_cad_b else 0
-                    loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, placeholder="Selecione a loja...", key="loja_bonf_sel")
+                    loja_bonf = st.selectbox("Loja", lista_lojas_cad_b, index=idx_l_cad_b, placeholder="Selecione a loja...", key=f"loja_bonf_sel_{bf_suf}")
                 with col_b2:
-                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", value="", placeholder="0,00")
-                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["", "Bonificação", "Transferência de Bonificação"], index=0, placeholder="Selecione o tipo...", key="tipo_bonf_input_sel")
+                    valor_bonf_str = st.text_input("Valor da Bonificação (R$)", placeholder="", key=f"bonf_val_{bf_suf}")
+                    tipo_bonf_sel = st.selectbox("Tipo de Bonificação", ["", "Bonificação", "Transferência de Bonificação"], index=0, placeholder="Selecione o tipo...", key=f"tipo_bonf_input_sel_{bf_suf}")
                 with col_b3:
-                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0, placeholder="Selecione o produto...")
-                    anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"])
+                    prod_bonf = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod, index=0, placeholder="Selecione o produto...", key=f"bonf_prod_{bf_suf}")
+                    anexo_bonf = st.file_uploader("Anexar NF (PDF ou Imagem)", type=["pdf", "png", "jpg", "jpeg"], key=f"bonf_anx_{bf_suf}")
 
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
-                with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...")
+                with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...", key=f"bonf_st_{bf_suf}")
                 with col_dt2: 
-                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", "cad_bonf_dt")
+                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", f"cad_bonf_dt_{bf_suf}")
                 with col_dt3:
                     hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
-                    st.text_input("Hora de Entrada", value=hora_auto, disabled=True)
+                    st.text_input("Hora de Entrada", value=hora_auto, disabled=True, key=f"bonf_hr_{bf_suf}")
 
                 dt_entrada_str = f"{data_entrada_manual.strftime('%d/%m/%Y')} {hora_auto}" if data_entrada_manual else ""
                 if st.form_submit_button("✅ Salvar Bonificação", type="primary"):
                     if not num_nota_bonf.strip() or not loja_bonf or not prod_bonf or not status_bonf or not tipo_bonf_sel:
                         st.error("Preencha todos os campos obrigatórios, incluindo o Tipo de Bonificação.")
                     else:
-                        spinner_supernova("Salvando bonificação...")
-                        valor_bonf_val = parse_float_ptbr(valor_bonf_str)
+                        with spinner_supernova("Salvando bonificação e blindando anexo..."):
+                            valor_bonf_val = parse_float_ptbr(valor_bonf_str)
 
-                        if not os.path.exists("uploads"):
-                            os.makedirs("uploads")
+                            path_anexo_bonf = ""
+                            b64_anexo_str = ""
+                            if anexo_bonf:
+                                if not os.path.exists("uploads"):
+                                    os.makedirs("uploads")
+                                path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
+                                anexo_bytes = anexo_bonf.getbuffer()
+                                with open(path_anexo_bonf, "wb") as f_out: 
+                                    f_out.write(anexo_bytes)
+                                b64_anexo_str = base64.b64encode(anexo_bytes).decode("utf-8")
 
-                        path_anexo_bonf = ""
-                        if anexo_bonf:
-                            path_anexo_bonf = os.path.join("uploads", f"NF_{num_nota_bonf}_{anexo_bonf.name}")
-                            anexo_bytes = anexo_bonf.getbuffer()
-                            with open(path_anexo_bonf, "wb") as f_out: 
-                                f_out.write(anexo_bytes)
-
-                        conn_b, db_tb = get_db_connection()
-                        try:
-                            cursor_b = conn_b.cursor()
-                            cursor_b.execute(
-                                "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                                (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, float(valor_bonf_val), status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel, "")
-                            )
-                            conn_b.commit()
-                            st.success("Salvo com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            conn_b.rollback()
-                            st.error(f"Erro: {e}")
-                        finally:
-                            conn_b.close()
+                            conn_b, db_tb = get_db_connection()
+                            try:
+                                cursor_b = conn_b.cursor()
+                                cursor_b.execute(
+                                    "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)" if db_tb == "postgres" else "INSERT INTO bonificacoes (numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                    (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, float(valor_bonf_val), status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel, b64_anexo_str)
+                                )
+                                conn_b.commit()
+                                mensagem_bonificacao_chat = (
+                                    "🎁 *NOVA BONIFICAÇÃO / TRANSFERÊNCIA CADASTRADA*\n"
+                                    f"Nota fiscal: {num_nota_bonf.strip()}\n"
+                                    f"Tipo: {tipo_bonf_sel}\n"
+                                    f"Loja: {loja_bonf}\n"
+                                    f"Produto: {prod_bonf}\n"
+                                    f"Valor: R$ {valor_bonf_val:,.2f}\n"
+                                    f"Status: {status_bonf}\n"
+                                    f"Data de entrada: {dt_entrada_str}"
+                                )
+                                chat_bonificacao_enviado = enviar_notificacao_google_chat(mensagem_bonificacao_chat)
+                                status_chat_bonf = " Google Chat notificado." if chat_bonificacao_enviado else " (Google Chat não notificado; confira os Secrets)."
+                                st.session_state["bonf_form_suf"] += 1
+                                st.success("Bonificação salva com sucesso com anexo persistido!" + status_chat_bonf)
+                                st.rerun()
+                            except Exception as e:
+                                conn_b.rollback()
+                                st.error(f"Erro: {e}")
+                            finally:
+                                conn_b.close()
 
         st.markdown("---")
         st.subheader("📋 Registros de Bonificação e Consulta de Notas")
@@ -1918,11 +3259,12 @@ else:
             with f_col3: f_status = st.selectbox("Filtrar por Status", ["TODOS", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], placeholder="Selecione...", key="f_status_bonf")
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
 
-        conn_b_sel, db_tb_sel = get_db_connection()
-        try:
-            df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn_b_sel)
-        finally:
-            conn_b_sel.close()
+        with spinner_supernova("Carregando registros de bonificação..."):
+            conn_b_sel, db_tb_sel = get_db_connection()
+            try:
+                df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64 FROM bonificacoes ORDER BY id DESC", conn_b_sel)
+            finally:
+                conn_b_sel.close()
 
         if not df_bonf.empty:
             if f_nota.strip(): df_bonf = df_bonf[df_bonf["numero_nota"].str.contains(f_nota.strip(), case=False, na=False)]
@@ -1937,7 +3279,7 @@ else:
                 if not df_bonf_puro.empty:
                     df_bp_show = df_bonf_puro.copy()
                     df_bp_show["Valor (R$)"] = df_bp_show["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                    df_bp_show["Anexo"] = df_bp_show.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
+                    df_bp_show["Anexo"] = df_bp_show.apply(lambda r: "📎 Disponível" if ((r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) or (r.get("anexo_b64") and len(str(r["anexo_b64"])) > 10)) else "Sem Anexo", axis=1)
                     df_bp_show = df_bp_show.rename(columns={"numero_nota": "N° Nota", "loja": "Loja", "data_entrada": "Data e Hora", "status": "Status", "produto_hortifruti": "Produto Hortifrúti"})
                     cols_ex_bp = df_bp_show[["N° Nota", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
                     cols_ex_bp.index = range(1, len(cols_ex_bp) + 1)
@@ -1951,7 +3293,7 @@ else:
                 if not df_bonf_transf.empty:
                     df_bt_show = df_bonf_transf.copy()
                     df_bt_show["Valor (R$)"] = df_bt_show["valor_bonificacao"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                    df_bt_show["Anexo"] = df_bt_show.apply(lambda r: "📎 Disponível" if (r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) else "Sem Anexo", axis=1)
+                    df_bt_show["Anexo"] = df_bt_show.apply(lambda r: "📎 Disponível" if ((r.get("caminho_anexo") and os.path.exists(r["caminho_anexo"])) or (r.get("anexo_b64") and len(str(r["anexo_b64"])) > 10)) else "Sem Anexo", axis=1)
                     df_bt_show = df_bt_show.rename(columns={"numero_nota": "N° Nota", "loja": "Loja", "data_entrada": "Data e Hora", "status": "Status", "produto_hortifruti": "Produto Hortifrúti"})
                     cols_ex_bt = df_bt_show[["N° Nota", "Loja", "Data e Hora", "Valor (R$)", "Status", "Produto Hortifrúti", "Anexo"]]
                     cols_ex_bt.index = range(1, len(cols_ex_bt) + 1)
@@ -1993,16 +3335,17 @@ else:
                     id_reg_atual = nota_selecionada_edicao[0]
                     reg_obj_atual = df_bonf[df_bonf["id"] == id_reg_atual].iloc[0]
                     caminho_nota_alvo = reg_obj_atual.get("caminho_anexo", "")
-                    if caminho_nota_alvo:
+                    if caminho_nota_alvo or reg_obj_atual.get("anexo_b64"):
                         if st.button("🖼️ Abrir Anexo / Nota Fiscal", type="primary", key="btn_abrir_anexo_direto_tabela"):
-                            conn_b64, _ = get_db_connection()
-                            try:
-                                cur_b64 = conn_b64.cursor()
-                                cur_b64.execute("SELECT anexo_b64 FROM bonificacoes WHERE id = %s" if HAS_POSTGRES else "SELECT anexo_b64 FROM bonificacoes WHERE id = ?", (id_reg_atual,))
-                                res_b64 = cur_b64.fetchone()
-                            finally:
-                                conn_b64.close()
-                            exibir_foto_modal(caminho_nota_alvo, res_b64[0] if res_b64 else None)
+                            with spinner_supernova("Carregando arquivo anexado..."):
+                                conn_b64, _ = get_db_connection()
+                                try:
+                                    cur_b64 = conn_b64.cursor()
+                                    cur_b64.execute("SELECT anexo_b64 FROM bonificacoes WHERE id = %s" if HAS_POSTGRES else "SELECT anexo_b64 FROM bonificacoes WHERE id = ?", (id_reg_atual,))
+                                    res_b64 = cur_b64.fetchone()
+                                finally:
+                                    conn_b64.close()
+                                exibir_foto_modal(caminho_nota_alvo, res_b64[0] if res_b64 else reg_obj_atual.get("anexo_b64"))
                     else:
                         st.warning("Este registo não possui ficheiro de nota anexado.")
 
@@ -2033,65 +3376,68 @@ else:
                     with col_btn_up2: excluir_bonf_btn = st.form_submit_button("🗑️ Excluir Bonificação", type="secondary")
 
                     if salvar_alt_bonf:
-                        spinner_supernova("Salvando alterações...")
-                        conn_up_dir, db_t_upd = get_db_connection()
-                        try:
-                            val_f_edit = parse_float_ptbr(novo_val_nota_str) if novo_val_nota_str else float(reg_obj_atual["valor_bonificacao"])
-                            hora_antiga = "00:00:00"
-                            if len(str(reg_obj_atual["data_entrada"]).split(" ")) > 1:
-                                hora_antiga = str(reg_obj_atual["data_entrada"]).split(" ")[1]
-                            nova_data_str = f"{nova_data_input.strftime('%d/%m/%Y')} {hora_antiga}"
+                        with spinner_supernova("Salvando alterações..."):
+                            conn_up_dir, db_t_upd = get_db_connection()
+                            try:
+                                val_f_edit = parse_float_ptbr(novo_val_nota_str) if novo_val_nota_str else float(reg_obj_atual["valor_bonificacao"])
+                                hora_antiga = "00:00:00"
+                                if len(str(reg_obj_atual["data_entrada"]).split(" ")) > 1:
+                                    hora_antiga = str(reg_obj_atual["data_entrada"]).split(" ")[1]
+                                nova_data_str = f"{nova_data_input.strftime('%d/%m/%Y')} {hora_antiga}"
 
-                            path_novo_arq = reg_obj_atual["caminho_anexo"]
-                            if novo_anexo_up:
-                                if not os.path.exists("uploads"): os.makedirs("uploads")
-                                path_novo_arq = os.path.join("uploads", f"NF_EDIT_{reg_obj_atual['numero_nota']}_{novo_anexo_up.name}")
-                                bytes_up = novo_anexo_up.getbuffer()
-                                with open(path_novo_arq, "wb") as f_out: f_out.write(bytes_up)
+                                path_novo_arq = reg_obj_atual["caminho_anexo"]
+                                b64_novo_arq = reg_obj_atual.get("anexo_b64", "")
+                                if novo_anexo_up:
+                                    if not os.path.exists("uploads"): os.makedirs("uploads")
+                                    path_novo_arq = os.path.join("uploads", f"NF_EDIT_{reg_obj_atual['numero_nota']}_{novo_anexo_up.name}")
+                                    bytes_up = novo_anexo_up.getbuffer()
+                                    with open(path_novo_arq, "wb") as f_out: f_out.write(bytes_up)
+                                    b64_novo_arq = base64.b64encode(bytes_up).decode("utf-8")
 
-                            cursor_upd = conn_up_dir.cursor()
-                            reg_id_b = int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual
-                            if novo_anexo_up:
-                                cursor_upd.execute(
-                                    "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ? WHERE id = ?",
-                                    (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, path_novo_arq, reg_id_b)
-                                )
-                            else:
-                                cursor_upd.execute(
-                                    "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ? WHERE id = ?",
-                                    (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, reg_id_b)
-                                )
-                            conn_up_dir.commit()
-                            st.success("Registo atualizado com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            conn_up_dir.rollback()
-                            st.error(f"Erro ao atualizar: {e}")
-                        finally:
-                            conn_up_dir.close()
+                                cursor_upd = conn_up_dir.cursor()
+                                reg_id_b = int(id_reg_atual) if db_t_upd == "postgres" else id_reg_atual
+                                if novo_anexo_up:
+                                    cursor_upd.execute(
+                                        "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s, caminho_anexo = %s, anexo_b64 = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ?, caminho_anexo = ?, anexo_b64 = ? WHERE id = ?",
+                                        (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, path_novo_arq, b64_novo_arq, reg_id_b)
+                                    )
+                                else:
+                                    cursor_upd.execute(
+                                        "UPDATE bonificacoes SET valor_bonificacao = %s, loja = %s, data_entrada = %s, status = %s, produto_hortifruti = %s WHERE id = %s" if db_t_upd == "postgres" else "UPDATE bonificacoes SET valor_bonificacao = ?, loja = ?, data_entrada = ?, status = ?, produto_hortifruti = ? WHERE id = ?",
+                                        (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, reg_id_b)
+                                    )
+                                conn_up_dir.commit()
+                                st.success("Registo atualizado com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                conn_up_dir.rollback()
+                                st.error(f"Erro ao atualizar: {e}")
+                            finally:
+                                conn_up_dir.close()
 
                     if excluir_bonf_btn:
-                        spinner_supernova("Excluindo bonificação...")
-                        conn_del_b, db_td_b = get_db_connection()
-                        try:
-                            cursor_db = conn_del_b.cursor()
-                            cursor_db.execute(
-                                "DELETE FROM bonificacoes WHERE id = %s" if db_td_b == "postgres" else "DELETE FROM bonificacoes WHERE id = ?",
-                                (int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual,)
-                            )
-                            conn_del_b.commit()
-                            st.success("Bonificação excluída com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            conn_del_b.rollback()
-                            st.error(f"Erro ao excluir: {e}")
-                        finally:
-                            conn_del_b.close()
+                        with spinner_supernova("Excluindo bonificação..."):
+                            conn_del_b, db_td_b = get_db_connection()
+                            try:
+                                cursor_db = conn_del_b.cursor()
+                                cursor_db.execute(
+                                    "DELETE FROM bonificacoes WHERE id = %s" if db_td_b == "postgres" else "DELETE FROM bonificacoes WHERE id = ?",
+                                    (int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual,)
+                                )
+                                conn_del_b.commit()
+                                st.success("Bonificação excluída com sucesso!")
+                                st.rerun()
+                            except Exception as e:
+                                conn_del_b.rollback()
+                                st.error(f"Erro ao excluir: {e}")
+                            finally:
+                                conn_del_b.close()
         else:
             st.info("Nenhuma bonificação encontrada.")
 
     elif menu == "Controle de Baixa de Avarias":
-        st.title("📉 Registro de Baixas das Avarias")
+        with spinner_supernova("Carregando baixas de avarias..."):
+            st.title("📉 Registro de Baixas das Avarias")
         loja_ativa_sessao = user_info.get("loja_atual", "LOJA 02 NOVA CIDADE")
         if "baixa_form_suffix" not in st.session_state:
             st.session_state["baixa_form_suffix"] = 0
@@ -2104,17 +3450,16 @@ else:
             conn_bx_chk.close()
 
         total_baixado_por_nota = {}
-        notas_utilizadas_em_ref = set()
-
+        notas_transf_ja_utilizadas = set()
         if not df_baixar_hist.empty:
             totais_por_nf = df_baixar_hist.groupby("nf_b_entrada")["valor_total_avaria"].sum()
             for nf_e, val_bx in totais_por_nf.items():
                 total_baixado_por_nota[str(nf_e).strip()] = float(val_bx)
             
-            for _, row_bx in df_baixar_hist.iterrows():
-                ref_val = str(row_bx.get("ref_bon_transferen", "")).strip()
-                if ref_val:
-                    notas_utilizadas_em_ref.add(ref_val)
+            for _, r_bx in df_baixar_hist.iterrows():
+                ref_transf_usada = str(r_bx["ref_bon_transferen"]).strip()
+                if ref_transf_usada:
+                    notas_transf_ja_utilizadas.add(ref_transf_usada)
 
         conn_b_all, db_tb_all = get_db_connection()
         try:
@@ -2123,24 +3468,24 @@ else:
                 cur_st_up = conn_b_all.cursor()
                 for _, r_b in df_todas_bonf.iterrows():
                     num_nf_b = str(r_b["numero_nota"]).strip()
+                    tipo_b_reg = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     val_orig_b = float(r_b["valor_bonificacao"])
-                    baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
-                    saldo_b = max(0.0, val_orig_b - baixado_b)
-                    tipo_b_reg_chk = str(r_b.get("tipo_bonificacao", "Bonificação")).strip().lower()
                     
-                    # REGRA CORRIGIDA: Se a nota está referenciada na coluna Ref. Bon., muda o status automaticamente para Totalmente Utilizada
-                    if num_nf_b in notas_utilizadas_em_ref or ("transferência" in tipo_b_reg_chk and baixado_b > 0):
-                        novo_st_auto = "Totalmente Utilizada"
-                    elif "transferência" in tipo_b_reg_chk:
-                        novo_st_auto = "Disponível"
-                    else:
-                        if baixado_b <= 0: 
-                            novo_st_auto = "Disponível"
-                        elif saldo_b > 0: 
-                            novo_st_auto = "Parcialmente Utilizada"
-                        else: 
+                    if "transferência" in tipo_b_reg:
+                        if num_nf_b in notas_transf_ja_utilizadas:
                             novo_st_auto = "Totalmente Utilizada"
-                        
+                        else:
+                            novo_st_auto = "Disponível"
+                    else:
+                        baixado_b = total_baixado_por_nota.get(num_nf_b, 0.0)
+                        saldo_b = max(0.0, val_orig_b - baixado_b)
+                        if saldo_b <= 0:
+                            novo_st_auto = "Totalmente Utilizada"
+                        elif baixado_b > 0:
+                            novo_st_auto = "Parcialmente Utilizada"
+                        else:
+                            novo_st_auto = "Disponível"
+                            
                     if r_b["status"] != novo_st_auto:
                         r_b_id = int(r_b["id"]) if db_tb_all == "postgres" else r_b["id"]
                         cur_st_up.execute(
@@ -2158,61 +3503,59 @@ else:
             for _, r_b in df_todas_bonf.iterrows():
                 dict_valor_orig_por_nf[str(r_b["numero_nota"]).strip()] = float(r_b["valor_bonificacao"])
 
+        notas_com_saldo_ativa = []
+        notas_transf_ativa = []
+        saldo_geral_somado_ativa = 0.0
+
         if not df_todas_bonf.empty:
-            df_bonf_ativas = df_todas_bonf[df_todas_bonf["status"].isin(["Disponível", "Parcialmente Utilizada"])]
-        else:
-            df_bonf_ativas = pd.DataFrame()
-
-        notas_com_saldo_loja02 = []
-        notas_transf_loja02 = []
-        saldo_geral_somado_loja02 = 0.0
-
-        if not df_bonf_ativas.empty:
-            for _, r_bonf in df_bonf_ativas.iterrows():
+            for _, r_bonf in df_todas_bonf.iterrows():
                 num_nf_ent = str(r_bonf["numero_nota"]).strip()
                 val_original = float(r_bonf["valor_bonificacao"])
-                ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
-                saldo_restante_nota = max(0.0, val_original - ja_baixado)
+                tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
+                loja_reg = str(r_bonf.get("loja", ""))
                 
-                if saldo_restante_nota > 0:
-                    tipo_b_reg = str(r_bonf.get("tipo_bonificacao", "Bonificação"))
-                    loja_reg = str(r_bonf.get("loja", ""))
+                item_dict = {
+                    "nf_entrada": num_nf_ent,
+                    "loja": loja_reg,
+                    "produto": r_bonf.get("produto_hortifruti", "N/A"),
+                    "valor_original": val_original
+                }
+                
+                if "Transferência" in tipo_b_reg:
+                    if num_nf_ent not in notas_transf_ja_utilizadas:
+                        item_dict["saldo_restante"] = val_original
+                        notas_transf_ativa.append(item_dict)
+                else:
+                    ja_baixado = total_baixado_por_nota.get(num_nf_ent, 0.0)
+                    saldo_restante_nota = max(0.0, val_original - ja_baixado)
                     
-                    item_dict = {
-                        "nf_entrada": num_nf_ent,
-                        "loja": loja_reg,
-                        "produto": r_bonf.get("produto_hortifruti", "N/A"),
-                        "valor_original": val_original,
-                        "saldo_restante": saldo_restante_nota
-                    }
-                    
-                    if "Transferência" in tipo_b_reg:
-                        notas_transf_loja02.append(item_dict)
-                    else:
-                        if "02" in loja_reg or "NOVA CIDADE" in loja_reg.upper():
-                            saldo_geral_somado_loja02 += saldo_restante_nota
-                            notas_com_saldo_loja02.append(item_dict)
+                    if saldo_restante_nota > 0:
+                        termo_loja = loja_ativa_sessao.split("-")[0].strip().upper()
+                        if is_admin or termo_loja in loja_reg.upper():
+                            saldo_geral_somado_ativa += saldo_restante_nota
+                            item_dict["saldo_restante"] = saldo_restante_nota
+                            notas_com_saldo_ativa.append(item_dict)
 
         st.markdown(f"""
         <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 35, 42, 0.9); padding: 12px 18px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.15); margin-bottom: 15px;">
             <span style="font-size: 20px;">💳</span>
-            <span style="color: #FFFFFF; font-weight: 700; font-size: 15px;">Saldo Total Disponível (Referente às notas da Loja 02): R$ {fmt_ptbr(saldo_geral_somado_loja02, 2)}</span>
+            <span style="color: #FFFFFF; font-weight: 700; font-size: 15px;">Saldo Total Disponível ({loja_ativa_sessao}): R$ {fmt_ptbr(saldo_geral_somado_ativa, 2)}</span>
         </div>
         """, unsafe_allow_html=True)
 
-        if notas_com_saldo_loja02:
-            with st.expander("📌 Notas de Bonificação com Saldo Disponível (Loja 02)", expanded=True):
-                df_ns_show = pd.DataFrame(notas_com_saldo_loja02)
+        if notas_com_saldo_ativa:
+            with st.expander(f"📌 Notas de Bonificação com Saldo Disponível ({loja_ativa_sessao})", expanded=True):
+                df_ns_show = pd.DataFrame(notas_com_saldo_ativa)
                 df_ns_show["Valor Original (R$)"] = df_ns_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show["Saldo Disponível (R$)"] = df_ns_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_ns_show = df_ns_show.rename(columns={"nf_entrada": "N° Nota de Entrada", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_ns_show[["N° Nota de Entrada", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
-        if notas_transf_loja02:
-            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação com Saldo Disponível (Todas as Lojas)", expanded=True):
-                df_tr_show = pd.DataFrame(notas_transf_loja02)
+        if notas_transf_ativa:
+            with st.expander("🔀 Planilha Separada: Notas de Transferência de Bonificação para Outras Lojas (Uso Único / Rastreio)", expanded=True):
+                df_tr_show = pd.DataFrame(notas_transf_ativa)
                 df_tr_show["Valor Original (R$)"] = df_tr_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
-                df_tr_show["Saldo Disponível (R$)"] = df_tr_show["saldo_restante"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
+                df_tr_show["Saldo Disponível (R$)"] = df_tr_show["valor_original"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_tr_show = df_tr_show.rename(columns={"nf_entrada": "N° Nota de Transferência", "loja": "Loja Origem", "produto": "Produto Hortifrúti"})
                 st.dataframe(df_tr_show[["N° Nota de Transferência", "Loja Origem", "Produto Hortifrúti", "Valor Original (R$)", "Saldo Disponível (R$)"]], use_container_width=True, hide_index=True, height=180)
 
@@ -2224,14 +3567,14 @@ else:
             lista_opcoes_prod_v.append(f"{c_prod} | Barras: {c_bar} | {p[2]}")
 
         with st.expander("➕ Registrar Nova Baixa de Avaria", expanded=False):
-            with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=True):
+            with st.form(f"form_registro_baixa_modelo_{bx_suf}", clear_on_submit=False):
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
                     lista_lojas_reg = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                     idx_l_ativa = lista_lojas_reg.index(loja_ativa_sessao) if loja_ativa_sessao in lista_lojas_reg else 0
                     lojas_baixa_sel = st.selectbox("LOJAS", options=lista_lojas_reg, index=idx_l_ativa, key=f"bx_loja_{bx_suf}")
                     
-                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else []
+                    opcoes_transf_ref = [item["nf_entrada"] for item in notas_transf_ativa] if notas_transf_ativa else []
                     opcoes_transf_ref_com_manual = ["-- Digitar Manualmente / Outra --"] + opcoes_transf_ref
                     
                     escolha_ref_transf = st.selectbox("Ref. Bon. transferen (Selecionar)", options=opcoes_transf_ref_com_manual, key=f"bx_ref_transf_sel_{bx_suf}")
@@ -2241,7 +3584,7 @@ else:
                     else:
                         ref_bon_transf = escolha_ref_transf
                 with col_m2:
-                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_loja02 if not any(t["nf_entrada"] == item["nf_entrada"] for t in notas_transf_loja02)] if notas_com_saldo_loja02 else ["Nenhuma Nota Disponível"]
+                    opcoes_nf_entrada = [item["nf_entrada"] for item in notas_com_saldo_ativa if not any(t["nf_entrada"] == item["nf_entrada"] for t in notas_transf_ativa)] if notas_com_saldo_ativa else ["Nenhuma Nota Disponível"]
                     nf_b_entrada_sel = st.selectbox("NF de B. ENTRADA", options=opcoes_nf_entrada, key=f"bx_nf_ent_{bx_suf}")
                     prod_hort_sel = st.selectbox("Produto Hortifrúti", options=[""] + lista_opcoes_prod_v, index=0, key=f"bx_prod_{bx_suf}")
                 with col_m3:
@@ -2263,81 +3606,91 @@ else:
                     if not lojas_baixa_sel or not ref_bon_transf or ref_bon_transf == "-- Digitar Manualmente / Outra --" or nf_b_entrada_sel == "Nenhuma Nota Disponível" or not prod_hort_sel:
                         st.error("Preencha todos os campos obrigatórios (incluindo o número da nota de transferência).")
                     else:
-                        spinner_supernova("Registrando baixa de avaria...")
-                        qtd_val_f = parse_float_ptbr(qtd_kg_cx_str)
-                        val_avaria_f = parse_float_ptbr(valor_total_avaria_str)
+                        with spinner_supernova("Registrando baixa de avaria e blindando anexo..."):
+                            qtd_val_f = parse_float_ptbr(qtd_kg_cx_str)
+                            val_avaria_f = parse_float_ptbr(valor_total_avaria_str)
 
-                        todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
-                        nota_selecionada_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nf_b_entrada_sel), None)
-                        if not nota_selecionada_dict:
-                            st.error("Nota de entrada inválida.")
-                        elif round(val_avaria_f, 2) > round(nota_selecionada_dict["saldo_restante"], 2):
-                            st.error("❌ O valor da avaria ultrapassa o saldo restante da nota!")
-                        else:
-                            path_nf_baixa = ""
-                            if nf_baixa_file:
-                                if not os.path.exists("uploads"): os.makedirs("uploads")
-                                path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
-                                bytes_baixa = nf_baixa_file.getbuffer()
-                                with open(path_nf_baixa, "wb") as f_out: f_out.write(bytes_baixa)
+                            todas_as_notas_com_saldo = notas_com_saldo_ativa + notas_transf_ativa
+                            nota_selecionada_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nf_b_entrada_sel), None)
+                            if not nota_selecionada_dict:
+                                st.error("Nota de entrada inválida.")
+                            elif round(val_avaria_f, 2) > round(nota_selecionada_dict["saldo_restante"], 2):
+                                st.error("❌ O valor da avaria ultrapassa o saldo restante da nota!")
+                            else:
+                                path_nf_baixa = ""
+                                b64_nf_baixa = ""
+                                if nf_baixa_file:
+                                    if not os.path.exists("uploads"): os.makedirs("uploads")
+                                    path_nf_baixa = os.path.join("uploads", f"NF_BAIXA_{ref_bon_transf}_{nf_baixa_file.name}")
+                                    bytes_baixa = nf_baixa_file.getbuffer()
+                                    with open(path_nf_baixa, "wb") as f_out: f_out.write(bytes_baixa)
+                                    b64_nf_baixa = base64.b64encode(bytes_baixa).decode("utf-8")
 
-                            saldo_disponivel_da_nota_referenciada = float(nota_selecionada_dict["saldo_restante"])
-                            novo_saldo_restante_nota = float(saldo_disponivel_da_nota_referenciada - val_avaria_f)
-                            conn_ins, db_tins = get_db_connection()
-                            try:
-                                cursor_ins = conn_ins.cursor()
-                                cursor_ins.execute(
-                                    """
-                                    INSERT INTO baixas_avarias (
-                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa,
-                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx,
-                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel,
-                                        nf_baixa_b64
-                                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                    """ if db_tins == "postgres" else """
-                                    INSERT INTO baixas_avarias (
-                                        loja_baixa, data_baixa, ref_bon_transferen, nf_baixa,
-                                        nf_b_entrada, produto_hortifruti, quantidade_kg_cx,
-                                        valor_total_avaria, saldo_restante_nota, saldo_total_disponivel,
-                                        nf_baixa_b64
-                                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                                    """,
-                                    (
-                                        lojas_baixa_sel, data_hora_baixa_str, str(ref_bon_transf).strip(),
-                                        path_nf_baixa, nf_b_entrada_sel, prod_hort_sel, float(qtd_val_f), float(val_avaria_f),
-                                        float(novo_saldo_restante_nota), float(saldo_disponivel_da_nota_referenciada), ""
+                                saldo_disponivel_da_nota_referenciada = float(nota_selecionada_dict["saldo_restante"])
+                                novo_saldo_restante_nota = float(saldo_disponivel_da_nota_referenciada - val_avaria_f)
+                                conn_ins, db_tins = get_db_connection()
+                                try:
+                                    cursor_ins = conn_ins.cursor()
+                                    cursor_ins.execute(
+                                        """
+                                        INSERT INTO baixas_avarias (
+                                            loja_baixa, data_baixa, ref_bon_transferen, nf_baixa,
+                                            nf_b_entrada, produto_hortifruti, quantidade_kg_cx,
+                                            valor_total_avaria, saldo_restante_nota, saldo_total_disponivel,
+                                            nf_baixa_b64
+                                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                        """ if db_tins == "postgres" else """
+                                        INSERT INTO baixas_avarias (
+                                            loja_baixa, data_baixa, ref_bon_transferen, nf_baixa,
+                                            nf_b_entrada, produto_hortifruti, quantidade_kg_cx,
+                                            valor_total_avaria, saldo_restante_nota, saldo_total_disponivel,
+                                            nf_baixa_b64
+                                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        """,
+                                        (
+                                            lojas_baixa_sel, data_hora_baixa_str, str(ref_bon_transf).strip(),
+                                            path_nf_baixa, nf_b_entrada_sel, prod_hort_sel, float(qtd_val_f), float(val_avaria_f),
+                                            float(novo_saldo_restante_nota), float(saldo_disponivel_da_nota_referenciada), b64_nf_baixa
+                                        )
                                     )
-                                )
-                                
-                                is_transf_nota_atual = any(str(t["nf_entrada"]).strip() == str(ref_bon_transf).strip() for t in notas_transf_loja02)
-                                
-                                if is_transf_nota_atual or ref_bon_transf:
-                                    st_auto_l2 = "Totalmente Utilizada"
-                                elif novo_saldo_restante_nota <= 0:
-                                    st_auto_l2 = "Totalmente Utilizada"
-                                else:
-                                    st_auto_l2 = "Parcialmente Utilizada"
+                                    
+                                    if novo_saldo_restante_nota <= 0:
+                                        st_auto_l2 = "Totalmente Utilizada"
+                                    else:
+                                        st_auto_l2 = "Parcialmente Utilizada"
 
-                                cursor_ins.execute(
-                                    "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
-                                    (st_auto_l2, str(nf_b_entrada_sel).strip())
-                                )
-                                
-                                if ref_bon_transf:
                                     cursor_ins.execute(
                                         "UPDATE bonificacoes SET status = %s WHERE TRIM(numero_nota) = TRIM(%s)" if db_tins == "postgres" else "UPDATE bonificacoes SET status = ? WHERE TRIM(numero_nota) = TRIM(?)",
-                                        ("Totalmente Utilizada", str(ref_bon_transf).strip())
+                                        (st_auto_l2, str(nf_b_entrada_sel).strip())
                                     )
 
-                                conn_ins.commit()
-                                st.session_state["baixa_form_suffix"] += 1
-                                st.success("Baixa registrada com sucesso e status atualizado!")
-                                st.rerun()
-                            except Exception as e:
-                                conn_ins.rollback()
-                                st.error(f"Erro: {e}")
-                            finally:
-                                conn_ins.close()
+                                    cursor_ins.execute(
+                                        "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE TRIM(numero_nota) = TRIM(%s) AND LOWER(tipo_bonificacao) LIKE '%%transferência%%'" if db_tins == "postgres" else "UPDATE bonificacoes SET status = 'Totalmente Utilizada' WHERE TRIM(numero_nota) = TRIM(?) AND LOWER(tipo_bonificacao) LIKE '%transferência%'",
+                                        (str(ref_bon_transf).strip(),)
+                                    )
+
+                                    conn_ins.commit()
+                                    mensagem_baixa_chat = (
+                                        "📉 *NOVA BAIXA DE AVARIA REGISTRADA*\n"
+                                        f"Loja: {lojas_baixa_sel}\n"
+                                        f"Data: {data_hora_baixa_str}\n"
+                                        f"Referência de bonificação/transferência: {str(ref_bon_transf).strip()}\n"
+                                        f"NF de entrada: {nf_b_entrada_sel}\n"
+                                        f"Produto: {prod_hort_sel}\n"
+                                        f"Quantidade: {qtd_val_f:,.3f} kg/cx\n"
+                                        f"Valor da avaria: R$ {val_avaria_f:,.2f}\n"
+                                        f"Saldo restante da nota: R$ {novo_saldo_restante_nota:,.2f}"
+                                    )
+                                    _baixa_chat_ok = enviar_notificacao_google_chat(mensagem_baixa_chat)
+                                    st.session_state["baixa_form_suffix"] += 1
+                                    _status_baixa_chat = " Aviso enviado ao Google Chat." if _baixa_chat_ok else " Atenção: aviso não enviado ao Google Chat; consulte os Logs."
+                                    st.success("Baixa registrada com sucesso e saldo atualizado!" + _status_baixa_chat)
+                                    st.rerun()
+                                except Exception as e:
+                                    conn_ins.rollback()
+                                    st.error(f"Erro: {e}")
+                                finally:
+                                    conn_ins.close()
 
         st.markdown("---")
         st.subheader("📊 Planilha de Registro de Baixas das Avarias")
@@ -2352,11 +3705,12 @@ else:
             with fb2: f_ref_bx = st.text_input("Filtrar por Ref. Bon.", value="", placeholder="Referência...")
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
-        conn_bx_view, db_tbx_v = get_db_connection()
-        try:
-            df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
-        finally:
-            conn_bx_view.close()
+        with spinner_supernova("Carregando tabela de baixas..."):
+            conn_bx_view, db_tbx_v = get_db_connection()
+            try:
+                df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64 FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
+            finally:
+                conn_bx_view.close()
 
         if not df_bx_table.empty:
             if f_loja_bx != "TODAS": df_bx_table = df_bx_table[df_bx_table["loja_baixa"] == f_loja_bx]
@@ -2394,7 +3748,7 @@ else:
                 st.markdown("")
 
                 df_tabela_exibicao = df_display_plan.copy()
-                df_tabela_exibicao["Anexo"] = df_tabela_exibicao["nf_baixa"].apply(lambda x: "📎 Disponível" if (x and os.path.exists(str(x))) else "Sem Anexo")
+                df_tabela_exibicao["Anexo"] = df_tabela_exibicao.apply(lambda r: "📎 Disponível" if ((r.get("nf_baixa") and os.path.exists(str(r["nf_baixa"]))) or (r.get("nf_baixa_b64") and len(str(r["nf_baixa_b64"])) > 10)) else "Sem Anexo", axis=1)
                 df_tabela_exibicao["Saldo"] = df_tabela_exibicao["saldo_restante_calculado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_tabela_exibicao["Saldo Total Utilizado"] = df_tabela_exibicao["saldo_total_utilizado"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
                 df_tabela_exibicao["Valor Total Avaria (R$)"] = df_tabela_exibicao["valor_total_avaria"].apply(lambda x: f"R$ {fmt_ptbr(x, 2)}")
@@ -2420,15 +3774,16 @@ else:
                     reg_clicado = df_display_plan.iloc[idx_selecionado]
                     caminho_anexo_clicado = reg_clicado.get("nf_baixa", "")
                     
-                    if caminho_anexo_clicado and os.path.exists(str(caminho_anexo_clicado)):
-                        conn_b64_l, _ = get_db_connection()
-                        try:
-                            cur_b64_l = conn_b64_l.cursor()
-                            cur_b64_l.execute("SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = %s" if HAS_POSTGRES else "SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = ?", (int(reg_clicado['id']),))
-                            res_b64_l = cur_b64_l.fetchone()
-                        finally:
-                            conn_b64_l.close()
-                        exibir_foto_modal(caminho_anexo_clicado, res_b64_l[0] if res_b64_l else None)
+                    if caminho_anexo_clicado or reg_clicado.get("nf_baixa_b64"):
+                        with spinner_supernova("Carregando anexo..."):
+                            conn_b64_l, _ = get_db_connection()
+                            try:
+                                cur_b64_l = conn_b64_l.cursor()
+                                cur_b64_l.execute("SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = %s" if HAS_POSTGRES else "SELECT nf_baixa_b64 FROM baixas_avarias WHERE id = ?", (int(reg_clicado['id']),))
+                                res_b64_l = cur_b64_l.fetchone()
+                            finally:
+                                conn_b64_l.close()
+                            exibir_foto_modal(caminho_anexo_clicado, res_b64_l[0] if res_b64_l else reg_clicado.get("nf_baixa_b64"))
 
                 st.markdown("---")
                 st.subheader("⚙️ Gerenciamento: Editar ou Excluir Registro de Baixa")
@@ -2446,13 +3801,13 @@ else:
                                 lista_lojas_eb = ["LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
                                 idx_l_eb = lista_lojas_eb.index(reg_bx_atual["loja_baixa"]) if reg_bx_atual["loja_baixa"] in lista_lojas_eb else 0
                                 nova_loja_bx = st.selectbox("Loja da Baixa", lista_lojas_eb, index=idx_l_eb)
-                                notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_loja02]
+                                notas_disponiveis_edicao = [item["nf_entrada"] for item in notas_com_saldo_ativa]
                                 if reg_bx_atual["nf_b_entrada"] not in notas_disponiveis_edicao:
                                     notas_disponiveis_edicao.insert(0, reg_bx_atual["nf_b_entrada"])
                                 idx_nf_atual = notas_disponiveis_edicao.index(reg_bx_atual["nf_b_entrada"]) if reg_bx_atual["nf_b_entrada"] in notas_disponiveis_edicao else 0
                                 nova_nf_b_entrada = st.selectbox("NF de B. ENTRADA", options=notas_disponiveis_edicao, index=idx_nf_atual)
                             with col_eb2:
-                                opcoes_transf_ref_ed = [item["nf_entrada"] for item in notas_transf_loja02] if notas_transf_loja02 else [reg_bx_atual["ref_bon_transferen"]]
+                                opcoes_transf_ref_ed = [item["nf_entrada"] for item in notas_transf_ativa] if notas_transf_ativa else [reg_bx_atual["ref_bon_transferen"]]
                                 if reg_bx_atual["ref_bon_transferen"] not in opcoes_transf_ref_ed:
                                     opcoes_transf_ref_ed.insert(0, reg_bx_atual["ref_bon_transferen"])
                                 idx_ref_atual = opcoes_transf_ref_ed.index(reg_bx_atual["ref_bon_transferen"]) if reg_bx_atual["ref_bon_transferen"] in opcoes_transf_ref_ed else 0
@@ -2469,67 +3824,70 @@ else:
                             with col_bnt_bx2: excluir_bx_btn = st.form_submit_button("🗑️ Excluir Registo de Baixa", type="secondary")
 
                             if salvar_alt_bx:
-                                spinner_supernova("Atualizando baixa...")
-                                conn_up_bx, db_t_upbx = get_db_connection()
-                                try:
-                                    q_f_ed = parse_float_ptbr(novo_qtd_bx_str) if novo_qtd_bx_str else float(reg_bx_atual["quantidade_kg_cx"])
-                                    v_f_ed = parse_float_ptbr(novo_val_bx_str) if novo_val_bx_str else float(reg_bx_atual["valor_total_avaria"])
-                                    
-                                    path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
-                                    if novo_anexo_bx_up:
-                                        if not os.path.exists("uploads"): os.makedirs("uploads")
-                                        path_nf_bx_ed = os.path.join("uploads", f"NF_BAIXA_EDIT_{novo_ref_bx}_{novo_anexo_bx_up.name}")
-                                        bytes_bx_up = novo_anexo_bx_up.getbuffer()
-                                        with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
+                                with spinner_supernova("Atualizando baixa..."):
+                                    conn_up_bx, db_t_upbx = get_db_connection()
+                                    try:
+                                        q_f_ed = parse_float_ptbr(novo_qtd_bx_str) if novo_qtd_bx_str else float(reg_bx_atual["quantidade_kg_cx"])
+                                        v_f_ed = parse_float_ptbr(novo_val_bx_str) if novo_val_bx_str else float(reg_bx_atual["valor_total_avaria"])
+                                        
+                                        path_nf_bx_ed = reg_bx_atual.get("nf_baixa", "")
+                                        b64_nf_bx_ed = reg_bx_atual.get("nf_baixa_b64", "")
+                                        if novo_anexo_bx_up:
+                                            if not os.path.exists("uploads"): os.makedirs("uploads")
+                                            path_nf_bx_ed = os.path.join("uploads", f"NF_BAIXA_EDIT_{novo_ref_bx}_{novo_anexo_bx_up.name}")
+                                            bytes_bx_up = novo_anexo_bx_up.getbuffer()
+                                            with open(path_nf_bx_ed, "wb") as f_out: f_out.write(bytes_bx_up)
+                                            b64_nf_bx_ed = base64.b64encode(bytes_bx_up).decode("utf-8")
 
-                                    todas_as_notas_com_saldo = notas_com_saldo_loja02 + notas_transf_loja02
-                                    nota_edit_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nova_nf_b_entrada), None)
-                                    saldo_disp_edit = float(nota_edit_dict["saldo_restante"]) if nota_edit_dict else float(reg_bx_atual["saldo_total_disponivel"])
-                                    novo_saldo_restante_ed = float(saldo_disp_edit - v_f_ed)
+                                        todas_as_notas_com_saldo = notas_com_saldo_ativa + notas_transf_ativa
+                                        nota_edit_dict = next((item for item in todas_as_notas_com_saldo if item["nf_entrada"] == nova_nf_b_entrada), None)
+                                        saldo_disp_edit = float(nota_edit_dict["saldo_restante"]) if nota_edit_dict else float(reg_bx_atual["saldo_total_disponivel"])
+                                        novo_saldo_restante_ed = float(saldo_disp_edit - v_f_ed)
 
-                                    cur_upbx = conn_up_bx.cursor()
-                                    reg_id_bx = int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual
-                                    if novo_anexo_bx_up:
-                                        cur_upbx.execute(
-                                            "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s, nf_baixa = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ?, nf_baixa = ? WHERE id = ?",
-                                            (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), str(path_nf_bx_ed), reg_id_bx)
-                                        )
-                                    else:
-                                        cur_upbx.execute(
-                                            "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ? WHERE id = ?",
-                                            (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), reg_id_bx)
-                                        )
-                                    conn_up_bx.commit()
-                                    st.success("Baixa atualizada com sucesso!")
-                                    st.rerun()
-                                except Exception as e:
-                                    conn_up_bx.rollback()
-                                    st.error(f"Erro ao atualizar baixa: {e}")
-                                finally:
-                                    conn_up_bx.close()
+                                        cur_upbx = conn_up_bx.cursor()
+                                        reg_id_bx = int(id_bx_atual) if db_t_upbx == "postgres" else id_bx_atual
+                                        if novo_anexo_bx_up:
+                                            cur_upbx.execute(
+                                                "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s, nf_baixa = %s, nf_baixa_b64 = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ?, nf_baixa = ?, nf_baixa_b64 = ? WHERE id = ?",
+                                                (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), str(path_nf_bx_ed), b64_nf_bx_ed, reg_id_bx)
+                                            )
+                                        else:
+                                            cur_upbx.execute(
+                                                "UPDATE baixas_avarias SET loja_baixa = %s, ref_bon_transferen = %s, nf_b_entrada = %s, produto_hortifruti = %s, quantidade_kg_cx = %s, valor_total_avaria = %s, saldo_restante_nota = %s, saldo_total_disponivel = %s WHERE id = %s" if db_t_upbx == "postgres" else "UPDATE baixas_avarias SET loja_baixa = ?, ref_bon_transferen = ?, nf_b_entrada = ?, produto_hortifruti = ?, quantidade_kg_cx = ?, valor_total_avaria = ?, saldo_restante_nota = ?, saldo_total_disponivel = ? WHERE id = ?",
+                                                (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), reg_id_bx)
+                                            )
+                                        conn_up_bx.commit()
+                                        st.success("Baixa atualizada com sucesso!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        conn_up_bx.rollback()
+                                        st.error(f"Erro ao atualizar baixa: {e}")
+                                    finally:
+                                        conn_up_bx.close()
 
                             if excluir_bx_btn:
-                                spinner_supernova("Excluindo baixa...")
-                                conn_del_bx, db_td_bx = get_db_connection()
-                                try:
-                                    cur_delbx = conn_del_bx.cursor()
-                                    cur_delbx.execute(
-                                        "DELETE FROM baixas_avarias WHERE id = %s" if db_td_bx == "postgres" else "DELETE FROM baixas_avarias WHERE id = ?",
-                                        (int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual,)
-                                    )
-                                    conn_del_bx.commit()
-                                    st.success("Baixa excluída com sucesso!")
-                                    st.rerun()
-                                except Exception as e:
-                                    conn_del_bx.rollback()
-                                    st.error(f"Erro ao excluir baixa: {e}")
-                                finally:
-                                    conn_del_bx.close()
+                                with spinner_supernova("Excluindo baixa..."):
+                                    conn_del_bx, db_td_bx = get_db_connection()
+                                    try:
+                                        cur_delbx = conn_del_bx.cursor()
+                                        cur_delbx.execute(
+                                            "DELETE FROM baixas_avarias WHERE id = %s" if db_td_bx == "postgres" else "DELETE FROM baixas_avarias WHERE id = ?",
+                                            (int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual,)
+                                        )
+                                        conn_del_bx.commit()
+                                        st.success("Baixa excluída com sucesso!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        conn_del_bx.rollback()
+                                        st.error(f"Erro ao excluir baixa: {e}")
+                                    finally:
+                                        conn_del_bx.close()
         else:
             st.info("Nenhum registo de baixa encontrado.")
 
     elif menu == "Relatórios & Gráficos" and is_admin:
-        st.title("📊 Relatórios & Business Intelligence (BI) Executive")
+        with spinner_supernova("Carregando relatórios e BI..."):
+            st.title("📊 Relatórios & Business Intelligence (BI) Executive")
         tab_bi_receb, tab_bi_bonf_avaria = st.tabs([
             "📋 BI de Recebimento de Cargas",
             "📈 BI Bonificações, Transferências & Prevenção de Perdas"
@@ -2744,33 +4102,38 @@ else:
                 )
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
-        st.title("🛒 Gerenciamento e Cadastro (Produtos & Fornecedores)")
+        with spinner_supernova("Carregando cadastros..."):
+            st.title("🛒 Gerenciamento e Cadastro (Produtos & Fornecedores)")
         tab_prod, tab_forn = st.tabs(["📦 Cadastro de Produtos", "🏢 Cadastro de Fornecedores"])
         with tab_prod:
+            if "prod_form_suf" not in st.session_state:
+                st.session_state["prod_form_suf"] = 0
+            pf_suf = st.session_state["prod_form_suf"]
             with st.expander("➕ Cadastrar Novo Produto", expanded=False):
-                with st.form("cad_prod_form", clear_on_submit=True):
+                with st.form(f"cad_prod_form_{pf_suf}", clear_on_submit=False):
                     col_cp1, col_cp2, col_cp3, col_cp4 = st.columns([2, 2, 3, 1.5])
-                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", value="", placeholder="Cód...")
-                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", value="", placeholder="Código de barras...")
-                    with col_cp3: nome_p = st.text_input("Nome do Produto *", value="", placeholder="Nome do produto...")
-                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0)
+                    with col_cp1: cod_prod_input = st.text_input("Código do Produto", placeholder="", key=f"cp_cod_{pf_suf}")
+                    with col_cp2: cod_bar_input = st.text_input("Código de Barras", placeholder="", key=f"cp_bar_{pf_suf}")
+                    with col_cp3: nome_p = st.text_input("Nome do Produto *", placeholder="", key=f"cp_nome_{pf_suf}")
+                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0, key=f"cp_und_{pf_suf}")
                     if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                         if not nome_p.strip(): st.error("O Nome é obrigatório.")
                         else:
-                            spinner_supernova("Cadastrando produto...")
-                            conn, db_type = get_db_connection()
-                            try:
-                                cursor = conn.cursor()
-                                cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
-                                conn.commit()
-                                carregar_produtos_cached.clear()
-                                st.success("Cadastrado com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                conn.rollback()
-                                st.error(f"Erro: {e}")
-                            finally:
-                                conn.close()
+                            with spinner_supernova("Cadastrando produto..."):
+                                conn, db_type = get_db_connection()
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
+                                    conn.commit()
+                                    carregar_produtos_cached.clear()
+                                    st.session_state["prod_form_suf"] += 1
+                                    st.success("Cadastrado com sucesso!")
+                                    st.rerun()
+                                except Exception as e:
+                                    conn.rollback()
+                                    st.error(f"Erro: {e}")
+                                finally:
+                                    conn.close()
             st.markdown("---")
             produtos_cadastrados = carregar_produtos_cached()
 
@@ -2830,113 +4193,110 @@ else:
                             with col_bp2: btn_excluir_prod = st.form_submit_button("🗑️ Excluir Produto", type="secondary")
 
                             if btn_salvar_prod:
-                                spinner_supernova("Atualizando produto...")
-                                conn_up_p, db_tup = get_db_connection()
-                                try:
-                                    cur_upp = conn_up_p.cursor()
-                                    r_id_upp = int(id_p_ed) if db_tup == "postgres" else id_p_ed
-                                    cur_upp.execute(
-                                        "UPDATE produtos SET codigo_barras = %s, codigo_produto = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
-                                        (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), ep_und, r_id_upp)
-                                    )
-                                    conn_up_p.commit()
-                                    carregar_produtos_cached.clear()
-                                    st.success("Produto atualizado com sucesso!")
-                                    st.rerun()
-                                except Exception as e:
-                                    conn_up_p.rollback()
-                                    st.error(f"Erro ao atualizar o produto: {e}")
-                                finally:
-                                    conn_up_p.close()
+                                with spinner_supernova("Atualizando produto..."):
+                                    conn_up_p, db_tup = get_db_connection()
+                                    try:
+                                        cur_upp = conn_up_p.cursor()
+                                        r_id_upp = int(id_p_ed) if db_tup == "postgres" else id_p_ed
+                                        cur_upp.execute(
+                                            "UPDATE produtos SET codigo_barras = %s, codigo_produto = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
+                                            (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), ep_und, r_id_upp)
+                                        )
+                                        conn_up_p.commit()
+                                        carregar_produtos_cached.clear()
+                                        st.success("Produto atualizado com sucesso!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        conn_up_p.rollback()
+                                        st.error(f"Erro ao atualizar produto: {e}")
+                                    finally:
+                                        conn_up_p.close()
 
                             if btn_excluir_prod:
-                                spinner_supernova("Excluindo produto...")
-                                conn_del_p, db_tdp = get_db_connection()
-                                try:
-                                    cur_delp = conn_del_p.cursor()
-                                    cur_delp.execute("DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
-                                    conn_del_p.commit()
-                                    carregar_produtos_cached.clear()
-                                    st.success("Produto excluído com sucesso!")
-                                    st.rerun()
-                                except Exception as e:
-                                    conn_del_p.rollback()
-                                    st.error(f"Erro ao excluir: {e}")
-                                finally:
-                                    conn_del_p.close()
-            else: st.info("Nenhum produto cadastrado.")
+                                with spinner_supernova("Excluindo produto..."):
+                                    conn_del_p, db_tdp = get_db_connection()
+                                    try:
+                                        cur_delp = conn_del_p.cursor()
+                                        r_id_delp = int(id_p_ed) if db_tdp == "postgres" else id_p_ed
+                                        cur_delp.execute(
+                                            "DELETE FROM produtos WHERE id = %s" if db_tdp == "postgres" else "DELETE FROM produtos WHERE id = ?",
+                                            (r_id_delp,)
+                                        )
+                                        conn_del_p.commit()
+                                        carregar_produtos_cached.clear()
+                                        st.success("Produto excluído com sucesso!")
+                                        st.rerun()
+                                    except Exception as e:
+                                        conn_del_p.rollback()
+                                        st.error(f"Erro ao excluir produto: {e}")
+                                    finally:
+                                        conn_del_p.close()
+            else:
+                st.info("Nenhum produto cadastrado.")
 
         with tab_forn:
+            if "forn_form_suf" not in st.session_state:
+                st.session_state["forn_form_suf"] = 0
+            ff_suf = st.session_state["forn_form_suf"]
             with st.expander("➕ Cadastrar Novo Fornecedor", expanded=False):
-                with st.form("cad_forn_form", clear_on_submit=True):
-                    col_fc1, col_fc2, col_fc3 = st.columns([2, 2, 3])
-                    with col_fc1: f_cod_input = st.text_input("Código", value="", placeholder="Código...")
-                    with col_fc2: f_cnpj_input = st.text_input("CNPJ", value="", placeholder="00.000.000/0000-00")
-                    with col_fc3: f_nome_input = st.text_input("Nome / Razão Social *", value="", placeholder="Razão social...")
+                with st.form(f"cad_forn_form_{ff_suf}", clear_on_submit=False):
+                    col_f1, col_f2, col_f3 = st.columns([2, 2, 3])
+                    with col_f1: cod_forn_input = st.text_input("Código do Fornecedor", placeholder="", key=f"cf_cod_{ff_suf}")
+                    with col_f2: cnpj_forn_input = st.text_input("CNPJ", placeholder="", key=f"cf_cnpj_{ff_suf}")
+                    with col_f3: nome_forn_input = st.text_input("Nome do Fornecedor *", placeholder="", key=f"cf_nome_{ff_suf}")
                     if st.form_submit_button("➕ Cadastrar Fornecedor", type="primary"):
-                        if not f_nome_input.strip(): st.error("O Nome é obrigatório.")
+                        if not nome_forn_input.strip(): st.error("O Nome do Fornecedor é obrigatório.")
                         else:
-                            spinner_supernova("Cadastrando fornecedor...")
-                            conn, db_type = get_db_connection()
-                            try:
-                                cursor = conn.cursor()
-                                cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (f_cod_input.strip() if f_cod_input else None, f_cnpj_input.strip() if f_cnpj_input else None, f_nome_input.strip().upper()))
-                                conn.commit()
-                                carregar_fornecedores_cached.clear()
-                                st.success("Cadastrado com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                conn.rollback()
-                                st.error(f"Erro: {e}")
-                            finally:
-                                conn.close()
+                            with spinner_supernova("Cadastrando fornecedor..."):
+                                conn, db_type = get_db_connection()
+                                try:
+                                    cursor = conn.cursor()
+                                    cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (cod_forn_input.strip() if cod_forn_input else None, cnpj_forn_input.strip() if cnpj_forn_input else None, nome_forn_input.strip().upper()))
+                                    conn.commit()
+                                    carregar_fornecedores_cached.clear()
+                                    st.session_state["forn_form_suf"] += 1
+                                    st.success("Fornecedor cadastrado!")
+                                    st.rerun()
+                                except Exception as e:
+                                    conn.rollback()
+                                    st.error(f"Erro: {e}")
+                                finally:
+                                    conn.close()
             st.markdown("---")
-            fornecedores_cadastrados = carregar_fornecedores_cached()
+            conn, db_type = get_db_connection()
+            try:
+                forns_cadastrados = pd.read_sql_query("SELECT id, codigo_fornecedor, cnpj, nome FROM fornecedores ORDER BY id DESC", conn)
+            finally:
+                conn.close()
 
-            if fornecedores_cadastrados:
-                forn_com_id_ajustado = [(i, f[1], f[0]) for i, f in enumerate(fornecedores_cadastrados, 1)]
-                df_forn_show = pd.DataFrame(forn_com_id_ajustado, columns=["ID", "Código", "Nome do Fornecedor"])
-                st.dataframe(df_forn_show[["ID", "Código", "Nome do Fornecedor"]], use_container_width=True, hide_index=True, height=250)
+            if not forns_cadastrados.empty:
+                forns_cadastrados_show = forns_cadastrados.copy()
+                forns_cadastrados_show["ID"] = range(1, len(forns_cadastrados_show) + 1)
+                st.dataframe(forns_cadastrados_show[["ID", "codigo_fornecedor", "cnpj", "nome"]].rename(columns={"codigo_fornecedor": "Código do Fornecedor", "cnpj": "CNPJ", "nome": "Nome do Fornecedor"}), use_container_width=True, hide_index=True, height=250)
 
                 st.markdown("### ✏️ Editar ou Excluir Fornecedor")
-                conn_f_ed, db_tfed = get_db_connection()
-                try:
-                    cur_fe = conn_f_ed.cursor()
-                    cur_fe.execute("SELECT id, nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
-                    forns_para_edit = cur_fe.fetchall()
-                finally:
-                    conn_f_ed.close()
-
-                opcoes_edit_forn = [(f[0], f"{f[1]} (Cód: {f[2] or 'S/Cód'})") for f in forns_para_edit]
+                opcoes_edit_forn = [(row["id"], f"{row['nome']} (Cód: {row['codigo_fornecedor'] or 'S/Cód'})") for _, row in forns_cadastrados.iterrows()]
                 forn_sel_ed = st.selectbox("Selecione o fornecedor para editar ou excluir", options=opcoes_edit_forn, format_func=lambda x: x[1], key="sel_forn_editar")
                 if forn_sel_ed:
                     id_f_ed = forn_sel_ed[0]
-                    conn_f_det, db_tf_det = get_db_connection()
-                    try:
-                        cur_fd = conn_f_det.cursor()
-                        r_id_fd = int(id_f_ed) if db_tf_det == "postgres" else id_f_ed
-                        cur_fd.execute("SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = %s" if db_tf_det == "postgres" else "SELECT codigo_fornecedor, cnpj, nome FROM fornecedores WHERE id = ?", (r_id_fd,))
-                        dados_f_atual = cur_fd.fetchone()
-                    finally:
-                        conn_f_det.close()
+                    dados_f_atual = forns_cadastrados[forns_cadastrados["id"] == id_f_ed].iloc[0]
 
-                    if dados_f_atual:
-                        with st.form("form_edit_fornecedor"):
-                            ef_cod = st.text_input("Código do Fornecedor", value=dados_f_atual[0] or "")
-                            ef_cnpj = st.text_input("CNPJ", value=dados_f_atual[1] or "")
-                            ef_nome = st.text_input("Nome / Razão Social", value=dados_f_atual[2] or "")
-                            col_bf1, col_bf2 = st.columns(2)
-                            with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                            with col_bf2: btn_excluir_forn = st.form_submit_button("🗑️ Excluir Fornecedor", type="secondary")
+                    with st.form("form_edit_fornecedor"):
+                        ef_cod = st.text_input("Código do Fornecedor", value=str(dados_f_atual["codigo_fornecedor"] or ""))
+                        ef_cnpj = st.text_input("CNPJ", value=str(dados_f_atual["cnpj"] or ""))
+                        ef_nome = st.text_input("Nome do Fornecedor", value=str(dados_f_atual["nome"] or ""))
+                        col_bf1, col_bf2 = st.columns(2)
+                        with col_bf1: btn_salvar_forn = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                        with col_bf2: btn_excluir_forn = st.form_submit_button("🗑️ Excluir Fornecedor", type="secondary")
 
-                            if btn_salvar_forn:
-                                spinner_supernova("Atualizando fornecedor...")
-                                conn_up_f, db_tupf = get_db_connection()
+                        if btn_salvar_forn:
+                            with spinner_supernova("Atualizando fornecedor..."):
+                                conn_up_f, db_tuf = get_db_connection()
                                 try:
                                     cur_upf = conn_up_f.cursor()
-                                    r_id_upf = int(id_f_ed) if db_tupf == "postgres" else id_f_ed
+                                    r_id_upf = int(id_f_ed) if db_tuf == "postgres" else id_f_ed
                                     cur_upf.execute(
-                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s WHERE id = %s" if db_tupf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ? WHERE id = ?",
+                                        "UPDATE fornecedores SET codigo_fornecedor = %s, cnpj = %s, nome = %s WHERE id = %s" if db_tuf == "postgres" else "UPDATE fornecedores SET codigo_fornecedor = ?, cnpj = ?, nome = ? WHERE id = ?",
                                         (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), r_id_upf)
                                     )
                                     conn_up_f.commit()
@@ -2945,138 +4305,145 @@ else:
                                     st.rerun()
                                 except Exception as e:
                                     conn_up_f.rollback()
-                                    st.error(f"Erro ao atualizar: {e}")
+                                    st.error(f"Erro ao atualizar fornecedor: {e}")
                                 finally:
                                     conn_up_f.close()
 
-                            if btn_excluir_forn:
-                                spinner_supernova("Excluindo fornecedor...")
+                        if btn_excluir_forn:
+                            with spinner_supernova("Excluindo fornecedor..."):
                                 conn_del_f, db_tdf = get_db_connection()
                                 try:
                                     cur_delf = conn_del_f.cursor()
-                                    cur_delf.execute("DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?", (int(id_p_ed) if db_tdp == "postgres" else id_p_ed,))
+                                    r_id_delf = int(id_f_ed) if db_tdf == "postgres" else id_f_ed
+                                    cur_delf.execute(
+                                        "DELETE FROM fornecedores WHERE id = %s" if db_tdf == "postgres" else "DELETE FROM fornecedores WHERE id = ?",
+                                        (r_id_delf,)
+                                    )
                                     conn_del_f.commit()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
                                     st.rerun()
                                 except Exception as e:
                                     conn_del_f.rollback()
-                                    st.error(f"Erro ao excluir: {e}")
+                                    st.error(f"Erro ao excluir fornecedor: {e}")
                                 finally:
                                     conn_del_f.close()
-            else: st.info("Nenhum fornecedor cadastrado.")
+            else:
+                st.info("Nenhum fornecedor cadastrado.")
 
     elif menu == "Gerenciar Usuários & Permissões" and is_admin:
-        st.title("👥 Gerenciamento de Usuários e Permissões (Com Hashing de Senhas)")
+        with spinner_supernova("Carregando usuários e permissões..."):
+            st.title("👥 Gerenciar Usuários & Permissões")
+        st.markdown("Defina os acessos ao sistema: **Conferente** (apenas digita o romaneio) ou **Gestor / Assistente** (acesso completo ao BI, bonificações, cadastros e usuários).")
+        if "usr_form_suf" not in st.session_state:
+            st.session_state["usr_form_suf"] = 0
+        uf_suf = st.session_state["usr_form_suf"]
         with st.expander("➕ Cadastrar Novo Usuário", expanded=False):
-            with st.form("cad_usuario_form", clear_on_submit=True):
-                col_u1, col_u2, col_u3, col_u4 = st.columns([2.5, 2, 2, 2])
-                with col_u1: novo_nome = st.text_input("Nome Completo", value="", placeholder="Nome...")
-                with col_u2: novo_login = st.text_input("Login", value="", placeholder="Login...")
-                with col_u3: nova_senha = st.text_input("Senha", type="password", value="", placeholder="Senha...")
-                with col_u4: novo_perfil = st.selectbox("Perfil", ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"], index=0, placeholder="Selecione...")
-                if st.form_submit_button("➕ Cadastrar", type="primary"):
-                    if not novo_nome.strip() or not novo_login.strip() or not nova_senha.strip():
-                        st.error("Preencha todos os campos.")
+            with st.form(f"cad_usr_form_{uf_suf}", clear_on_submit=False):
+                u_col1, u_col2, u_col3, u_col4 = st.columns(4)
+                with u_col1: nome_usr = st.text_input("Nome Completo *", placeholder="", key=f"cu_nome_{uf_suf}")
+                with u_col2: login_usr = st.text_input("Login / Usuário *", placeholder="", key=f"cu_login_{uf_suf}")
+                with u_col3: senha_usr = st.text_input("Senha *", type="password", placeholder="", key=f"cu_senha_{uf_suf}")
+                with u_col4: perfil_usr = st.selectbox("Perfil de Acesso", ["Conferente", "Auxiliar", "Gestor"], index=0, key=f"cu_perfil_{uf_suf}")
+                if st.form_submit_button("✅ Criar Usuário", type="primary"):
+                    if not nome_usr.strip() or not login_usr.strip() or not senha_usr.strip(): st.error("Preencha todos os campos.")
                     else:
-                        spinner_supernova("Cadastrando usuário...")
-                        senha_segura_hash = gerar_hash_senha(nova_senha.strip())
-                        conn, db_type = get_db_connection()
-                        try:
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)",
-                                (novo_nome.strip(), novo_login.strip(), senha_segura_hash, novo_perfil)
-                            )
-                            conn.commit()
-                            st.success("Cadastrado com sucesso!")
-                            st.rerun()
-                        except Exception as e:
-                            conn_log.rollback() if 'conn_log' in locals() else conn.rollback()
-                            st.error(f"Erro: {e}")
-                        finally:
-                            conn.close()
+                        with spinner_supernova("Criando usuário..."):
+                            conn, db_type = get_db_connection()
+                            try:
+                                cursor = conn.cursor()
+                                senha_hash = gerar_hash_senha(senha_usr.strip())
+                                cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr))
+                                conn.commit()
+                                st.session_state["usr_form_suf"] += 1
+                                st.success(f"Usuário {nome_usr} criado!")
+                                st.rerun()
+                            except Exception as e:
+                                conn.rollback()
+                                st.error(f"Erro: {e}")
+                            finally:
+                                conn.close()
         st.markdown("---")
         conn, db_type = get_db_connection()
         try:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, nome, login, senha, perfil FROM usuarios ORDER BY id DESC")
-            usuarios_cadastrados = cursor.fetchall()
+            df_users = pd.read_sql_query("SELECT id, nome, login, perfil FROM usuarios ORDER BY id ASC", conn)
         finally:
             conn.close()
+        if not df_users.empty:
+            df_users_show = df_users.copy()
+            df_users_show["ID"] = range(1, len(df_users_show) + 1)
+            st.dataframe(df_users_show[["ID", "nome", "login", "perfil"]].rename(columns={"nome": "Nome", "login": "Login", "perfil": "Perfil"}), use_container_width=True, hide_index=True, height=250)
 
-        if usuarios_cadastrados:
-            usuarios_com_id_ajustado = [(i, u[1], u[2], "••••••••", u[4], u[0]) for i, u in enumerate(usuarios_cadastrados, 1)]
-            df_usuarios = pd.DataFrame(usuarios_com_id_ajustado, columns=["ID", "Nome Completo", "Login", "Senha Protegida", "Perfil", "ID_Real"])
-            st.dataframe(df_usuarios[["ID", "Nome Completo", "Login", "Senha Protegida", "Perfil"]], use_container_width=True, hide_index=True, height=250)
-
-            st.markdown("### ✏️ Editar ou Excluir Utilizador")
-            opcoes_edit_usr = [(u[5], f"{u[1]} (Login: {u[2]})") for u in usuarios_com_id_ajustado]
-            usr_sel_ed = st.selectbox("Selecione o utilizador para editar ou excluir", options=opcoes_edit_usr, format_func=lambda x: x[1], key="sel_usr_editar")
+            st.markdown("### ✏️ Editar ou Excluir Usuário")
+            opcoes_edit_usr = [(row["id"], f"{row['nome']} (Login: {row['login']} | Perfil: {row['perfil']})") for _, row in df_users.iterrows()]
+            usr_sel_ed = st.selectbox("Selecione o usuário para editar ou excluir", options=opcoes_edit_usr, format_func=lambda x: x[1], key="sel_usr_editar")
             if usr_sel_ed:
                 id_u_ed = usr_sel_ed[0]
-                conn_u_det, db_tu_det = get_db_connection()
-                try:
-                    cur_ud = conn_u_det.cursor()
-                    r_id_ud = int(id_u_ed) if db_tu_det == "postgres" else id_u_ed
-                    cur_ud.execute("SELECT nome, login, senha, perfil FROM usuarios WHERE id = %s" if db_tu_det == "postgres" else "SELECT nome, login, senha, perfil FROM usuarios WHERE id = ?", (r_id_ud,))
-                    dados_u_atual = cur_ud.fetchone()
-                finally:
-                    conn_u_det.close()
+                dados_u_atual = df_users[df_users["id"] == id_u_ed].iloc[0]
 
-                if dados_u_atual:
-                    with st.form("form_edit_usuario"):
-                        eu_nome = st.text_input("Nome Completo", value=dados_u_atual[0] or "")
-                        eu_login = st.text_input("Login", value=dados_u_atual[1] or "")
-                        eu_senha = st.text_input("Nova Senha (deixe em branco se não quiser alterar)", type="password", value="")
-                        perfis_lst = ["Conferente", "Auxiliar de Logística", "Assistente de Logística", "Gestor"]
-                        idx_per = perfis_lst.index(dados_u_atual[3]) if dados_u_atual[3] in perfis_lst else 0
-                        eu_perfil = st.selectbox("Perfil", perfis_lst, index=idx_per)
-                        col_bu1, col_bu2 = st.columns(2)
-                        with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
-                        with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Utilizador", type="secondary")
+                with st.form("form_edit_usuario"):
+                    eu_nome = st.text_input("Nome Completo", value=str(dados_u_atual["nome"]))
+                    eu_login = st.text_input("Login / Usuário", value=str(dados_u_atual["login"]))
+                    eu_senha = st.text_input("Nova Senha (Deixe em branco para manter a atual)", type="password")
+                    perfis_disponiveis = ["Conferente", "Auxiliar", "Gestor"]
+                    idx_perf = perfis_disponiveis.index(dados_u_atual["perfil"]) if dados_u_atual["perfil"] in perfis_disponiveis else 0
+                    eu_perfil = st.selectbox("Perfil de Acesso", perfis_disponiveis, index=idx_perf)
+                    col_bu1, col_bu2 = st.columns(2)
+                    with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
+                    with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Usuário", type="secondary")
 
-                        if btn_salvar_usr:
-                            spinner_supernova("Atualizando utilizador...")
-                            conn_up_u, db_tupu = get_db_connection()
+                    if btn_salvar_usr:
+                        with spinner_supernova("Atualizando usuário..."):
+                            conn_up_u, db_tuu = get_db_connection()
                             try:
                                 cur_upu = conn_up_u.cursor()
-                                r_id_upu = int(id_u_ed) if db_tupu == "postgres" else id_u_ed
+                                r_id_upu = int(id_u_ed) if db_tuu == "postgres" else id_u_ed
                                 if eu_senha.strip():
-                                    hash_nova = gerar_hash_senha(eu_senha.strip())
+                                    hash_nova_s = gerar_hash_senha(eu_senha.strip())
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
-                                        (eu_nome.strip(), eu_login.strip(), hash_nova, eu_perfil, r_id_upu)
+                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), hash_nova_s, eu_perfil, r_id_upu)
                                     )
                                 else:
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tupu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?",
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ? WHERE id = ?",
                                         (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
                                     )
                                 conn_up_u.commit()
-                                st.success("Utilizador atualizado com sucesso!")
+                                st.success("Usuário atualizado com sucesso!")
                                 st.rerun()
                             except Exception as e:
                                 conn_up_u.rollback()
-                                st.error(f"Erro ao atualizar: {e}")
+                                st.error(f"Erro ao atualizar usuário: {e}")
                             finally:
                                 conn_up_u.close()
 
-                        if btn_excluir_usr:
-                            spinner_supernova("Excluindo utilizador...")
-                            conn_del_u, db_tdu = get_db_connection()
-                            try:
-                                cur_delu = conn_del_u.cursor()
-                                cur_delu.execute(
-                                    "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
-                                    (int(id_u_ed) if db_tdu == "postgres" else id_u_ed,)
-                                )
-                                conn_del_u.commit()
-                                st.success("Excluído com sucesso!")
-                                st.rerun()
-                            except Exception as e:
-                                conn_del_u.rollback()
-                                st.error(f"Erro ao excluir: {e}")
-                            finally:
-                                conn_del_u.close()
-        else: st.info("Nenhum usuário cadastrado.")
+                    if btn_excluir_usr:
+                        if str(dados_u_atual["login"]).lower() == "908":
+                            st.error("Não é permitido excluir o usuário Administrador padrão (908).")
+                        else:
+                            with spinner_supernova("Excluindo usuário..."):
+                                conn_del_u, db_tdu = get_db_connection()
+                                try:
+                                    cur_delu = conn_del_u.cursor()
+                                    r_id_delu = int(id_u_ed) if db_tdu == "postgres" else id_u_ed
+                                    cur_delu.execute(
+                                        "DELETE FROM usuarios WHERE id = %s" if db_tdu == "postgres" else "DELETE FROM usuarios WHERE id = ?",
+                                        (r_id_delu,)
+                                    )
+                                    conn_del_u.commit()
+                                    st.success("Usuário excluído com sucesso!")
+                                    st.rerun()
+                                except Exception as e:
+                                    conn_del_u.rollback()
+                                    st.error(f"Erro ao excluir usuário: {e}")
+                                finally:
+                                    conn_del_u.close()
+        else:
+            st.info("Nenhum usuário cadastrado.")
+
+st.markdown("""
+<div style="text-align: center; color: gray; font-size: 0.8em; margin-top: 30px; padding: 10px; border-top: 1px solid rgba(128,128,128,0.2);">
+    HortiControl Supernova • Sistema de Recebimento de Hortifrúti
+</div>
+""", unsafe_allow_html=True)
