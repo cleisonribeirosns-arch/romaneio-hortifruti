@@ -125,45 +125,78 @@ def obter_logo_transparente_b64(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
         return ""
     try:
-        from PIL import ImageDraw
+        from PIL import ImageDraw, ImageFilter
         img = Image.open(caminho_imagem).convert("RGBA")
         w, h = img.size
-        # Limpa bordas claras/acinzentadas externas usando floodfill a partir dos 4 cantos
         px = img.load()
+
+        # Amostra a cor média dos 4 cantos para identificar o fundo externo
+        cantos = [px[0, 0], px[w - 1, 0], px[0, h - 1], px[w - 1, h - 1]]
+        bg_r = sum(c[0] for c in cantos) / 4.0
+        bg_g = sum(c[1] for c in cantos) / 4.0
+        bg_b = sum(c[2] for c in cantos) / 4.0
+
         visitado = set()
-        fila = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+        fila = []
+        for x in range(w):
+            fila.append((x, 0))
+            fila.append((x, h - 1))
+        for y in range(h):
+            fila.append((0, y))
+            fila.append((w - 1, y))
         for pt in fila:
             visitado.add(pt)
+
         while fila:
             cx, cy = fila.pop(0)
             r, g, b, a = px[cx, cy]
-            # Remove fundo branco ou cinza claro ao redor do ícone arredondado
-            if r > 155 and g > 155 and b > 155 and max(r, g, b) - min(r, g, b) < 40:
+            dist_bg = ((r - bg_r) ** 2 + (g - bg_g) ** 2 + (b - bg_b) ** 2) ** 0.5
+            eh_claro_neutro = (r > 130 and g > 130 and b > 130 and (max(r, g, b) - min(r, g, b)) < 55)
+            if a == 0 or dist_bg < 95 or eh_claro_neutro:
                 px[cx, cy] = (255, 255, 255, 0)
                 for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
                     if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visitado:
                         visitado.add((nx, ny))
                         fila.append((nx, ny))
 
-        # Limpa bordas claras residuais adicionais após o primeiro floodfill
-        px2 = img.load()
-        for y_scan in range(h):
-            for x_scan in range(w):
-                r_s, g_s, b_s, a_s = px2[x_scan, y_scan]
-                if a_s > 0 and r_s > 195 and g_s > 195 and b_s > 195 and max(r_s, g_s, b_s) - min(r_s, g_s, b_s) < 35:
-                    # Só limpa se estiver próximo das bordas externas (margem de 14% da imagem)
-                    if x_scan < w * 0.14 or x_scan > w * 0.86 or y_scan < h * 0.14 or y_scan > h * 0.86:
-                        px2[x_scan, y_scan] = (255, 255, 255, 0)
+        # Remove ilhas/fragmentos soltos pequenos desconectados do ícone principal
+        alpha = img.getchannel("A")
+        apx = alpha.load()
+        comp_vis = set()
+        componentes = []
+        for yy in range(h):
+            for xx in range(w):
+                if apx[xx, yy] > 20 and (xx, yy) not in comp_vis:
+                    q = [(xx, yy)]
+                    comp_vis.add((xx, yy))
+                    pts = []
+                    while q:
+                        qx, qy = q.pop(0)
+                        pts.append((qx, qy))
+                        for nx, ny in ((qx + 1, qy), (qx - 1, qy), (qx, qy + 1), (qx, qy - 1)):
+                            if 0 <= nx < w and 0 <= ny < h and apx[nx, ny] > 20 and (nx, ny) not in comp_vis:
+                                comp_vis.add((nx, ny))
+                                q.append((nx, ny))
+                    componentes.append(pts)
 
-        # Recorta automaticamente a área útil sem sobras externas e aplica máscara arredondada limpa
+        if componentes:
+            maior_comp = set(max(componentes, key=len))
+            for yy in range(h):
+                for xx in range(w):
+                    if (xx, yy) not in maior_comp:
+                        px[xx, yy] = (255, 255, 255, 0)
+
         bbox = img.getbbox()
         if bbox:
             img = img.crop(bbox)
         cw, ch = img.size
-        raio = max(16, int(min(cw, ch) * 0.18))
+        # Aplica recorte arredondado interno de segurança para eliminar halos brancos nas bordas
+        margem = max(6, int(min(cw, ch) * 0.03))
+        raio = max(18, int(min(cw, ch) * 0.20))
         mask = Image.new("L", (cw, ch), 0)
         draw = ImageDraw.Draw(mask)
-        draw.rounded_rectangle([(4, 4), (cw - 5, ch - 5)], radius=raio, fill=255)
+        draw.rounded_rectangle([(margem, margem), (cw - 1 - margem, ch - 1 - margem)], radius=raio, fill=255)
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=1))
         img_limpa = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
         img_limpa.paste(img, (0, 0), mask=mask)
 
@@ -1453,16 +1486,32 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
 def seletor_data_unificado(label_titulo, key_prefix):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
     st.markdown(f"**{label_titulo}**")
-    data_selecionada = st.date_input(
+    txt_key = f"{key_prefix}_date_text_input"
+    if txt_key not in st.session_state:
+        st.session_state[txt_key] = hoje.strftime("%d/%m/%Y")
+
+    def _formatar_data_digitada():
+        val = st.session_state.get(txt_key, "")
+        digitos = "".join(filter(str.isdigit, str(val)))[:8]
+        if len(digitos) <= 2:
+            st.session_state[txt_key] = digitos
+        elif len(digitos) <= 4:
+            st.session_state[txt_key] = f"{digitos[:2]}/{digitos[2:]}"
+        else:
+            st.session_state[txt_key] = f"{digitos[:2]}/{digitos[2:4]}/{digitos[4:]}"
+
+    data_txt = st.text_input(
         label_titulo,
-        value=hoje.date(),
-        min_value=datetime(2000, 1, 1).date(),
-        max_value=datetime(2150, 12, 31).date(),
-        format="DD/MM/YYYY",
-        key=f"{key_prefix}_date_input_ciss",
+        key=txt_key,
+        max_chars=10,
+        placeholder="DD/MM/AAAA",
+        on_change=_formatar_data_digitada,
         label_visibility="collapsed"
     )
-    return data_selecionada
+    try:
+        return datetime.strptime(data_txt.strip(), "%d/%m/%Y").date()
+    except Exception:
+        return None
 
 def garantir_tabela_configuracoes_dispositivo():
     """Cria a tabela de preferências visuais vinculadas ao navegador/aparelho."""
@@ -2637,7 +2686,7 @@ def _abrir_modal_chatcontrol():
 
 
 def render_widget_flutuante_chatcontrol():
-    """Renderiza o botão flutuante discreto do ChatControl no canto inferior direito."""
+    """Renderiza o botão flutuante discreto do ChatControl acima da barra inferior."""
     b64_m, mime_m = _cc_mascote_b64()
     icone_url = f"data:{mime_m};base64,{b64_m}" if b64_m else ""
 
@@ -2647,19 +2696,19 @@ def render_widget_flutuante_chatcontrol():
             <style>
             div.st-key-btn_flutuante_chatcontrol {{
                 position: fixed !important;
-                bottom: 16px !important;
-                right: 16px !important;
+                bottom: 84px !important;
+                right: 20px !important;
                 left: auto !important;
-                z-index: 99999 !important;
+                z-index: 2147483647 !important;
                 width: auto !important;
             }}
             div.st-key-btn_flutuante_chatcontrol button {{
                 display: flex !important;
                 align-items: center !important;
                 justify-content: center !important;
-                width: 58px !important;
-                height: 58px !important;
-                min-height: 58px !important;
+                width: 60px !important;
+                height: 60px !important;
+                min-height: 60px !important;
                 padding: 0 !important;
                 border-radius: 50% !important;
                 border: 2px solid #4CAF50 !important;
@@ -2668,12 +2717,14 @@ def render_widget_flutuante_chatcontrol():
                 background-size: cover !important;
                 background-repeat: no-repeat !important;
                 background-position: center !important;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55) !important;
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7) !important;
                 transition: transform 0.2s ease !important;
                 overflow: hidden !important;
+                position: relative !important;
+                z-index: 2147483647 !important;
             }}
             div.st-key-btn_flutuante_chatcontrol button:hover {{
-                transform: scale(1.06) !important;
+                transform: scale(1.07) !important;
             }}
             div.st-key-btn_flutuante_chatcontrol button::before,
             div.st-key-btn_flutuante_chatcontrol button::after,
@@ -2699,23 +2750,25 @@ def render_widget_flutuante_chatcontrol():
             <style>
             div.st-key-btn_flutuante_chatcontrol {
                 position: fixed !important;
-                bottom: 16px !important;
-                right: 16px !important;
+                bottom: 84px !important;
+                right: 20px !important;
                 left: auto !important;
-                z-index: 99999 !important;
+                z-index: 2147483647 !important;
                 width: auto !important;
             }
             div.st-key-btn_flutuante_chatcontrol button {
                 border-radius: 50% !important;
-                width: 52px !important;
-                height: 52px !important;
-                min-height: 52px !important;
+                width: 56px !important;
+                height: 56px !important;
+                min-height: 56px !important;
                 padding: 0 !important;
                 border: 2px solid #4CAF50 !important;
                 background-color: #1B5E20 !important;
                 color: #FFFFFF !important;
                 font-weight: 700 !important;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55) !important;
+                box-shadow: 0 6px 18px rgba(0, 0, 0, 0.7) !important;
+                position: relative !important;
+                z-index: 2147483647 !important;
             }
             </style>
             """,
@@ -2851,27 +2904,35 @@ if st.session_state["usuario_logado"] is None:
                 logo_display = nome
                 break
             
-    col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
-    with col_central:
-        if logo_display:
-            logo_b64_transp = obter_logo_transparente_b64(logo_display)
-            if logo_b64_transp:
+    if logo_display:
+        logo_b64_transp = obter_logo_transparente_b64(logo_display)
+        if logo_b64_transp:
+            st.markdown(
+                f"""
+                <div style="width: 100%; display: flex; justify-content: center; align-items: center; margin: 4px auto 18px auto; padding: 0; text-align: center;">
+                    <img src="data:image/png;base64,{logo_b64_transp}" 
+                         style="display: block; margin: 0 auto; max-height: 200px; max-width: 72vw; width: auto; height: auto;
+                                filter: drop-shadow(0px 12px 22px rgba(0,0,0,0.85)) 
+                                        drop-shadow(0px 4px 10px rgba(0,200,0,0.35));" />
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            b64_raw_lg, mime_raw_lg = obter_arquivo_b64_e_mime(logo_display)
+            if b64_raw_lg:
                 st.markdown(
                     f"""
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <img src="data:image/png;base64,{logo_b64_transp}" 
-                             style="max-height: 220px; width: auto; 
-                                    filter: drop-shadow(0px 15px 25px rgba(0,0,0,0.85)) 
-                                            drop-shadow(0px 5px 10px rgba(0,200,0,0.35)) 
-                                            contrast(1.15) saturate(1.1);
-                                    transform: perspective(600px) rotateX(4deg);
-                                    transition: transform 0.3s ease;" />
+                    <div style="width: 100%; display: flex; justify-content: center; align-items: center; margin: 4px auto 18px auto;">
+                        <img src="data:{mime_raw_lg};base64,{b64_raw_lg}"
+                             style="display: block; margin: 0 auto; width: 190px; max-width: 70vw; border-radius: 28px;" />
                     </div>
                     """,
                     unsafe_allow_html=True
                 )
-            else:
-                st.image(logo_display, width=220)
+
+    col_vazia_esq, col_central, col_vazia_dir = st.columns([0.1, 3.8, 0.1])
+    with col_central:
                 
         st.markdown("<h2 style='text-align: center; color: white;'>HortiControl - Sistema de Recebimento Hortifrúti</h2>", unsafe_allow_html=True)
             
@@ -3235,7 +3296,7 @@ else:
                 num_romaneio = st.text_input("Número do Romaneio", value=st.session_state[f"num_rom_auto_{k_suffix}"], disabled=True, key=f"num_rom_{k_suffix}")
                 tipo_operacao = st.selectbox("Tipo de Operação", ["", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"], index=0, key=f"tipo_op_{k_suffix}", placeholder="Selecione o tipo...")
             with col2:
-                data_rec_val = seletor_data_unificado("Data do Recebimento (Livre - A partir de 2000)", f"rec_{k_suffix}")
+                data_rec_val = seletor_data_unificado("Data do Recebimento", f"rec_{k_suffix}")
                 data_rec_str = data_rec_val.strftime("%d/%m/%Y") if data_rec_val else ""
 
                 if tipo_operacao in ["Transferência", "Transferência/Bonificação"]:
@@ -3256,7 +3317,7 @@ else:
                 fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=idx_sel, placeholder="Selecione o fornecedor...", key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
                 if f"in_cod_forn_{k_suffix}" not in st.session_state:
                     st.session_state[f"in_cod_forn_{k_suffix}"] = st.session_state[f"val_cod_forn_{k_suffix}"]
-                cod_fornecedor = st.text_input("Código do Fornecedor (Automático)", key=f"in_cod_forn_{k_suffix}", disabled=True)
+                cod_fornecedor = st.text_input("Código do Fornecedor", key=f"in_cod_forn_{k_suffix}", disabled=True)
 
             col_tel1, col_tel2 = st.columns([2, 2])
             with col_tel1:
@@ -3358,7 +3419,7 @@ else:
             forn_final = fornecedor if isinstance(fornecedor, str) else ""
             cod_forn_val = st.session_state[f"val_cod_forn_{k_suffix}"]
             if not forn_final.strip(): st.error("Selecione o fornecedor na lista cadastrada.")
-            elif not data_rec_str: st.error("A Data do Recebimento é obrigatória!")
+            elif not data_rec_str: st.error("Informe uma Data do Recebimento válida no formato DD/MM/AAAA!")
             elif tipo_operacao in ["Transferência", "Transferência/Bonificação"] and (not loja_origem or not loja_destino): st.error("Selecione a Loja de Origem e a Loja de Destino!")
             elif tipo_operacao not in ["Transferência", "Transferência/Bonificação"] and not loja: st.error("Selecione a loja!")
             elif pag_a_vista == "NÃO" and not data_pag_str: st.error("A Data para Pagamento é obrigatória para compras a prazo!")
