@@ -125,17 +125,40 @@ def obter_logo_transparente_b64(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
         return ""
     try:
+        from PIL import ImageDraw
         img = Image.open(caminho_imagem).convert("RGBA")
-        datas = list(img.getdata())
-        newData = []
-        for item in datas:
-            if item[0] > 180 and item[1] > 180 and item[2] > 180:
-                newData.append((255, 255, 255, 0))
-            else:
-                newData.append(item)
-        img.putdata(newData)
+        w, h = img.size
+        # Limpa bordas claras/acinzentadas externas usando floodfill a partir dos 4 cantos
+        px = img.load()
+        visitado = set()
+        fila = [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+        for pt in fila:
+            visitado.add(pt)
+        while fila:
+            cx, cy = fila.pop(0)
+            r, g, b, a = px[cx, cy]
+            # Remove fundo branco ou cinza claro ao redor do ícone arredondado
+            if r > 155 and g > 155 and b > 155 and max(r, g, b) - min(r, g, b) < 40:
+                px[cx, cy] = (255, 255, 255, 0)
+                for nx, ny in ((cx + 1, cy), (cx - 1, cy), (cx, cy + 1), (cx, cy - 1)):
+                    if 0 <= nx < w and 0 <= ny < h and (nx, ny) not in visitado:
+                        visitado.add((nx, ny))
+                        fila.append((nx, ny))
+
+        # Recorta automaticamente a área útil sem sobras externas e aplica máscara arredondada limpa
+        bbox = img.getbbox()
+        if bbox:
+            img = img.crop(bbox)
+        cw, ch = img.size
+        raio = max(16, int(min(cw, ch) * 0.18))
+        mask = Image.new("L", (cw, ch), 0)
+        draw = ImageDraw.Draw(mask)
+        draw.rounded_rectangle([(2, 2), (cw - 3, ch - 3)], radius=raio, fill=255)
+        img_limpa = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+        img_limpa.paste(img, (0, 0), mask=mask)
+
         buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
+        img_limpa.save(buffered, format="PNG")
         return base64.b64encode(buffered.getvalue()).decode("utf-8")
     except Exception:
         return ""
@@ -2598,49 +2621,60 @@ def render_chat_control():
         st.rerun()
 
 
+@st.dialog("🍏 ChatControl — Assistente Inteligente de Logística", width="large")
+def _abrir_modal_chatcontrol():
+    render_chat_control()
+
+
 def render_widget_flutuante_chatcontrol():
-    """Renderiza o botão/painel flutuante do ChatControl no canto inferior esquerdo."""
+    """Renderiza o botão flutuante do ChatControl no canto inferior direito com ícone do mascote e nome."""
     b64_m, mime_m = _cc_mascote_b64()
-    if b64_m:
+    icone_url = f"data:{mime_m};base64,{b64_m}" if b64_m else ""
+
+    if icone_url:
         st.markdown(
             f"""
             <style>
-            div[data-testid="stPopover"] {{
+            div.st-key-btn_flutuante_chatcontrol {{
                 position: fixed !important;
-                bottom: 20px !important;
-                left: 20px !important;
+                bottom: 22px !important;
+                right: 22px !important;
+                left: auto !important;
                 z-index: 99999 !important;
                 width: auto !important;
             }}
-            div[data-testid="stPopover"] > button {{
-                width: 68px !important;
-                height: 68px !important;
-                border-radius: 50% !important;
-                padding: 0 !important;
-                border: 3px solid #4CAF50 !important;
-                background-color: #0E140C !important;
-                background-image: url("data:{mime_m};base64,{b64_m}") !important;
-                background-size: cover !important;
-                background-position: center !important;
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65), 0 0 12px rgba(76, 175, 80, 0.55) !important;
-                color: transparent !important;
-                overflow: hidden !important;
-                transition: transform 0.2s ease !important;
+            div.st-key-btn_flutuante_chatcontrol button {{
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: flex-end !important;
+                width: 96px !important;
+                height: 102px !important;
+                padding: 6px 6px 8px 6px !important;
+                border-radius: 20px !important;
+                border: 2.5px solid #4CAF50 !important;
+                background-color: rgba(14, 20, 12, 0.94) !important;
+                background-image: url("{icone_url}") !important;
+                background-size: 62px 62px !important;
+                background-repeat: no-repeat !important;
+                background-position: center 8px !important;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.72), 0 0 14px rgba(76, 175, 80, 0.55) !important;
+                transition: transform 0.2s ease, box-shadow 0.2s ease !important;
             }}
-            div[data-testid="stPopover"] > button:hover {{
-                transform: scale(1.08) !important;
+            div.st-key-btn_flutuante_chatcontrol button:hover {{
+                transform: translateY(-3px) scale(1.04) !important;
+                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8), 0 0 18px rgba(76, 175, 80, 0.8) !important;
             }}
-            div[data-testid="stPopover"] > button p,
-            div[data-testid="stPopover"] > button span,
-            div[data-testid="stPopover"] > button svg {{
-                display: none !important;
-            }}
-            div[data-testid="stPopoverBody"] {{
-                width: min(760px, 92vw) !important;
-                max-height: 82vh !important;
-                overflow-y: auto !important;
-                border: 2px solid #4CAF50 !important;
-                border-radius: 14px !important;
+            div.st-key-btn_flutuante_chatcontrol button p {{
+                margin: 0 !important;
+                padding: 2px 6px !important;
+                font-size: 12px !important;
+                font-weight: 800 !important;
+                letter-spacing: 0.3px !important;
+                color: #FFFFFF !important;
+                background: rgba(27, 94, 32, 0.92) !important;
+                border-radius: 8px !important;
+                line-height: 1.15 !important;
             }}
             </style>
             """,
@@ -2650,34 +2684,30 @@ def render_widget_flutuante_chatcontrol():
         st.markdown(
             """
             <style>
-            div[data-testid="stPopover"] {
+            div.st-key-btn_flutuante_chatcontrol {
                 position: fixed !important;
-                bottom: 20px !important;
-                left: 20px !important;
+                bottom: 22px !important;
+                right: 22px !important;
+                left: auto !important;
                 z-index: 99999 !important;
                 width: auto !important;
             }
-            div[data-testid="stPopover"] > button {
-                width: 64px !important;
-                height: 64px !important;
-                border-radius: 50% !important;
-                border: 3px solid #4CAF50 !important;
+            div.st-key-btn_flutuante_chatcontrol button {
+                border-radius: 50px !important;
+                padding: 10px 18px !important;
+                border: 2.5px solid #4CAF50 !important;
                 background-color: #1B5E20 !important;
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65) !important;
-                font-size: 28px !important;
-            }
-            div[data-testid="stPopoverBody"] {
-                width: min(760px, 92vw) !important;
-                max-height: 82vh !important;
-                overflow-y: auto !important;
+                color: #FFFFFF !important;
+                font-weight: 800 !important;
+                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.72) !important;
             }
             </style>
             """,
             unsafe_allow_html=True,
         )
 
-    with st.popover("🍏", use_container_width=False):
-        render_chat_control()
+    if st.button("ChatControl", key="btn_flutuante_chatcontrol"):
+        _abrir_modal_chatcontrol()
 
 
 def obter_css_fundo(tema_selecionado, custom_b64=""):
