@@ -2479,9 +2479,54 @@ def _cc_processar_comando(prompt: str) -> dict:
     }
 
 
+def _cc_buscar_mascote():
+    for candidato in [
+        "mascote_chatcontrol.png",
+        "mascote_chatcontrol.png.png",
+        "mascote_chatcontrol.jpg",
+        "mascote_chatcontrol.jpeg",
+    ]:
+        if os.path.exists(candidato) and os.path.isfile(candidato):
+            return candidato
+    if os.path.exists("."):
+        for arq in os.listdir("."):
+            if arq.lower().startswith("mascote_chatcontrol") and os.path.isfile(arq):
+                return arq
+    return None
+
+
+def _cc_mascote_b64():
+    caminho = _cc_buscar_mascote()
+    if not caminho:
+        return "", "image/png"
+    return obter_arquivo_b64_e_mime(caminho)
+
+
 def render_chat_control():
-    st.markdown("## 🍏 ChatControl — Assistente Inteligente de Logística")
-    st.caption("Solicite relatórios gerenciais, saldos de bonificação, baixas de avarias ou romaneios por loja e período.")
+    b64_m, mime_m = _cc_mascote_b64()
+    mascote_path = _cc_buscar_mascote()
+    avatar_cc = mascote_path if mascote_path else "🍏"
+
+    if b64_m:
+        st.markdown(
+            f"""
+            <div style="display:flex; align-items:center; gap:14px; margin-bottom:8px;">
+                <img src="data:{mime_m};base64,{b64_m}"
+                     style="width:58px; height:58px; border-radius:50%; object-fit:cover;
+                            border:2px solid #4CAF50; box-shadow:0 4px 12px rgba(0,0,0,0.45);" />
+                <div>
+                    <h3 style="margin:0; padding:0;">ChatControl — Assistente Inteligente de Logística</h3>
+                    <span style="font-size:13px; opacity:0.85;">
+                        Solicite relatórios gerenciais, saldos de bonificação, baixas de avarias ou romaneios por loja e período.
+                    </span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown("### 🍏 ChatControl — Assistente Inteligente de Logística")
+        st.caption("Solicite relatórios gerenciais, saldos de bonificação, baixas de avarias ou romaneios por loja e período.")
 
     if "chatcontrol_mensagens" not in st.session_state:
         st.session_state["chatcontrol_mensagens"] = [
@@ -2514,26 +2559,28 @@ def render_chat_control():
 
     st.markdown("---")
 
-    for idx_msg, msg in enumerate(st.session_state["chatcontrol_mensagens"]):
-        avatar_cc = ("mascote_chatcontrol.png" if os.path.exists("mascote_chatcontrol.png") else "🍏") if msg["role"] == "assistant" else None
-        with st.chat_message(msg["role"], avatar=avatar_cc):
-            st.markdown(msg["content"])
-            if msg.get("df_preview") is not None and not msg["df_preview"].empty:
-                st.dataframe(msg["df_preview"], use_container_width=True, hide_index=True)
-            arquivos = msg.get("files") or []
-            if arquivos:
-                cols_dl = st.columns(len(arquivos))
-                for idx_f, arq in enumerate(arquivos):
-                    with cols_dl[idx_f]:
-                        st.download_button(
-                            label=arq["label"],
-                            data=arq["data"],
-                            file_name=arq["file_name"],
-                            mime=arq["mime"],
-                            type="primary" if idx_f == 0 else "secondary",
-                            key=f"cc_dl_{idx_msg}_{idx_f}",
-                            use_container_width=True,
-                        )
+    box_msgs = st.container(height=360)
+    with box_msgs:
+        for idx_msg, msg in enumerate(st.session_state["chatcontrol_mensagens"]):
+            av = avatar_cc if msg["role"] == "assistant" else None
+            with st.chat_message(msg["role"], avatar=av):
+                st.markdown(msg["content"])
+                if msg.get("df_preview") is not None and not msg["df_preview"].empty:
+                    st.dataframe(msg["df_preview"], use_container_width=True, hide_index=True)
+                arquivos = msg.get("files") or []
+                if arquivos:
+                    cols_dl = st.columns(len(arquivos))
+                    for idx_f, arq in enumerate(arquivos):
+                        with cols_dl[idx_f]:
+                            st.download_button(
+                                label=arq["label"],
+                                data=arq["data"],
+                                file_name=arq["file_name"],
+                                mime=arq["mime"],
+                                type="primary" if idx_f == 0 else "secondary",
+                                key=f"cc_dl_{idx_msg}_{idx_f}",
+                                use_container_width=True,
+                            )
 
     prompt_usuario = st.chat_input("Digite sua solicitação para o ChatControl (ex: Relatório de avarias Loja 02)...")
     comando_final = atalho_prompt or prompt_usuario
@@ -2549,6 +2596,88 @@ def render_chat_control():
             resposta_bot = _cc_processar_comando(comando_final)
         st.session_state["chatcontrol_mensagens"].append(resposta_bot)
         st.rerun()
+
+
+def render_widget_flutuante_chatcontrol():
+    """Renderiza o botão/painel flutuante do ChatControl no canto inferior esquerdo."""
+    b64_m, mime_m = _cc_mascote_b64()
+    if b64_m:
+        st.markdown(
+            f"""
+            <style>
+            div[data-testid="stPopover"] {{
+                position: fixed !important;
+                bottom: 20px !important;
+                left: 20px !important;
+                z-index: 99999 !important;
+                width: auto !important;
+            }}
+            div[data-testid="stPopover"] > button {{
+                width: 68px !important;
+                height: 68px !important;
+                border-radius: 50% !important;
+                padding: 0 !important;
+                border: 3px solid #4CAF50 !important;
+                background-color: #0E140C !important;
+                background-image: url("data:{mime_m};base64,{b64_m}") !important;
+                background-size: cover !important;
+                background-position: center !important;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65), 0 0 12px rgba(76, 175, 80, 0.55) !important;
+                color: transparent !important;
+                overflow: hidden !important;
+                transition: transform 0.2s ease !important;
+            }}
+            div[data-testid="stPopover"] > button:hover {{
+                transform: scale(1.08) !important;
+            }}
+            div[data-testid="stPopover"] > button p,
+            div[data-testid="stPopover"] > button span,
+            div[data-testid="stPopover"] > button svg {{
+                display: none !important;
+            }}
+            div[data-testid="stPopoverBody"] {{
+                width: min(760px, 92vw) !important;
+                max-height: 82vh !important;
+                overflow-y: auto !important;
+                border: 2px solid #4CAF50 !important;
+                border-radius: 14px !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            """
+            <style>
+            div[data-testid="stPopover"] {
+                position: fixed !important;
+                bottom: 20px !important;
+                left: 20px !important;
+                z-index: 99999 !important;
+                width: auto !important;
+            }
+            div[data-testid="stPopover"] > button {
+                width: 64px !important;
+                height: 64px !important;
+                border-radius: 50% !important;
+                border: 3px solid #4CAF50 !important;
+                background-color: #1B5E20 !important;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.65) !important;
+                font-size: 28px !important;
+            }
+            div[data-testid="stPopoverBody"] {
+                width: min(760px, 92vw) !important;
+                max-height: 82vh !important;
+                overflow-y: auto !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with st.popover("🍏", use_container_width=False):
+        render_chat_control()
 
 
 def obter_css_fundo(tema_selecionado, custom_b64=""):
@@ -2984,7 +3113,6 @@ else:
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🍏 ChatControl": "ChatControl",
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
@@ -4517,9 +4645,6 @@ else:
                     mime="application/pdf", type="primary", key="btn_download_executivo_bi"
                 )
 
-    elif menu == "ChatControl" and is_admin:
-        render_chat_control()
-
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         with spinner_supernova("Carregando cadastros..."):
             st.title("🛒 Gerenciamento e Cadastro (Produtos & Fornecedores)")
@@ -4860,6 +4985,9 @@ else:
                                     conn_del_u.close()
         else:
             st.info("Nenhum usuário cadastrado.")
+
+    if is_admin:
+        render_widget_flutuante_chatcontrol()
 
 st.markdown("""
 <div style="text-align: center; color: gray; font-size: 0.8em; margin-top: 30px; padding: 10px; border-top: 1px solid rgba(128,128,128,0.2);">
