@@ -2159,6 +2159,391 @@ def gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_bonf_sub, df_baixas_sub):
     buffer.seek(0)
     return buffer
 
+
+# ==============================================================================
+# MÓDULO CHATCONTROL - ASSISTENTE INTELIGENTE DE LOGÍSTICA & RELATÓRIOS
+# ==============================================================================
+LOJAS_MAP_CC = {
+    "02": "Loja 02 - Nova Cidade",
+    "nova cidade": "Loja 02 - Nova Cidade",
+    "03": "Loja 03 - Terra Nova",
+    "terra nova": "Loja 03 - Terra Nova",
+    "04": "Loja 04 - Manoa",
+    "manoa": "Loja 04 - Manoa",
+    "05": "Loja 05 - Zumbi",
+    "zumbi": "Loja 05 - Zumbi",
+    "06": "Loja 06 - Oswaldo Frota",
+    "oswaldo frota": "Loja 06 - Oswaldo Frota",
+    "07": "Loja 07 - Mosaico",
+    "mosaico": "Loja 07 - Mosaico",
+}
+
+
+def _cc_detectar_loja(texto_lower: str, lojas_disponiveis: list) -> str | None:
+    for chave, padrao in LOJAS_MAP_CC.items():
+        if re.search(rf"\b{re.escape(chave)}\b", texto_lower):
+            for lj in lojas_disponiveis:
+                if chave in lj.lower() or padrao.split("-")[-1].strip().lower() in lj.lower():
+                    return lj
+            return padrao
+    for lj in lojas_disponiveis:
+        if lj.lower() in texto_lower:
+            return lj
+    return None
+
+
+def _cc_filtrar_periodo(df: pd.DataFrame, col_data: str, texto_lower: str) -> tuple[pd.DataFrame, str]:
+    if df.empty or col_data not in df.columns:
+        return df, "Todo o histórico"
+
+    agora = datetime.now(ZoneInfo("America/Manaus"))
+    datas = pd.to_datetime(df[col_data].astype(str).str.split(" ").str[0], format="%d/%m/%Y", errors="coerce")
+
+    if "hoje" in texto_lower:
+        return df[datas.dt.date == agora.date()], f"Hoje ({agora.strftime('%d/%m/%Y')})"
+    if "ontem" in texto_lower:
+        ontem = (agora - timedelta(days=1)).date()
+        return df[datas.dt.date == ontem], f"Ontem ({ontem.strftime('%d/%m/%Y')})"
+    if "7 dias" in texto_lower or "semana" in texto_lower:
+        limite = (agora - timedelta(days=7)).replace(tzinfo=None)
+        return df[datas >= limite], "Últimos 7 dias"
+    if "30 dias" in texto_lower or "mês" in texto_lower or "mes" in texto_lower:
+        limite = (agora - timedelta(days=30)).replace(tzinfo=None)
+        return df[datas >= limite], "Últimos 30 dias"
+    if "90 dias" in texto_lower or "trimestre" in texto_lower:
+        limite = (agora - timedelta(days=90)).replace(tzinfo=None)
+        return df[datas >= limite], "Últimos 90 dias"
+
+    m_data = re.search(r"(\d{2}/\d{2}/\d{4})", texto_lower)
+    if m_data:
+        dt_alvo = pd.to_datetime(m_data.group(1), format="%d/%m/%Y", errors="coerce")
+        if pd.notna(dt_alvo):
+            return df[datas.dt.date == dt_alvo.date()], f"Data {m_data.group(1)}"
+
+    return df, "Todo o histórico"
+
+
+def _cc_gerar_excel_bytes(abas: dict) -> bytes:
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        for nome_aba, df_aba in abas.items():
+            nome_limpo = re.sub(r"[\\/*?:\[\]]", "_", nome_aba)[:31] or "Dados"
+            df_export = df_aba.copy() if not df_aba.empty else pd.DataFrame({"Aviso": ["Sem registros no filtro"]})
+            df_export.to_excel(writer, sheet_name=nome_limpo, index=False)
+            ws = writer.sheets[nome_limpo]
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or "")) for cell in col)
+                ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 3, 12), 45)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _cc_gerar_pdf_dinamico(titulo_relatorio: str, subtitulo: str, df_dados: pd.DataFrame, resumo_rodape: str) -> bytes:
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=landscape(letter), rightMargin=25, leftMargin=25, topMargin=25, bottomMargin=25)
+    story = []
+    styles = getSampleStyleSheet()
+    style_cell = ParagraphStyle("CCCell", parent=styles["Normal"], alignment=1, fontName="Helvetica", fontSize=8)
+    style_head = ParagraphStyle("CCHead", parent=styles["Normal"], alignment=1, fontName="Helvetica-Bold", fontSize=8, textColor=colors.whitesmoke)
+
+    logo_path = buscar_caminho_logo()
+    logo_img = RLImage(logo_path, width=65, height=42) if logo_path and os.path.exists(logo_path) else Paragraph("<b>SUPERNOVA</b>", styles["Normal"])
+    emissao = datetime.now(ZoneInfo("America/Manaus")).strftime("%d/%m/%Y %H:%M")
+
+    header = Table(
+        [[logo_img, Paragraph(f"<b>SUPERMERCADO SUPER NOVA CIDADE</b><br/>ChatControl • {titulo_relatorio}<br/><font size=8>{subtitulo}</font>", styles["Normal"]), Paragraph(f"<b>Emissão:</b> {emissao}<br/><b>Registros:</b> {len(df_dados)}", styles["Normal"])]],
+        colWidths=[75, 535, 182],
+    )
+    header.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("GRID", (0, 0), (-1, -1), 0.5, colors.grey), ("BACKGROUND", (0, 0), (-1, -1), colors.lightgrey)]))
+    story.append(header)
+    story.append(Spacer(1, 12))
+
+    if df_dados.empty:
+        story.append(Paragraph("Nenhum registro encontrado para os filtros solicitados.", styles["Normal"]))
+    else:
+        df_pdf = df_dados.iloc[:, :9].head(150)
+        col_w = 792.0 / max(len(df_pdf.columns), 1)
+        tabela_rows = [[Paragraph(str(c), style_head) for c in df_pdf.columns]]
+        for _, row in df_pdf.iterrows():
+            tabela_rows.append([Paragraph(str(val if pd.notna(val) else "-"), style_cell) for val in row])
+
+        tbl = Table(tabela_rows, colWidths=[col_w] * len(df_pdf.columns))
+        tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1B5E20")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F4F6F8")]),
+            ("GRID", (0, 0), (-1, -1), 0.4, colors.grey),
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ]))
+        story.append(tbl)
+
+    if resumo_rodape:
+        story.append(Spacer(1, 10))
+        foot = Table([[resumo_rodape]], colWidths=[792])
+        foot.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#1A202C")),
+            ("TEXTCOLOR", (0, 0), (-1, -1), colors.whitesmoke),
+            ("ALIGN", (0, 0), (-1, -1), "RIGHT"),
+            ("FONTNAME", (0, 0), (-1, -1), "Helvetica-Bold"),
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ]))
+        story.append(foot)
+
+    doc.build(story, onFirstPage=desenhar_fundo_pdf, onLaterPages=desenhar_fundo_pdf)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _cc_processar_comando(prompt: str) -> dict:
+    texto = prompt.strip()
+    texto_lower = texto.lower()
+    ts_str = datetime.now(ZoneInfo("America/Manaus")).strftime("%Y%m%d_%H%M")
+
+    conn, _ = get_db_connection()
+    try:
+        df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn)
+        df_baixas = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel FROM baixas_avarias ORDER BY id DESC", conn)
+        df_rom = pd.read_sql_query("""
+            SELECT r.id, r.numero_romaneio, r.loja, r.data_recebimento, r.fornecedor, r.conferente, r.tipo_operacao, r.status_nota,
+                   COALESCE(SUM(i.valor_total), 0) AS valor_total_romaneio, COUNT(i.id) AS qtd_itens
+            FROM romaneios r
+            LEFT JOIN romaneio_itens i ON i.romaneio_id = r.id
+            GROUP BY r.id, r.numero_romaneio, r.loja, r.data_recebimento, r.fornecedor, r.conferente, r.tipo_operacao, r.status_nota
+            ORDER BY r.id DESC
+        """, conn)
+    finally:
+        conn.close()
+
+    lojas_existentes = sorted(list(
+        set(df_bonf["loja"].dropna().astype(str))
+        | set(df_baixas["loja_baixa"].dropna().astype(str))
+        | set(df_rom["loja"].dropna().astype(str))
+    ))
+    loja_filtro = _cc_detectar_loja(texto_lower, lojas_existentes)
+
+    # 1. BAIXAS DE AVARIAS
+    if any(k in texto_lower for k in ["avaria", "avarias", "baixa", "baixas", "perda", "perdas"]):
+        df_f = df_baixas.copy()
+        if loja_filtro and not df_f.empty:
+            df_f = df_f[df_f["loja_baixa"].str.lower() == loja_filtro.lower()]
+        df_f, lbl_periodo = _cc_filtrar_periodo(df_f, "data_baixa", texto_lower)
+
+        tot_avaria = float(df_f["valor_total_avaria"].sum()) if not df_f.empty else 0.0
+        tot_qtd = float(df_f["quantidade_kg_cx"].sum()) if not df_f.empty else 0.0
+        escopo = f"**{loja_filtro}**" if loja_filtro else "**Todas as Lojas**"
+
+        resposta = (
+            f"### 📉 Relatório de Baixas de Avarias\n"
+            f"- **Escopo:** {escopo} | **Período:** {lbl_periodo}\n"
+            f"- **Registros encontrados:** {len(df_f)}\n"
+            f"- **Volume total baixado:** {fmt_ptbr(tot_qtd, 3)} kg/cx\n"
+            f"- **Valor total compensado:** **R$ {fmt_ptbr(tot_avaria, 2)}**\n\n"
+            f"Os arquivos em **PDF** e **Excel** estão prontos para download abaixo."
+        )
+        pdf_bytes = gerar_pdf_baixas(df_f).getvalue()
+        xlsx_bytes = _cc_gerar_excel_bytes({"Baixas_Avarias": df_f})
+        return {
+            "role": "assistant",
+            "content": resposta,
+            "df_preview": df_f[["loja_baixa", "data_baixa", "nf_b_entrada", "produto_hortifruti", "quantidade_kg_cx", "valor_total_avaria"]].head(15) if not df_f.empty else None,
+            "files": [
+                {"label": "📥 Baixar PDF - Baixas de Avarias", "data": pdf_bytes, "file_name": f"ChatControl_Baixas_Avarias_{ts_str}.pdf", "mime": "application/pdf"},
+                {"label": "📊 Baixar Excel (.xlsx)", "data": xlsx_bytes, "file_name": f"ChatControl_Baixas_Avarias_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            ],
+        }
+
+    # 2. BONIFICAÇÕES E SALDOS
+    if any(k in texto_lower for k in ["bonifica", "saldo", "nota", "transferência", "transferencia"]):
+        df_f = df_bonf.copy()
+        if loja_filtro and not df_f.empty:
+            df_f = df_f[df_f["loja"].str.lower() == loja_filtro.lower()]
+        if "disponível" in texto_lower or "disponivel" in texto_lower or "saldo" in texto_lower:
+            df_f = df_f[df_f["status"].isin(["Disponível", "Parcialmente Utilizada"])]
+        df_f, lbl_periodo = _cc_filtrar_periodo(df_f, "data_entrada", texto_lower)
+
+        tot_bonf = float(df_f["valor_bonificacao"].sum()) if not df_f.empty else 0.0
+        escopo = f"**{loja_filtro}**" if loja_filtro else "**Todas as Lojas**"
+
+        resposta = (
+            f"### 🎁 Controle de Bonificações\n"
+            f"- **Escopo:** {escopo} | **Período:** {lbl_periodo}\n"
+            f"- **Notas listadas:** {len(df_f)}\n"
+            f"- **Valor total bonificado/transferido:** **R$ {fmt_ptbr(tot_bonf, 2)}**\n\n"
+            f"Arquivos gerados e disponíveis abaixo."
+        )
+        pdf_bytes = gerar_pdf_bonificacoes(df_f).getvalue()
+        xlsx_bytes = _cc_gerar_excel_bytes({"Bonificacoes": df_f})
+        return {
+            "role": "assistant",
+            "content": resposta,
+            "df_preview": df_f[["numero_nota", "tipo_bonificacao", "loja", "data_entrada", "valor_bonificacao", "status", "produto_hortifruti"]].head(15) if not df_f.empty else None,
+            "files": [
+                {"label": "📥 Baixar PDF - Bonificações", "data": pdf_bytes, "file_name": f"ChatControl_Bonificacoes_{ts_str}.pdf", "mime": "application/pdf"},
+                {"label": "📊 Baixar Excel (.xlsx)", "data": xlsx_bytes, "file_name": f"ChatControl_Bonificacoes_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            ],
+        }
+
+    # 3. ROMANEIOS DE RECEBIMENTO
+    if any(k in texto_lower for k in ["romaneio", "romaneios", "recebimento", "fornecedor", "compra"]):
+        df_f = df_rom.copy()
+        if loja_filtro and not df_f.empty:
+            df_f = df_f[df_f["loja"].str.lower() == loja_filtro.lower()]
+        df_f, lbl_periodo = _cc_filtrar_periodo(df_f, "data_recebimento", texto_lower)
+
+        tot_rom = float(df_f["valor_total_romaneio"].sum()) if not df_f.empty else 0.0
+        escopo = f"**{loja_filtro}**" if loja_filtro else "**Todas as Lojas**"
+
+        resposta = (
+            f"### 📋 Relatório de Romaneios de Recebimento\n"
+            f"- **Escopo:** {escopo} | **Período:** {lbl_periodo}\n"
+            f"- **Total de romaneios:** {len(df_f)}\n"
+            f"- **Valor financeiro total:** **R$ {fmt_ptbr(tot_rom, 2)}**\n\n"
+            f"Baixe o consolidado em **PDF** ou **Excel** abaixo."
+        )
+        df_exibir = df_f[["numero_romaneio", "loja", "data_recebimento", "fornecedor", "conferente", "tipo_operacao", "qtd_itens", "valor_total_romaneio"]].copy()
+        df_exibir.columns = ["Romaneio", "Loja", "Data", "Fornecedor", "Conferente", "Operação", "Itens", "Total (R$)"]
+        pdf_bytes = _cc_gerar_pdf_dinamico(
+            "Relatório Consolidado de Romaneios",
+            f"Escopo: {loja_filtro or 'Todas as Lojas'} | Período: {lbl_periodo}",
+            df_exibir,
+            f"TOTAL GERAL DOS ROMANEIOS: R$ {fmt_ptbr(tot_rom, 2)}",
+        )
+        xlsx_bytes = _cc_gerar_excel_bytes({"Romaneios": df_exibir})
+        return {
+            "role": "assistant",
+            "content": resposta,
+            "df_preview": df_exibir.head(15) if not df_exibir.empty else None,
+            "files": [
+                {"label": "📥 Baixar PDF - Romaneios", "data": pdf_bytes, "file_name": f"ChatControl_Romaneios_{ts_str}.pdf", "mime": "application/pdf"},
+                {"label": "📊 Baixar Excel (.xlsx)", "data": xlsx_bytes, "file_name": f"ChatControl_Romaneios_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            ],
+        }
+
+    # 4. RESUMO EXECUTIVO GERAL / BI
+    df_b_sub = df_bonf.copy()
+    df_bx_sub = df_baixas.copy()
+    if loja_filtro:
+        if not df_b_sub.empty:
+            df_b_sub = df_b_sub[df_b_sub["loja"].str.lower() == loja_filtro.lower()]
+        if not df_bx_sub.empty:
+            df_bx_sub = df_bx_sub[df_bx_sub["loja_baixa"].str.lower() == loja_filtro.lower()]
+
+    df_b_sub, lbl_periodo = _cc_filtrar_periodo(df_b_sub, "data_entrada", texto_lower)
+    df_bx_sub, _ = _cc_filtrar_periodo(df_bx_sub, "data_baixa", texto_lower)
+
+    v_tot_bonf = float(df_b_sub[df_b_sub.get("tipo_bonificacao", "Bonificação") == "Bonificação"]["valor_bonificacao"].sum()) if not df_b_sub.empty else 0.0
+    v_tot_transf = float(df_b_sub[df_b_sub.get("tipo_bonificacao", "Bonificação") == "Transferência de Bonificação"]["valor_bonificacao"].sum()) if not df_b_sub.empty else 0.0
+    v_tot_entradas = float(df_b_sub["valor_bonificacao"].sum()) if not df_b_sub.empty else 0.0
+    v_tot_avarias = float(df_bx_sub["valor_total_avaria"].sum()) if not df_bx_sub.empty else 0.0
+    taxa_cobertura = float((v_tot_avarias / v_tot_entradas * 100)) if v_tot_entradas > 0 else 0.0
+    saldo_restante = float(max(0.0, v_tot_entradas - v_tot_avarias))
+
+    metrics_dict = {
+        "tot_bonf": v_tot_bonf,
+        "tot_transf": v_tot_transf,
+        "tot_avaria": v_tot_avarias,
+        "taxa_cobertura": taxa_cobertura,
+        "saldo_restante": saldo_restante,
+    }
+    escopo = f"**{loja_filtro}**" if loja_filtro else "**Todas as Lojas (Rede Super Nova Cidade)**"
+    resposta = (
+        f"### 🏆 Resumo Executivo Gerencial — HortiControl\n"
+        f"- **Escopo:** {escopo} | **Período:** {lbl_periodo}\n"
+        f"- **1. Entradas Bonificadas:** R$ {fmt_ptbr(v_tot_bonf, 2)}\n"
+        f"- **2. Transferências:** R$ {fmt_ptbr(v_tot_transf, 2)}\n"
+        f"- **3. Perdas Evitadas (Avarias Cobertas):** **R$ {fmt_ptbr(v_tot_avarias, 2)}**\n"
+        f"- **4. Taxa de Cobertura:** {fmt_ptbr(taxa_cobertura, 2)}%\n"
+        f"- **5. Saldo Remanescente:** **R$ {fmt_ptbr(saldo_restante, 2)}**\n\n"
+        f"O **PDF Executivo** e a **Planilha Completa (.xlsx)** estão prontos para download abaixo."
+    )
+    pdf_bi_bytes = gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_b_sub, df_bx_sub).getvalue()
+    xlsx_bi_bytes = _cc_gerar_excel_bytes({
+        "Resumo_KPIs": pd.DataFrame([metrics_dict]),
+        "Bonificacoes": df_b_sub,
+        "Baixas_Avarias": df_bx_sub,
+        "Romaneios": df_rom,
+    })
+    return {
+        "role": "assistant",
+        "content": resposta,
+        "df_preview": None,
+        "files": [
+            {"label": "📥 Baixar PDF Executivo (BI)", "data": pdf_bi_bytes, "file_name": f"ChatControl_Relatorio_Executivo_{ts_str}.pdf", "mime": "application/pdf"},
+            {"label": "📊 Baixar Planilha Completa (.xlsx)", "data": xlsx_bi_bytes, "file_name": f"ChatControl_Dados_Completos_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        ],
+    }
+
+
+def render_chat_control():
+    st.markdown("## 🤖 ChatControl — Assistente Inteligente de Logística")
+    st.caption("Solicite relatórios gerenciais, saldos de bonificação, baixas de avarias ou romaneios por loja e período.")
+
+    if "chatcontrol_mensagens" not in st.session_state:
+        st.session_state["chatcontrol_mensagens"] = [
+            {
+                "role": "assistant",
+                "content": (
+                    "Olá! Sou o **ChatControl** do HortiControl. Posso consultar o banco de dados em tempo real e gerar relatórios prontos para download em **PDF** e **Excel**.\n\n"
+                    "**Exemplos do que você pode pedir:**\n"
+                    "- *\"Gerar relatório executivo geral\"*\n"
+                    "- *\"Relatório de baixas de avarias da Loja 04 Manoa nos últimos 30 dias\"*\n"
+                    "- *\"Mostrar saldo disponível de bonificações\"*\n"
+                    "- *\"Romaneios recebidos hoje\"*"
+                ),
+                "df_preview": None,
+                "files": [],
+            }
+        ]
+
+    col_at1, col_at2, col_at3, col_at4 = st.columns(4)
+    atalho_prompt = None
+    if col_at1.button("📊 Resumo Executivo", use_container_width=True, key="cc_btn_exec"):
+        atalho_prompt = "Gerar relatório executivo geral"
+    if col_at2.button("🎁 Saldos Bonificação", use_container_width=True, key="cc_btn_bonf"):
+        atalho_prompt = "Mostrar saldo disponível de bonificações"
+    if col_at3.button("📉 Baixas de Avarias", use_container_width=True, key="cc_btn_avaria"):
+        atalho_prompt = "Relatório de baixas de avarias"
+    if col_at4.button("🗑️ Limpar Chat", use_container_width=True, key="cc_btn_limpar"):
+        st.session_state["chatcontrol_mensagens"] = st.session_state["chatcontrol_mensagens"][:1]
+        st.rerun()
+
+    st.markdown("---")
+
+    for idx_msg, msg in enumerate(st.session_state["chatcontrol_mensagens"]):
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+            if msg.get("df_preview") is not None and not msg["df_preview"].empty:
+                st.dataframe(msg["df_preview"], use_container_width=True, hide_index=True)
+            arquivos = msg.get("files") or []
+            if arquivos:
+                cols_dl = st.columns(len(arquivos))
+                for idx_f, arq in enumerate(arquivos):
+                    with cols_dl[idx_f]:
+                        st.download_button(
+                            label=arq["label"],
+                            data=arq["data"],
+                            file_name=arq["file_name"],
+                            mime=arq["mime"],
+                            type="primary" if idx_f == 0 else "secondary",
+                            key=f"cc_dl_{idx_msg}_{idx_f}",
+                            use_container_width=True,
+                        )
+
+    prompt_usuario = st.chat_input("Digite sua solicitação para o ChatControl (ex: Relatório de avarias Loja 02)...")
+    comando_final = atalho_prompt or prompt_usuario
+
+    if comando_final:
+        st.session_state["chatcontrol_mensagens"].append({
+            "role": "user",
+            "content": comando_final,
+            "df_preview": None,
+            "files": [],
+        })
+        with st.spinner("ChatControl consultando dados e gerando arquivos..."):
+            resposta_bot = _cc_processar_comando(comando_final)
+        st.session_state["chatcontrol_mensagens"].append(resposta_bot)
+        st.rerun()
+
+
 def obter_css_fundo(tema_selecionado, custom_b64=""):
     if tema_selecionado == "Fundo Branco":
         return """
@@ -2592,6 +2977,7 @@ else:
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
+            "🤖 ChatControl": "ChatControl",
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
@@ -4123,6 +4509,9 @@ else:
                     file_name=f"Relatorio_Executivo_Lideranca_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d_%H%M')}.pdf",
                     mime="application/pdf", type="primary", key="btn_download_executivo_bi"
                 )
+
+    elif menu == "ChatControl" and is_admin:
+        render_chat_control()
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         with spinner_supernova("Carregando cadastros..."):
