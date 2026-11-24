@@ -2223,19 +2223,25 @@ def _cc_filtrar_periodo(df: pd.DataFrame, col_data: str, texto_lower: str) -> tu
     return df, "Todo o histórico"
 
 
-def _cc_gerar_excel_bytes(abas: dict) -> bytes:
-    buffer = io.BytesIO()
-    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        for nome_aba, df_aba in abas.items():
-            nome_limpo = re.sub(r"[\\/*?:\[\]]", "_", nome_aba)[:31] or "Dados"
-            df_export = df_aba.copy() if not df_aba.empty else pd.DataFrame({"Aviso": ["Sem registros no filtro"]})
-            df_export.to_excel(writer, sheet_name=nome_limpo, index=False)
-            ws = writer.sheets[nome_limpo]
-            for col in ws.columns:
-                max_len = max(len(str(cell.value or "")) for cell in col)
-                ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 3, 12), 45)
-    buffer.seek(0)
-    return buffer.getvalue()
+def _cc_gerar_excel_bytes(abas: dict) -> tuple[bytes, str, str]:
+    try:
+        import openpyxl  # noqa: F401
+        buffer = io.BytesIO()
+        with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+            for nome_aba, df_aba in abas.items():
+                nome_limpo = re.sub(r"[\\/*?:\[\]]", "_", nome_aba)[:31] or "Dados"
+                df_export = df_aba.copy() if not df_aba.empty else pd.DataFrame({"Aviso": ["Sem registros no filtro"]})
+                df_export.to_excel(writer, sheet_name=nome_limpo, index=False)
+                ws = writer.sheets[nome_limpo]
+                for col in ws.columns:
+                    max_len = max(len(str(cell.value or "")) for cell in col)
+                    ws.column_dimensions[col[0].column_letter].width = min(max(max_len + 3, 12), 45)
+        buffer.seek(0)
+        return buffer.getvalue(), "xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    except ImportError:
+        primeiro_df = next(iter(abas.values())) if abas else pd.DataFrame()
+        csv_bytes = primeiro_df.to_csv(index=False, sep=";").encode("utf-8-sig")
+        return csv_bytes, "csv", "text/csv"
 
 
 def _cc_gerar_pdf_dinamico(titulo_relatorio: str, subtitulo: str, df_dados: pd.DataFrame, resumo_rodape: str) -> bytes:
@@ -2340,14 +2346,14 @@ def _cc_processar_comando(prompt: str) -> dict:
             f"Os arquivos em **PDF** e **Excel** estão prontos para download abaixo."
         )
         pdf_bytes = gerar_pdf_baixas(df_f).getvalue()
-        xlsx_bytes = _cc_gerar_excel_bytes({"Baixas_Avarias": df_f})
+        plan_bytes, plan_ext, plan_mime = _cc_gerar_excel_bytes({"Baixas_Avarias": df_f})
         return {
             "role": "assistant",
             "content": resposta,
             "df_preview": df_f[["loja_baixa", "data_baixa", "nf_b_entrada", "produto_hortifruti", "quantidade_kg_cx", "valor_total_avaria"]].head(15) if not df_f.empty else None,
             "files": [
                 {"label": "📥 Baixar PDF - Baixas de Avarias", "data": pdf_bytes, "file_name": f"ChatControl_Baixas_Avarias_{ts_str}.pdf", "mime": "application/pdf"},
-                {"label": "📊 Baixar Excel (.xlsx)", "data": xlsx_bytes, "file_name": f"ChatControl_Baixas_Avarias_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                {"label": f"📊 Baixar Planilha (.{plan_ext})", "data": plan_bytes, "file_name": f"ChatControl_Baixas_Avarias_{ts_str}.{plan_ext}", "mime": plan_mime},
             ],
         }
 
@@ -2371,14 +2377,14 @@ def _cc_processar_comando(prompt: str) -> dict:
             f"Arquivos gerados e disponíveis abaixo."
         )
         pdf_bytes = gerar_pdf_bonificacoes(df_f).getvalue()
-        xlsx_bytes = _cc_gerar_excel_bytes({"Bonificacoes": df_f})
+        plan_bytes, plan_ext, plan_mime = _cc_gerar_excel_bytes({"Bonificacoes": df_f})
         return {
             "role": "assistant",
             "content": resposta,
             "df_preview": df_f[["numero_nota", "tipo_bonificacao", "loja", "data_entrada", "valor_bonificacao", "status", "produto_hortifruti"]].head(15) if not df_f.empty else None,
             "files": [
                 {"label": "📥 Baixar PDF - Bonificações", "data": pdf_bytes, "file_name": f"ChatControl_Bonificacoes_{ts_str}.pdf", "mime": "application/pdf"},
-                {"label": "📊 Baixar Excel (.xlsx)", "data": xlsx_bytes, "file_name": f"ChatControl_Bonificacoes_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                {"label": f"📊 Baixar Planilha (.{plan_ext})", "data": plan_bytes, "file_name": f"ChatControl_Bonificacoes_{ts_str}.{plan_ext}", "mime": plan_mime},
             ],
         }
 
@@ -2407,14 +2413,14 @@ def _cc_processar_comando(prompt: str) -> dict:
             df_exibir,
             f"TOTAL GERAL DOS ROMANEIOS: R$ {fmt_ptbr(tot_rom, 2)}",
         )
-        xlsx_bytes = _cc_gerar_excel_bytes({"Romaneios": df_exibir})
+        plan_bytes, plan_ext, plan_mime = _cc_gerar_excel_bytes({"Romaneios": df_exibir})
         return {
             "role": "assistant",
             "content": resposta,
             "df_preview": df_exibir.head(15) if not df_exibir.empty else None,
             "files": [
                 {"label": "📥 Baixar PDF - Romaneios", "data": pdf_bytes, "file_name": f"ChatControl_Romaneios_{ts_str}.pdf", "mime": "application/pdf"},
-                {"label": "📊 Baixar Excel (.xlsx)", "data": xlsx_bytes, "file_name": f"ChatControl_Romaneios_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+                {"label": f"📊 Baixar Planilha (.{plan_ext})", "data": plan_bytes, "file_name": f"ChatControl_Romaneios_{ts_str}.{plan_ext}", "mime": plan_mime},
             ],
         }
 
@@ -2456,7 +2462,7 @@ def _cc_processar_comando(prompt: str) -> dict:
         f"O **PDF Executivo** e a **Planilha Completa (.xlsx)** estão prontos para download abaixo."
     )
     pdf_bi_bytes = gerar_pdf_relatorio_gerencial_bi(metrics_dict, df_b_sub, df_bx_sub).getvalue()
-    xlsx_bi_bytes = _cc_gerar_excel_bytes({
+    plan_bi_bytes, plan_bi_ext, plan_bi_mime = _cc_gerar_excel_bytes({
         "Resumo_KPIs": pd.DataFrame([metrics_dict]),
         "Bonificacoes": df_b_sub,
         "Baixas_Avarias": df_bx_sub,
@@ -2468,13 +2474,13 @@ def _cc_processar_comando(prompt: str) -> dict:
         "df_preview": None,
         "files": [
             {"label": "📥 Baixar PDF Executivo (BI)", "data": pdf_bi_bytes, "file_name": f"ChatControl_Relatorio_Executivo_{ts_str}.pdf", "mime": "application/pdf"},
-            {"label": "📊 Baixar Planilha Completa (.xlsx)", "data": xlsx_bi_bytes, "file_name": f"ChatControl_Dados_Completos_{ts_str}.xlsx", "mime": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+            {"label": f"📊 Baixar Planilha Completa (.{plan_bi_ext})", "data": plan_bi_bytes, "file_name": f"ChatControl_Dados_Completos_{ts_str}.{plan_bi_ext}", "mime": plan_bi_mime},
         ],
     }
 
 
 def render_chat_control():
-    st.markdown("## 🤖 ChatControl — Assistente Inteligente de Logística")
+    st.markdown("## 🍏 ChatControl — Assistente Inteligente de Logística")
     st.caption("Solicite relatórios gerenciais, saldos de bonificação, baixas de avarias ou romaneios por loja e período.")
 
     if "chatcontrol_mensagens" not in st.session_state:
@@ -2509,7 +2515,8 @@ def render_chat_control():
     st.markdown("---")
 
     for idx_msg, msg in enumerate(st.session_state["chatcontrol_mensagens"]):
-        with st.chat_message(msg["role"]):
+        avatar_cc = ("mascote_chatcontrol.png" if os.path.exists("mascote_chatcontrol.png") else "🍏") if msg["role"] == "assistant" else None
+        with st.chat_message(msg["role"], avatar=avatar_cc):
             st.markdown(msg["content"])
             if msg.get("df_preview") is not None and not msg["df_preview"].empty:
                 st.dataframe(msg["df_preview"], use_container_width=True, hide_index=True)
@@ -2977,7 +2984,7 @@ else:
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
-            "🤖 ChatControl": "ChatControl",
+            "🍏 ChatControl": "ChatControl",
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
