@@ -145,6 +145,16 @@ def obter_logo_transparente_b64(caminho_imagem):
                         visitado.add((nx, ny))
                         fila.append((nx, ny))
 
+        # Limpa bordas claras residuais adicionais após o primeiro floodfill
+        px2 = img.load()
+        for y_scan in range(h):
+            for x_scan in range(w):
+                r_s, g_s, b_s, a_s = px2[x_scan, y_scan]
+                if a_s > 0 and r_s > 195 and g_s > 195 and b_s > 195 and max(r_s, g_s, b_s) - min(r_s, g_s, b_s) < 35:
+                    # Só limpa se estiver próximo das bordas externas (margem de 14% da imagem)
+                    if x_scan < w * 0.14 or x_scan > w * 0.86 or y_scan < h * 0.14 or y_scan > h * 0.86:
+                        px2[x_scan, y_scan] = (255, 255, 255, 0)
+
         # Recorta automaticamente a área útil sem sobras externas e aplica máscara arredondada limpa
         bbox = img.getbbox()
         if bbox:
@@ -153,7 +163,7 @@ def obter_logo_transparente_b64(caminho_imagem):
         raio = max(16, int(min(cw, ch) * 0.18))
         mask = Image.new("L", (cw, ch), 0)
         draw = ImageDraw.Draw(mask)
-        draw.rounded_rectangle([(2, 2), (cw - 3, ch - 3)], radius=raio, fill=255)
+        draw.rounded_rectangle([(4, 4), (cw - 5, ch - 5)], radius=raio, fill=255)
         img_limpa = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
         img_limpa.paste(img, (0, 0), mask=mask)
 
@@ -2627,7 +2637,7 @@ def _abrir_modal_chatcontrol():
 
 
 def render_widget_flutuante_chatcontrol():
-    """Renderiza o botão flutuante do ChatControl no canto inferior direito com ícone do mascote e nome."""
+    """Renderiza o botão flutuante discreto do ChatControl no canto inferior direito."""
     b64_m, mime_m = _cc_mascote_b64()
     icone_url = f"data:{mime_m};base64,{b64_m}" if b64_m else ""
 
@@ -2637,44 +2647,47 @@ def render_widget_flutuante_chatcontrol():
             <style>
             div.st-key-btn_flutuante_chatcontrol {{
                 position: fixed !important;
-                bottom: 22px !important;
-                right: 22px !important;
+                bottom: 16px !important;
+                right: 16px !important;
                 left: auto !important;
                 z-index: 99999 !important;
                 width: auto !important;
             }}
             div.st-key-btn_flutuante_chatcontrol button {{
                 display: flex !important;
-                flex-direction: column !important;
                 align-items: center !important;
-                justify-content: flex-end !important;
-                width: 96px !important;
-                height: 102px !important;
-                padding: 6px 6px 8px 6px !important;
-                border-radius: 20px !important;
-                border: 2.5px solid #4CAF50 !important;
-                background-color: rgba(14, 20, 12, 0.94) !important;
+                justify-content: center !important;
+                width: 58px !important;
+                height: 58px !important;
+                min-height: 58px !important;
+                padding: 0 !important;
+                border-radius: 50% !important;
+                border: 2px solid #4CAF50 !important;
+                background-color: #0E140C !important;
                 background-image: url("{icone_url}") !important;
-                background-size: 62px 62px !important;
+                background-size: cover !important;
                 background-repeat: no-repeat !important;
-                background-position: center 8px !important;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.72), 0 0 14px rgba(76, 175, 80, 0.55) !important;
-                transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+                background-position: center !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55) !important;
+                transition: transform 0.2s ease !important;
+                overflow: hidden !important;
             }}
             div.st-key-btn_flutuante_chatcontrol button:hover {{
-                transform: translateY(-3px) scale(1.04) !important;
-                box-shadow: 0 12px 28px rgba(0, 0, 0, 0.8), 0 0 18px rgba(76, 175, 80, 0.8) !important;
+                transform: scale(1.06) !important;
             }}
-            div.st-key-btn_flutuante_chatcontrol button p {{
-                margin: 0 !important;
-                padding: 2px 6px !important;
-                font-size: 12px !important;
-                font-weight: 800 !important;
-                letter-spacing: 0.3px !important;
-                color: #FFFFFF !important;
-                background: rgba(27, 94, 32, 0.92) !important;
-                border-radius: 8px !important;
-                line-height: 1.15 !important;
+            div.st-key-btn_flutuante_chatcontrol button::before,
+            div.st-key-btn_flutuante_chatcontrol button::after,
+            div.st-key-btn_flutuante_chatcontrol::before,
+            div.st-key-btn_flutuante_chatcontrol::after {{
+                display: none !important;
+                content: none !important;
+            }}
+            div.st-key-btn_flutuante_chatcontrol button p,
+            div.st-key-btn_flutuante_chatcontrol button span {{
+                display: none !important;
+                font-size: 0 !important;
+                color: transparent !important;
+                background: transparent !important;
             }}
             </style>
             """,
@@ -2686,27 +2699,30 @@ def render_widget_flutuante_chatcontrol():
             <style>
             div.st-key-btn_flutuante_chatcontrol {
                 position: fixed !important;
-                bottom: 22px !important;
-                right: 22px !important;
+                bottom: 16px !important;
+                right: 16px !important;
                 left: auto !important;
                 z-index: 99999 !important;
                 width: auto !important;
             }
             div.st-key-btn_flutuante_chatcontrol button {
-                border-radius: 50px !important;
-                padding: 10px 18px !important;
-                border: 2.5px solid #4CAF50 !important;
+                border-radius: 50% !important;
+                width: 52px !important;
+                height: 52px !important;
+                min-height: 52px !important;
+                padding: 0 !important;
+                border: 2px solid #4CAF50 !important;
                 background-color: #1B5E20 !important;
                 color: #FFFFFF !important;
-                font-weight: 800 !important;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.72) !important;
+                font-weight: 700 !important;
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.55) !important;
             }
             </style>
             """,
             unsafe_allow_html=True,
         )
 
-    if st.button("ChatControl", key="btn_flutuante_chatcontrol"):
+    if st.button("CC", key="btn_flutuante_chatcontrol", help="Abrir ChatControl"):
         _abrir_modal_chatcontrol()
 
 
