@@ -121,6 +121,7 @@ except Exception:
     _device_id = st.session_state.get("_hc_device_id") or str(uuid.uuid4())
     st.session_state["_hc_device_id"] = _device_id
 
+@st.cache_data(show_spinner=False)
 def obter_logo_transparente_b64(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
         return ""
@@ -295,7 +296,7 @@ components.html(f"""
 </script>
 """, height=0)
 
-def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.45):
+def spinner_supernova(mensagem="Processando transição...", duracao_minima=0.0):
     # Componente visual personalizado garantindo a exibição da transição com a logo
     img_tag = f'<img src="data:image/png;base64,{logo_b64_global_overlay}" class="supernova-logo-pulse" />' if logo_b64_global_overlay else '<div style="font-size: 40px; margin-bottom: 20px;">📦</div>'
     
@@ -660,6 +661,7 @@ def _garantir_tabelas_controle_contingencia(conn_reserva):
     )
     """)
     conn_reserva.commit()
+    st.cache_data.clear()
 
 
 def _registrar_pendencia_contingencia(conn_reserva, tabela, chave_unica, operacao="UPSERT"):
@@ -935,12 +937,14 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
             raise
 
     conn_neon.commit()
+    st.cache_data.clear()
     for lid in sincronizados_ids:
         cur_sup.execute(
             "UPDATE _contingencia_sync_log SET sincronizado = 1, sincronizado_em = CURRENT_TIMESTAMP WHERE id = %s",
             (lid,),
         )
     conn_supabase.commit()
+    st.cache_data.clear()
     return len(sincronizados_ids)
 
 
@@ -1020,6 +1024,7 @@ def _espelhar_base_para_reserva(conn_neon, conn_supabase):
             )
 
     conn_supabase.commit()
+    st.cache_data.clear()
 
 
 class _CursorContingenciaWrapper:
@@ -1164,16 +1169,19 @@ def get_db_connection(ping_only=False):
             conn_neon = _conectar_pg_direto(neon_url, timeout=18, tentativas=2)
             st.session_state["_banco_ativo_modo"] = "Neon (Principal)"
             if not ping_only and supabase_url:
-                try:
-                    conn_sup_tmp = _conectar_pg_direto(supabase_url, timeout=8, tentativas=1)
+                _agora_sync = time_module.time()
+                if _agora_sync - st.session_state.get("_ultimo_check_sync_conn", 0.0) >= 60:
+                    st.session_state["_ultimo_check_sync_conn"] = _agora_sync
                     try:
-                        qtd_sinc = _sincronizar_reserva_para_principal(conn_neon, conn_sup_tmp)
-                        if qtd_sinc > 0:
-                            st.session_state["_qtd_ultima_sincronizacao"] = qtd_sinc
-                    finally:
-                        conn_sup_tmp.close()
-                except Exception:
-                    pass
+                        conn_sup_tmp = _conectar_pg_direto(supabase_url, timeout=8, tentativas=1)
+                        try:
+                            qtd_sinc = _sincronizar_reserva_para_principal(conn_neon, conn_sup_tmp)
+                            if qtd_sinc > 0:
+                                st.session_state["_qtd_ultima_sincronizacao"] = qtd_sinc
+                        finally:
+                            conn_sup_tmp.close()
+                    except Exception:
+                        pass
             return _ConnContingenciaWrapper(conn_neon, em_contingencia=False), "postgres"
         except Exception as e_neon:
             erro_neon = e_neon
@@ -1184,6 +1192,7 @@ def get_db_connection(ping_only=False):
                 _garantir_schema_postgres(conn_sup)
                 _garantir_tabelas_controle_contingencia(conn_sup)
                 conn_sup.commit()
+                st.cache_data.clear()
                 st.session_state["_banco_ativo_modo"] = "Supabase (Contingência Ativa)"
                 if not ping_only:
                     st.warning("⚠️ Neon indisponível no momento. Modo contingência ativado no Supabase — tudo que for salvo será sincronizado automaticamente para o Neon assim que ele voltar.")
@@ -1213,6 +1222,7 @@ def executar_keep_alive_banco():
             cur_n.execute("SELECT 1")
             cur_n.fetchone()
             conn_n.commit()
+            st.cache_data.clear()
             status_detalhes.append("neon:ok")
         except Exception as e_n:
             status_detalhes.append(f"neon:err({e_n})")
@@ -1224,6 +1234,7 @@ def executar_keep_alive_banco():
                 cur_s.execute("SELECT 1")
                 cur_s.fetchone()
                 conn_s.commit()
+                st.cache_data.clear()
                 status_detalhes.append("supabase:ok")
                 if conn_n is not None:
                     sinc = _sincronizar_reserva_para_principal(conn_n, conn_s)
@@ -1408,6 +1419,44 @@ def carregar_fornecedores_cached():
     finally:
         conn.close()
 
+@st.cache_data(ttl=45, show_spinner=False)
+def _carregar_romaneios_e_totais_cached():
+    conn, _ = get_db_connection()
+    try:
+        df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes, ass_conf_b64, ass_ent_b64 FROM romaneios ORDER BY id DESC", conn)
+        df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
+        return df_rom, df_all_itens
+    finally:
+        conn.close()
+
+@st.cache_data(ttl=45, show_spinner=False)
+def _carregar_bonificacoes_cached():
+    conn, _ = get_db_connection()
+    try:
+        return pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64 FROM bonificacoes ORDER BY id DESC", conn)
+    finally:
+        conn.close()
+
+@st.cache_data(ttl=45, show_spinner=False)
+def _carregar_baixas_avarias_cached():
+    conn, _ = get_db_connection()
+    try:
+        return pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64 FROM baixas_avarias ORDER BY id DESC", conn)
+    finally:
+        conn.close()
+
+@st.cache_data(ttl=45, show_spinner=False)
+def _carregar_dados_bi_cached():
+    conn, _ = get_db_connection()
+    try:
+        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios ORDER BY id DESC", conn)
+        df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, valor_total FROM romaneio_itens", conn)
+        df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn)
+        df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id DESC", conn)
+        return df_roms, df_itens, df_bonf_rel, df_baixas_rel
+    finally:
+        conn.close()
+
 def remover_fundo_branco(caminho_imagem):
     if not caminho_imagem or not os.path.exists(caminho_imagem):
         return caminho_imagem
@@ -1483,7 +1532,15 @@ def desenhar_fundo_pdf(canvas_doc, doc_obj):
         except Exception:
             canvas_doc.restoreState()
 
-def seletor_data_unificado(label_titulo, key_prefix):
+def _aplicar_mascara_data_str(valor):
+    digitos = "".join(filter(str.isdigit, str(valor or "")))[:8]
+    if len(digitos) <= 2:
+        return digitos
+    if len(digitos) <= 4:
+        return f"{digitos[:2]}/{digitos[2:]}"
+    return f"{digitos[:2]}/{digitos[2:4]}/{digitos[4:]}"
+
+def seletor_data_unificado(label_titulo, key_prefix, dentro_de_form=False):
     hoje = datetime.now(ZoneInfo("America/Manaus"))
     st.markdown(f"**{label_titulo}**")
     txt_key = f"{key_prefix}_date_text_input"
@@ -1491,25 +1548,30 @@ def seletor_data_unificado(label_titulo, key_prefix):
         st.session_state[txt_key] = hoje.strftime("%d/%m/%Y")
 
     def _formatar_data_digitada():
-        val = st.session_state.get(txt_key, "")
-        digitos = "".join(filter(str.isdigit, str(val)))[:8]
-        if len(digitos) <= 2:
-            st.session_state[txt_key] = digitos
-        elif len(digitos) <= 4:
-            st.session_state[txt_key] = f"{digitos[:2]}/{digitos[2:]}"
-        else:
-            st.session_state[txt_key] = f"{digitos[:2]}/{digitos[2:4]}/{digitos[4:]}"
+        st.session_state[txt_key] = _aplicar_mascara_data_str(st.session_state.get(txt_key, ""))
 
-    data_txt = st.text_input(
-        label_titulo,
-        key=txt_key,
-        max_chars=10,
-        placeholder="DD/MM/AAAA",
-        on_change=_formatar_data_digitada,
-        label_visibility="collapsed"
-    )
+    if dentro_de_form:
+        data_txt = st.text_input(
+            label_titulo,
+            key=txt_key,
+            max_chars=10,
+            placeholder="DD/MM/AAAA",
+            label_visibility="collapsed"
+        )
+        data_txt_fmt = _aplicar_mascara_data_str(data_txt)
+    else:
+        data_txt = st.text_input(
+            label_titulo,
+            key=txt_key,
+            max_chars=10,
+            placeholder="DD/MM/AAAA",
+            on_change=_formatar_data_digitada,
+            label_visibility="collapsed"
+        )
+        data_txt_fmt = str(data_txt).strip()
+
     try:
-        return datetime.strptime(data_txt.strip(), "%d/%m/%Y").date()
+        return datetime.strptime(data_txt_fmt.strip(), "%d/%m/%Y").date()
     except Exception:
         return None
 
@@ -1537,10 +1599,12 @@ def garantir_tabela_configuracoes_dispositivo():
                 )
             """)
         conn.commit()
+        st.cache_data.clear()
     finally:
         conn.close()
 
 
+@st.cache_data(ttl=120, show_spinner=False)
 def carregar_configuracoes_dispositivo(device_id):
     padrao = {"fonte_cor": "#F8FAFC", "fonte_tamanho": 16}
     conn, db_type = get_db_connection()
@@ -1584,6 +1648,8 @@ def salvar_configuracoes_dispositivo(device_id, fonte_cor, fonte_tamanho):
                     atualizado_em = CURRENT_TIMESTAMP
             """, (device_id, fonte_cor, int(fonte_tamanho)))
         conn.commit()
+        st.cache_data.clear()
+        carregar_configuracoes_dispositivo.clear()
     except Exception:
         conn.rollback()
         raise
@@ -1847,6 +1913,7 @@ def init_db():
                     (senha_hash_adm,)
                 )
         conn.commit()
+        st.cache_data.clear()
     except Exception as e:
         conn.rollback()
         raise e
@@ -1863,8 +1930,10 @@ def manter_sessao_ativa_periodica():
         except Exception:
             pass
 
-init_db()
-garantir_tabela_configuracoes_dispositivo()
+if not st.session_state.get("_schema_inicializado"):
+    init_db()
+    garantir_tabela_configuracoes_dispositivo()
+    st.session_state["_schema_inicializado"] = True
 manter_sessao_ativa_periodica()
 
 if "usuario_logado" not in st.session_state:
@@ -1895,6 +1964,7 @@ def fazer_login(login_ou_nome, senha):
                         (hash_novo, usr[0])
                     )
                     conn.commit()
+                    st.cache_data.clear()
                 return (usr[0], usr[1], usr[2], usr[3], usr[5], usr[6], usr[7])
         return None
     finally:
@@ -3030,7 +3100,7 @@ else:
     _colunas_topo = st.columns([1.2, 1.2, 1.0] if is_admin else [1.2, 1.0], vertical_alignment="center")
     with _colunas_topo[0]:
         if st.button("🔄 Atualizar aplicativo", type="secondary", key="btn_atualizar_app_topo", use_container_width=True, help="Limpar caches, sincronizar e recarregar os dados"):
-            with spinner_supernova("Atualizando aplicativo e dados...", duracao_minima=0.5):
+            with spinner_supernova("Atualizando aplicativo e dados..."):
                 try:
                     st.cache_data.clear()
                 except Exception:
@@ -3165,6 +3235,7 @@ else:
                                     (nome_novo_wp.strip(), b64_new_bg)
                                 )
                                 conn_ins_w.commit()
+                                st.cache_data.clear()
                                 st.success(f"Wallpaper '{nome_novo_wp}' salvo com sucesso na galeria!")
                             except Exception:
                                 conn_ins_w.rollback()
@@ -3193,6 +3264,7 @@ else:
                                 (tema_val, notif_val, bg_b64_val, u_id)
                             )
                             conn_cfg.commit()
+                            st.cache_data.clear()
                             st.session_state["exibir_modal_config"] = False
                             st.success("Configurações salvas permanentemente com sucesso!")
                             st.rerun()
@@ -3236,7 +3308,7 @@ else:
         st.session_state["ultimo_menu_ativo"] = menu
     elif st.session_state["ultimo_menu_ativo"] != menu:
         st.session_state["ultimo_menu_ativo"] = menu
-        with spinner_supernova(f"Abrindo {menu_selecionado_label}...", duracao_minima=0.5):
+        with spinner_supernova(f"Abrindo {menu_selecionado_label}..."):
             pass
     st.markdown("---")
     
@@ -3496,6 +3568,7 @@ else:
                             itens_salvos_pdf.append([None, itm["produto"], q_val, itm["unidade"], v_u_val, v_t_val])
 
                         conn.commit()
+                        st.cache_data.clear()
 
                         romaneio_dict_atual = {
                             "numero_romaneio": num_rom_final, "data_recebimento": data_rec_str,
@@ -3553,12 +3626,9 @@ else:
     elif menu == "Consultar Romaneios":
         st.title("🗂️ Consultar & Gerenciar Romaneios de Recebimento")
         with spinner_supernova("Carregando romaneios..."):
-            conn, db_type = get_db_connection()
-            try:
-                df_rom = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, telefone_fornecedor, conferente, pagamento_a_vista, data_pagamento, caminho_foto, assinatura_conferente, assinatura_entregador, status_nota, tipo_operacao, observacoes, ass_conf_b64, ass_ent_b64 FROM romaneios ORDER BY id DESC", conn)
-                df_all_itens = pd.read_sql_query("SELECT romaneio_id, SUM(valor_total) as valor_total_rom FROM romaneio_itens GROUP BY romaneio_id", conn)
-            finally:
-                conn.close()
+            df_rom, df_all_itens = _carregar_romaneios_e_totais_cached()
+            df_rom = df_rom.copy()
+            df_all_itens = df_all_itens.copy()
 
         if df_rom.empty:
             st.info("Nenhum romaneio registrado no sistema.")
@@ -3705,6 +3775,7 @@ else:
                                                                 (str(novo_st_sel), r_id_st)
                                                             )
                                                             conn_st.commit()
+                                                            st.cache_data.clear()
                                                             st.success("Status atualizado com sucesso!")
                                                             st.rerun()
                                                         except Exception as e:
@@ -3740,6 +3811,7 @@ else:
                                                                 cur_del.execute("DELETE FROM romaneio_itens WHERE romaneio_id = %s" if db_t_del == "postgres" else "DELETE FROM romaneio_itens WHERE romaneio_id = ?", (r_id_del,))
                                                                 cur_del.execute("DELETE FROM romaneios WHERE id = %s" if db_t_del == "postgres" else "DELETE FROM romaneios WHERE id = ?", (r_id_del,))
                                                                 conn_del.commit()
+                                                                st.cache_data.clear()
                                                                 st.success("Excluído com sucesso!")
                                                                 st.rerun()
                                                             except Exception as e:
@@ -3802,6 +3874,7 @@ else:
                                                                         (novo_forn_ed.strip(), novo_cod_forn_ed.strip(), novo_tel_ed.strip(), novo_tipo_op_ed, novo_pag_v_ed, nova_dt_pag_ed.strip(), novas_obs_ed.strip(), r_id_urom)
                                                                     )
                                                                 conn_urom.commit()
+                                                                st.cache_data.clear()
                                                                 st.success("Romaneio atualizado com sucesso pelo administrador!")
                                                                 st.rerun()
                                                             except Exception as e:
@@ -3843,7 +3916,7 @@ else:
                 col_dt1, col_dt2, col_dt3 = st.columns([1.5, 1.5, 1.5])
                 with col_dt1: status_bonf = st.selectbox("STATUS", ["", "Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"], index=0, placeholder="Selecione o status...", key=f"bonf_st_{bf_suf}")
                 with col_dt2: 
-                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", f"cad_bonf_dt_{bf_suf}")
+                    data_entrada_manual = seletor_data_unificado("Data de Entrada (Livre)", f"cad_bonf_dt_{bf_suf}", dentro_de_form=True)
                 with col_dt3:
                     hora_auto = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora de Entrada", value=hora_auto, disabled=True, key=f"bonf_hr_{bf_suf}")
@@ -3875,6 +3948,7 @@ else:
                                     (num_nota_bonf.strip(), loja_bonf, dt_entrada_str, float(valor_bonf_val), status_bonf, prod_bonf, path_anexo_bonf, tipo_bonf_sel, b64_anexo_str)
                                 )
                                 conn_b.commit()
+                                st.cache_data.clear()
                                 mensagem_bonificacao_chat = (
                                     "🎁 *NOVA BONIFICAÇÃO / TRANSFERÊNCIA CADASTRADA*\n"
                                     f"Nota fiscal: {num_nota_bonf.strip()}\n"
@@ -3911,11 +3985,7 @@ else:
             with f_col4: f_prod = st.text_input("Filtrar por Produto", value="", placeholder="Produto...", key="f_prod_bonf")
 
         with spinner_supernova("Carregando registros de bonificação..."):
-            conn_b_sel, db_tb_sel = get_db_connection()
-            try:
-                df_bonf = pd.read_sql_query("SELECT id, numero_nota, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, caminho_anexo, tipo_bonificacao, anexo_b64 FROM bonificacoes ORDER BY id DESC", conn_b_sel)
-            finally:
-                conn_b_sel.close()
+            df_bonf = _carregar_bonificacoes_cached().copy()
 
         if not df_bonf.empty:
             if f_nota.strip(): df_bonf = df_bonf[df_bonf["numero_nota"].str.contains(f_nota.strip(), case=False, na=False)]
@@ -4014,7 +4084,7 @@ else:
                         idx_loja_alt = lista_lojas_alt.index(reg_obj_atual["loja"]) if reg_obj_atual["loja"] in lista_lojas_alt else 0
                         nova_loja_nota = st.selectbox("Loja", lista_lojas_alt, index=idx_loja_alt)
                     with col_e3: 
-                        nova_data_input = seletor_data_unificado("Data de Entrada (Livre)", "edit_bonf_dt")
+                        nova_data_input = seletor_data_unificado("Data de Entrada (Livre)", "edit_bonf_dt", dentro_de_form=True)
                     with col_e4:
                         status_atuais_lst = ["Disponível", "Parcialmente Utilizada", "Totalmente Utilizada"]
                         idx_st_atual = status_atuais_lst.index(reg_obj_atual["status"]) if reg_obj_atual["status"] in status_atuais_lst else 0
@@ -4058,6 +4128,7 @@ else:
                                         (val_f_edit, nova_loja_nota, nova_data_str, novo_st_nota, novo_prod_nota, reg_id_b)
                                     )
                                 conn_up_dir.commit()
+                                st.cache_data.clear()
                                 st.success("Registo atualizado com sucesso!")
                                 st.rerun()
                             except Exception as e:
@@ -4076,6 +4147,7 @@ else:
                                     (int(id_reg_atual) if db_td_b == "postgres" else id_reg_atual,)
                                 )
                                 conn_del_b.commit()
+                                st.cache_data.clear()
                                 st.success("Bonificação excluída com sucesso!")
                                 st.rerun()
                             except Exception as e:
@@ -4144,6 +4216,7 @@ else:
                             (novo_st_auto, r_b_id)
                         )
                 conn_b_all.commit()
+                st.cache_data.clear()
         except Exception:
             conn_b_all.rollback()
         finally:
@@ -4245,7 +4318,7 @@ else:
 
                 col_dm1, col_dm2 = st.columns(2)
                 with col_dm1: 
-                    data_baixa_man = seletor_data_unificado("Data da Baixa (Livre)", f"bx_dt_{bx_suf}")
+                    data_baixa_man = seletor_data_unificado("Data da Baixa (Livre)", f"bx_dt_{bx_suf}", dentro_de_form=True)
                 with col_dm2:
                     hora_baixa_aut = datetime.now(ZoneInfo("America/Manaus")).strftime('%H:%M:%S')
                     st.text_input("Hora da Baixa", value=hora_baixa_aut, disabled=True, key=f"bx_hr_{bx_suf}")
@@ -4321,6 +4394,7 @@ else:
                                     )
 
                                     conn_ins.commit()
+                                    st.cache_data.clear()
                                     mensagem_baixa_chat = (
                                         "📉 *NOVA BAIXA DE AVARIA REGISTRADA*\n"
                                         f"Loja: {lojas_baixa_sel}\n"
@@ -4357,11 +4431,7 @@ else:
             with fb3: f_prod_bx = st.text_input("Filtrar por Produto", value="", placeholder="Produto...")
 
         with spinner_supernova("Carregando tabela de baixas..."):
-            conn_bx_view, db_tbx_v = get_db_connection()
-            try:
-                df_bx_table = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, ref_bon_transferen, nf_baixa, nf_b_entrada, produto_hortifruti, quantidade_kg_cx, valor_total_avaria, saldo_restante_nota, saldo_total_disponivel, nf_baixa_b64 FROM baixas_avarias ORDER BY id DESC", conn_bx_view)
-            finally:
-                conn_bx_view.close()
+            df_bx_table = _carregar_baixas_avarias_cached().copy()
 
         if not df_bx_table.empty:
             if f_loja_bx != "TODAS": df_bx_table = df_bx_table[df_bx_table["loja_baixa"] == f_loja_bx]
@@ -4508,6 +4578,7 @@ else:
                                                 (str(nova_loja_bx), str(novo_ref_bx).strip(), str(nova_nf_b_entrada), str(novo_prod_bx), float(q_f_ed), float(v_f_ed), float(novo_saldo_restante_ed), float(saldo_disp_edit), reg_id_bx)
                                             )
                                         conn_up_bx.commit()
+                                        st.cache_data.clear()
                                         st.success("Baixa atualizada com sucesso!")
                                         st.rerun()
                                     except Exception as e:
@@ -4526,6 +4597,7 @@ else:
                                             (int(id_bx_atual) if db_td_bx == "postgres" else id_bx_atual,)
                                         )
                                         conn_del_bx.commit()
+                                        st.cache_data.clear()
                                         st.success("Baixa excluída com sucesso!")
                                         st.rerun()
                                     except Exception as e:
@@ -4543,14 +4615,11 @@ else:
             "📋 BI de Recebimento de Cargas",
             "📈 BI Bonificações, Transferências & Prevenção de Perdas"
         ])
-        conn, db_type = get_db_connection()
-        try:
-            df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios ORDER BY id DESC", conn)
-            df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, valor_total FROM romaneio_itens", conn)
-            df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn)
-            df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id DESC", conn)
-        finally:
-            conn.close()
+        df_roms, df_itens, df_bonf_rel, df_baixas_rel = _carregar_dados_bi_cached()
+        df_roms = df_roms.copy()
+        df_itens = df_itens.copy()
+        df_bonf_rel = df_bonf_rel.copy()
+        df_baixas_rel = df_baixas_rel.copy()
 
         with tab_bi_receb:
             if df_roms.empty or df_itens.empty:
@@ -4776,6 +4845,7 @@ else:
                                     cursor = conn.cursor()
                                     cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
                                     conn.commit()
+                                    st.cache_data.clear()
                                     carregar_produtos_cached.clear()
                                     st.session_state["prod_form_suf"] += 1
                                     st.success("Cadastrado com sucesso!")
@@ -4854,6 +4924,7 @@ else:
                                             (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), ep_und, r_id_upp)
                                         )
                                         conn_up_p.commit()
+                                        st.cache_data.clear()
                                         carregar_produtos_cached.clear()
                                         st.success("Produto atualizado com sucesso!")
                                         st.rerun()
@@ -4874,6 +4945,7 @@ else:
                                             (r_id_delp,)
                                         )
                                         conn_del_p.commit()
+                                        st.cache_data.clear()
                                         carregar_produtos_cached.clear()
                                         st.success("Produto excluído com sucesso!")
                                         st.rerun()
@@ -4904,6 +4976,7 @@ else:
                                     cursor = conn.cursor()
                                     cursor.execute("INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (%s, %s, %s)" if db_type == "postgres" else "INSERT INTO fornecedores (codigo_fornecedor, cnpj, nome) VALUES (?, ?, ?)", (cod_forn_input.strip() if cod_forn_input else None, cnpj_forn_input.strip() if cnpj_forn_input else None, nome_forn_input.strip().upper()))
                                     conn.commit()
+                                    st.cache_data.clear()
                                     carregar_fornecedores_cached.clear()
                                     st.session_state["forn_form_suf"] += 1
                                     st.success("Fornecedor cadastrado!")
@@ -4951,6 +5024,7 @@ else:
                                         (ef_cod.strip(), ef_cnpj.strip(), ef_nome.strip().upper(), r_id_upf)
                                     )
                                     conn_up_f.commit()
+                                    st.cache_data.clear()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor atualizado com sucesso!")
                                     st.rerun()
@@ -4971,6 +5045,7 @@ else:
                                         (r_id_delf,)
                                     )
                                     conn_del_f.commit()
+                                    st.cache_data.clear()
                                     carregar_fornecedores_cached.clear()
                                     st.success("Fornecedor excluído com sucesso!")
                                     st.rerun()
@@ -5006,6 +5081,7 @@ else:
                                 senha_hash = gerar_hash_senha(senha_usr.strip())
                                 cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr))
                                 conn.commit()
+                                st.cache_data.clear()
                                 st.session_state["usr_form_suf"] += 1
                                 st.success(f"Usuário {nome_usr} criado!")
                                 st.rerun()
@@ -5061,6 +5137,7 @@ else:
                                         (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
                                     )
                                 conn_up_u.commit()
+                                st.cache_data.clear()
                                 st.success("Usuário atualizado com sucesso!")
                                 st.rerun()
                             except Exception as e:
@@ -5083,6 +5160,7 @@ else:
                                         (r_id_delu,)
                                     )
                                     conn_del_u.commit()
+                                    st.cache_data.clear()
                                     st.success("Usuário excluído com sucesso!")
                                     st.rerun()
                                 except Exception as e:
