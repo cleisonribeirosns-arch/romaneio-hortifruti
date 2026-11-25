@@ -419,6 +419,85 @@ input, textarea,
 </style>
 """, unsafe_allow_html=True)
 
+
+# ---------------------------------------------------------
+# TEMA CLARO / ESCURO AUTOMÁTICO POR DISPOSITIVO (PRESERVANDO PLANO DE FUNDO)
+# ---------------------------------------------------------
+st.markdown("""
+<style>
+/* Transição suave apenas nos textos, rótulos e campos de preenchimento */
+p, label, h1, h2, h3, h4,
+[data-testid="stMarkdownContainer"] p,
+[data-testid="stWidgetLabel"] label,
+[data-testid="stWidgetLabel"] p,
+input, textarea, select, [data-baseweb="select"] > div {
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+/* ================= MODO ESCURO DO APARELHO ================= */
+@media (prefers-color-scheme: dark) {
+    :root {
+        color-scheme: dark;
+    }
+
+    p, label, h1, h2, h3, h4,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stWidgetLabel"] label,
+    [data-testid="stWidgetLabel"] p {
+        color: #f9fafb !important;
+    }
+
+    input, textarea, select, [data-baseweb="select"] > div {
+        background-color: #1e222b !important;
+        color: #f9fafb !important;
+        -webkit-text-fill-color: #f9fafb !important;
+        border-color: #4b5563 !important;
+    }
+
+    input::placeholder, textarea::placeholder {
+        color: #9ca3af !important;
+        -webkit-text-fill-color: #9ca3af !important;
+        opacity: 1 !important;
+    }
+}
+
+/* ================= MODO CLARO DO APARELHO ================= */
+@media (prefers-color-scheme: light) {
+    :root {
+        color-scheme: light;
+    }
+
+    p, label, h1, h2, h3, h4,
+    [data-testid="stMarkdownContainer"] p,
+    [data-testid="stWidgetLabel"] label,
+    [data-testid="stWidgetLabel"] p {
+        color: #111827 !important;
+    }
+
+    input, textarea, select, [data-baseweb="select"] > div {
+        background-color: #ffffff !important;
+        color: #111827 !important;
+        -webkit-text-fill-color: #111827 !important;
+        border-color: #cbd5e1 !important;
+    }
+
+    input::placeholder, textarea::placeholder {
+        color: #64748b !important;
+        -webkit-text-fill-color: #64748b !important;
+        opacity: 1 !important;
+    }
+}
+
+/* ================= AJUSTE PARA CELULAR / TABLET / COLETOR ================= */
+@media (max-width: 768px) {
+    input, textarea, select, [data-baseweb="select"] > div {
+        min-height: 44px !important;
+        font-size: 16px !important;
+    }
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ---------------------------------------------------------
 # CONFIGURAÇÃO DE PWA (USANDO icone_app.jpg)
 # ---------------------------------------------------------
