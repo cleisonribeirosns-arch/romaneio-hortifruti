@@ -3798,7 +3798,7 @@ else:
         def _troca_forn_change():
             _v = st.session_state.get(_kf); st.session_state[_kfc] = str(_v[1] or "") if _v else ""
         _forn_sel = st.selectbox("Fornecedor cadastrado", [None] + list(_forns_t),
-            format_func=lambda x: "Selecione o fornecedor..." if x is None else f"{x[0]} (Código: {x[1] or 'S/Cód'})",
+            format_func=lambda x: "Selecione o fornecedor..." if x is None else f"{x[0]} | Código do fornecedor: {x[1] or 'Não informado'}",
             key=_kf, on_change=_troca_forn_change)
         if _kfc not in st.session_state: st.session_state[_kfc] = str(_forn_sel[1] or "") if _forn_sel else ""
         _cf1,_cf2=st.columns([2,1])
@@ -3811,7 +3811,7 @@ else:
         def _troca_prod_change():
             _v=st.session_state.get(_kp); st.session_state[_kpc]=str(_v[0] or "") if _v else ""; st.session_state[_kpbar]=str(_v[1] or "") if _v else ""
         _prod_sel=st.selectbox("Produto cadastrado (código / barras / descrição)", [None]+list(_prods_t),
-            format_func=lambda x: "Selecione o produto..." if x is None else f"{x[0] or 'S/Cód'} | Barras: {x[1] or 'S/Barras'} | {x[2]}",
+            format_func=lambda x: "Selecione o produto..." if x is None else f"{x[2]} | Código de barras: {x[1] or 'Não informado'} | Código interno: {x[0] or 'Não informado'}",
             key=_kp,on_change=_troca_prod_change)
         if _kpc not in st.session_state: st.session_state[_kpc]=str(_prod_sel[0] or "") if _prod_sel else ""
         if _kpbar not in st.session_state: st.session_state[_kpbar]=str(_prod_sel[1] or "") if _prod_sel else ""
