@@ -4487,8 +4487,20 @@ else:
                                                                 (str(novo_st_sel), r_id_st)
                                                             )
                                                             conn_st.commit()
+                                                            _status_rom_ant=str(row_sel.get("status_nota") or "Pendente")
+                                                            if str(novo_st_sel)!=_status_rom_ant:
+                                                                _thread_ref_rom=str(row_sel.get("numero_romaneio") or "").strip()
+                                                                _thread_key_rom="horticontrol-troca-"+re.sub(r"[^A-Za-z0-9_-]","-",_thread_ref_rom)[:80]
+                                                                _msg_rom_status=("📋 ATUALIZAÇÃO DO ROMANEIO RELACIONADO À TRATATIVA\n"
+                                                                    +f"Romaneio: {_thread_ref_rom}\nFornecedor: {row_sel.get('fornecedor') or 'N/A'}\n"
+                                                                    +f"Status anterior: {_status_rom_ant}\nNovo status: {novo_st_sel}\n"
+                                                                    +f"Atualizado por: {user_info['nome']}")
+                                                                _chat_rom_ok=enviar_notificacao_google_chat(_msg_rom_status,thread_key=_thread_key_rom)
+                                                            else:
+                                                                _chat_rom_ok=True
                                                             st.cache_data.clear()
-                                                            st.success("Status atualizado com sucesso!")
+                                                            if _chat_rom_ok: st.success("Status atualizado com sucesso e aviso incluído na conversa do romaneio.")
+                                                            else: st.warning("Status atualizado, mas o Google Chat não confirmou o aviso. Confira os Logs/Secrets.")
                                                             st.rerun()
                                                         except Exception as e:
                                                             conn_st.rollback()
