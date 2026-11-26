@@ -1548,27 +1548,137 @@ def disparar_notificacao_sistema(romaneio_dados, itens_lista):
             mensagem=f"Fornecedor: {forn} | Total de itens: {total_itens}"
         )
 
-@st.cache_data(ttl=60)
+def _normalizar_cabecalho_excel(valor):
+    import unicodedata
+    texto = unicodedata.normalize("NFKD", str(valor or "")).encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^a-z0-9]+", " ", texto.lower()).strip()
+
+def _ler_excel_repositorio(nome_arquivo):
+    """Lê planilhas XLSX versionadas junto do aplicativo no repositório."""
+    caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), nome_arquivo)
+    if not os.path.isfile(caminho):
+        return []
+    try:
+        abas = pd.read_excel(caminho, sheet_name=None, dtype=str)
+        return [df.dropna(how="all") for df in abas.values() if df is not None and not df.empty]
+    except Exception as erro_excel:
+        print(f"Não foi possível ler {nome_arquivo}: {type(erro_excel).__name__}: {erro_excel}")
+        return []
+
+def _achar_coluna_excel(df, tipo):
+    colunas = [(col, _normalizar_cabecalho_excel(col)) for col in df.columns]
+    if tipo == "nome_produto":
+        preferidos = ["nome produto", "descricao produto", "produto", "descricao", "nome"]
+        exclui = ("codigo", "cod ", "barra", "unidade", "preco", "valor", "estoque", "saldo")
+        for alvo in preferidos:
+            for original, norm in colunas:
+                if norm == alvo or (alvo in ("produto", "descricao", "nome") and norm.startswith(alvo + " ")):
+                    if not any(x in norm for x in exclui):
+                        return original
+    elif tipo == "codigo_produto":
+        for original, norm in colunas:
+            if ("codigo" in norm or norm.startswith("cod ")) and not any(x in norm for x in ("barra", "fornecedor", "cnpj")):
+                return original
+    elif tipo == "codigo_barras":
+        for original, norm in colunas:
+            if "barra" in norm or "ean" in norm:
+                return original
+    elif tipo == "unidade":
+        for original, norm in colunas:
+            if "unidade" in norm or norm in ("und", "un", "um"):
+                return original
+    elif tipo == "nome_fornecedor":
+        for original, norm in colunas:
+            if ("fornecedor" in norm or norm in ("nome", "razao social", "nome fantasia")) and not any(x in norm for x in ("codigo", "cnpj")):
+                return original
+    elif tipo == "codigo_fornecedor":
+        for original, norm in colunas:
+            if ("codigo" in norm or norm.startswith("cod ")) and ("fornecedor" in norm or norm in ("codigo", "cod")):
+                return original
+    return None
+
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_produtos_cached():
+    produtos = []
     conn, db_type = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY nome ASC")
-        prods = cursor.fetchall()
-        return prods
+        produtos.extend(cursor.fetchall())
     finally:
         conn.close()
 
-@st.cache_data(ttl=60)
+    # Inclui os produtos dos arquivos PRODUTOS.xlsx/PRODUTO ESTOQUE.xlsx
+    # versionados no GitHub, mesmo que ainda não tenham sido cadastrados no banco.
+    for nome_arquivo in ("PRODUTOS.xlsx", "PRODUTO ESTOQUE.xlsx", "PRODUTO ESTOQUE.xlsx"):
+        for df in _ler_excel_repositorio(nome_arquivo):
+            c_nome = _achar_coluna_excel(df, "nome_produto")
+            c_cod = _achar_coluna_excel(df, "codigo_produto")
+            c_bar = _achar_coluna_excel(df, "codigo_barras")
+            c_un = _achar_coluna_excel(df, "unidade")
+            if c_nome is None:
+                continue
+            for _, row in df.iterrows():
+                nome = str(row.get(c_nome, "") or "").strip()
+                if not nome or nome.lower() in ("nan", "none", "produto", "descrição", "descricao"):
+                    continue
+                cod = str(row.get(c_cod, "") or "").strip() if c_cod is not None else ""
+                bar = str(row.get(c_bar, "") or "").strip() if c_bar is not None else ""
+                un = str(row.get(c_un, "") or "").strip().upper() if c_un is not None else "KG"
+                if cod.lower() == "nan": cod = ""
+                if bar.lower() == "nan": bar = ""
+                if not un or un.lower() == "nan": un = "KG"
+                produtos.append((cod, bar, nome, un))
+
+    # Deduplica por nome; mantém os dados do banco e completa códigos vazios pelo XLSX.
+    unicos = {}
+    for p in produtos:
+        chave = _normalizar_cabecalho_excel(p[2])
+        if not chave: continue
+        if chave not in unicos:
+            unicos[chave] = tuple(p)
+        else:
+            atual = list(unicos[chave])
+            for i in (0, 1, 3):
+                if (not atual[i] or str(atual[i]).lower() == "nan") and p[i]:
+                    atual[i] = p[i]
+            unicos[chave] = tuple(atual)
+    return sorted(unicos.values(), key=lambda p: str(p[2]).casefold())
+
+@st.cache_data(ttl=300, show_spinner=False)
 def carregar_fornecedores_cached():
+    fornecedores = []
     conn, db_type = get_db_connection()
     try:
         cursor = conn.cursor()
         cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY nome ASC")
-        forns = cursor.fetchall()
-        return forns
+        fornecedores.extend(cursor.fetchall())
     finally:
         conn.close()
+
+    # Inclui os fornecedores do arquivo FORNECEDORES.xlsx do repositório.
+    for df in _ler_excel_repositorio("FORNECEDORES.xlsx"):
+        c_nome = _achar_coluna_excel(df, "nome_fornecedor")
+        c_cod = _achar_coluna_excel(df, "codigo_fornecedor")
+        if c_nome is None:
+            continue
+        for _, row in df.iterrows():
+            nome = str(row.get(c_nome, "") or "").strip()
+            if not nome or nome.lower() in ("nan", "none", "fornecedor", "nome"):
+                continue
+            cod = str(row.get(c_cod, "") or "").strip() if c_cod is not None else ""
+            if cod.lower() == "nan": cod = ""
+            fornecedores.append((nome, cod))
+
+    unicos = {}
+    for f in fornecedores:
+        chave = _normalizar_cabecalho_excel(f[0])
+        if not chave: continue
+        if chave not in unicos:
+            unicos[chave] = tuple(f)
+        elif not unicos[chave][1] and f[1]:
+            unicos[chave] = (unicos[chave][0], f[1])
+    return sorted(unicos.values(), key=lambda f: str(f[0]).casefold())
 
 @st.cache_data(ttl=45, show_spinner=False)
 def _carregar_romaneios_e_totais_cached():
