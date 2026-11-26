@@ -3959,18 +3959,23 @@ else:
         st.caption("Consulte o registro individual e atualize o status quando a troca for concluída.")
         _conn_c,_db_c=get_db_connection()
         try:
-            _df_t=pd.read_sql_query("SELECT id,numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,status FROM troca_avarias ORDER BY id DESC",_conn_c)
+            _df_t=pd.read_sql_query("SELECT id,numero_controle,numero_romaneio,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,status FROM troca_avarias ORDER BY id DESC",_conn_c)
         finally: _conn_c.close()
         if _df_t.empty: st.info("Ainda não há trocas registradas.")
         else:
             _df_t["status"]=_df_t["status"].fillna("Troca pendente").replace("","Troca pendente")
-            _show_t=_df_t.rename(columns={"numero_controle":"Nº Controle","data_operacao":"Data","setor_loja":"Setor/Loja","fornecedor":"Fornecedor","codigo_fornecedor":"Cód. Fornecedor","conferente":"Responsável","status":"Status"})
-            st.dataframe(_show_t[["Nº Controle","Data","Setor/Loja","Fornecedor","Cód. Fornecedor","Responsável","Status"]],use_container_width=True,hide_index=True)
-            _opts_t=[(int(r["id"]),f"{r['numero_controle']} | {r['fornecedor']} | {r['data_operacao']} | {r['status']}") for _,r in _df_t.iterrows()]
+            _f_t=st.text_input("Buscar por Nº Romaneio, Nº Controle, fornecedor ou loja",key="filtro_consulta_troca")
+            if _f_t.strip():
+                _mask_t=_df_t[["numero_romaneio","numero_controle","fornecedor","setor_loja"]].fillna("").astype(str).apply(lambda c:c.str.contains(_f_t.strip(),case=False,na=False)).any(axis=1)
+                _df_t=_df_t[_mask_t]
+            _show_t=_df_t.rename(columns={"numero_romaneio":"Nº Romaneio","numero_controle":"Nº Controle","data_operacao":"Data","setor_loja":"Setor/Loja","fornecedor":"Fornecedor","codigo_fornecedor":"Cód. Fornecedor","conferente":"Responsável","status":"Status"})
+            st.dataframe(_show_t[["Nº Romaneio","Nº Controle","Data","Setor/Loja","Fornecedor","Cód. Fornecedor","Responsável","Status"]],use_container_width=True,hide_index=True)
+            _opts_t=[(int(r["id"]),f"Romaneio {r['numero_romaneio'] or '—'} | Controle {r['numero_controle']} | {r['fornecedor']} | {r['status']}") for _,r in _df_t.iterrows()]
             _sel_t=st.selectbox("Selecione uma troca",_opts_t,format_func=lambda x:x[1],key="consulta_troca_individual")
             if _sel_t:
                 _idc=_sel_t[0]; _rowc=_df_t[_df_t["id"]==_idc].iloc[0]
-                st.markdown(f"### Controle {_rowc['numero_controle']}")
+                st.markdown(f"### Tratativa — Controle {_rowc['numero_controle']}")
+                st.write(f"**Romaneio relacionado:** {_rowc['numero_romaneio'] or 'Não informado'}")
                 st.write(f"**Fornecedor:** {_rowc['fornecedor']} | **Código:** {_rowc['codigo_fornecedor'] or 'N/A'}")
                 st.write(f"**Setor/Loja:** {_rowc['setor_loja']} | **Responsável:** {_rowc['conferente']}")
                 st.write(f"**Observações:** {_rowc['observacoes'] or '—'}")
@@ -3980,17 +3985,43 @@ else:
                     _df_i=pd.read_sql_query(_q_i,_conn_i,params=(_idc,))
                 finally: _conn_i.close()
                 if not _df_i.empty: st.dataframe(_df_i.rename(columns={"codigo_produto":"Código","descricao_produto":"Produto","quantidade":"Quantidade","unidade":"Unidade"}),use_container_width=True,hide_index=True)
+                _conn_h,_db_h=get_db_connection()
+                try:
+                    _q_h="SELECT status_anterior,status_novo,alterado_por,data_hora,observacao FROM troca_avarias_historico WHERE troca_id = %s ORDER BY id DESC" if _db_h=="postgres" else "SELECT status_anterior,status_novo,alterado_por,data_hora,observacao FROM troca_avarias_historico WHERE troca_id = ? ORDER BY id DESC"
+                    _df_h=pd.read_sql_query(_q_h,_conn_h,params=(int(_idc) if _db_h=="postgres" else _idc,))
+                finally: _conn_h.close()
+                st.markdown("#### Histórico da tratativa")
+                if not _df_h.empty:
+                    st.dataframe(_df_h.rename(columns={"status_anterior":"Status anterior","status_novo":"Status atualizado","alterado_por":"Alterado por","data_hora":"Data/Hora","observacao":"Observação"}),use_container_width=True,hide_index=True)
                 _statusopts=["Troca pendente","Trocado"]; _curstatus=str(_rowc["status"] or "Troca pendente")
                 _idxstatus=_statusopts.index(_curstatus) if _curstatus in _statusopts else 0
-                _newstatus=st.selectbox("Status",_statusopts,index=_idxstatus,key=f"status_troca_{_idc}")
+                _newstatus=st.selectbox("Status atual no sistema da troca",_statusopts,index=_idxstatus,key=f"status_troca_{_idc}")
+                _obs_status=st.text_input("Observação da atualização (opcional)",key=f"obs_status_troca_{_idc}")
                 if st.button("💾 Salvar status da troca",key=f"salvar_status_troca_{_idc}"):
-                    _conn_s,_db_s=get_db_connection()
-                    try:
-                        _cur_s=_conn_s.cursor(); _cur_s.execute("UPDATE troca_avarias SET status = %s WHERE id = %s" if _db_s=="postgres" else "UPDATE troca_avarias SET status = ? WHERE id = ?",(_newstatus,int(_idc) if _db_s=="postgres" else _idc))
-                        _conn_s.commit(); st.cache_data.clear(); st.success("Status atualizado."); st.rerun()
-                    except Exception as _e_s:
-                        _conn_s.rollback(); st.error(f"Erro ao atualizar status: {_e_s}")
-                    finally: _conn_s.close()
+                    if _newstatus==_curstatus:
+                        st.info("O status não foi alterado; nenhuma notificação foi enviada.")
+                    else:
+                        _conn_s,_db_s=get_db_connection()
+                        try:
+                            _cur_s=_conn_s.cursor()
+                            _cur_s.execute("UPDATE troca_avarias SET status = %s WHERE id = %s" if _db_s=="postgres" else "UPDATE troca_avarias SET status = ? WHERE id = ?",(_newstatus,int(_idc) if _db_s=="postgres" else _idc))
+                            _sql_h="INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (%s,%s,%s,%s,%s)" if _db_s=="postgres" else "INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (?,?,?,?,?)"
+                            _cur_s.execute(_sql_h,(_idc,_curstatus,_newstatus,user_info["nome"],_obs_status.strip()))
+                            _conn_s.commit()
+                            _thread_ref=str(_rowc["numero_romaneio"] or "").strip() or str(_rowc["numero_controle"])
+                            _thread_key="horticontrol-troca-"+re.sub(r"[^A-Za-z0-9_-]","-",_thread_ref)[:80]
+                            _msg_status=("🔄 ATUALIZAÇÃO DA TRATATIVA DE TROCA POR AVARIA\n"
+                                +f"Romaneio: {_rowc['numero_romaneio'] or 'Não informado'}\nControle: {_rowc['numero_controle']}\n"
+                                +f"Fornecedor: {_rowc['fornecedor']}\nStatus anterior: {_curstatus}\nNovo status: {_newstatus}\n"
+                                +f"Atualizado por: {user_info['nome']}\nObservação: {_obs_status.strip() or '—'}")
+                            _chat_status_ok=enviar_notificacao_google_chat(_msg_status,thread_key=_thread_key)
+                            st.cache_data.clear()
+                            if _chat_status_ok: st.success("Status e histórico atualizados. Aviso enviado na conversa da tratativa no Google Chat.")
+                            else: st.warning("Status e histórico salvos, mas o Google Chat não confirmou o envio. Confira os Logs/Secrets.")
+                            st.rerun()
+                        except Exception as _e_s:
+                            _conn_s.rollback(); st.error(f"Erro ao atualizar status: {_e_s}")
+                        finally: _conn_s.close()
 
     if menu == "Romaneio de Recebimento - Hortifrúti":
         logo_path_header = buscar_caminho_logo()
