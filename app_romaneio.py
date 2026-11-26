@@ -1566,36 +1566,92 @@ def _ler_excel_repositorio(nome_arquivo):
         return []
 
 def _achar_coluna_excel(df, tipo):
+    """Identifica colunas por nomes completos e abreviados comuns nos cadastros."""
     colunas = [(col, _normalizar_cabecalho_excel(col)) for col in df.columns]
+
+    def tem_codigo(norm):
+        return "codigo" in norm or norm.startswith("cod ") or norm == "cod"
+
     if tipo == "nome_produto":
-        preferidos = ["nome produto", "descricao produto", "produto", "descricao", "nome"]
-        exclui = ("codigo", "cod ", "barra", "unidade", "preco", "valor", "estoque", "saldo")
-        for alvo in preferidos:
-            for original, norm in colunas:
-                if norm == alvo or (alvo in ("produto", "descricao", "nome") and norm.startswith(alvo + " ")):
-                    if not any(x in norm for x in exclui):
-                        return original
-    elif tipo == "codigo_produto":
+        # Prioriza descrição/nome do produto e evita colunas de código ou estoque.
+        candidatos = []
         for original, norm in colunas:
-            if ("codigo" in norm or norm.startswith("cod ")) and not any(x in norm for x in ("barra", "fornecedor", "cnpj")):
-                return original
+            if any(x in norm for x in ("codigo", "cod ", "barra", "ean", "unidade", "preco", "valor", "estoque", "saldo")):
+                continue
+            pontos = 0
+            if "produto" in norm: pontos += 5
+            if "descricao" in norm or "descr" in norm: pontos += 4
+            if "nome" in norm: pontos += 3
+            if norm in ("item", "mercadoria"): pontos += 2
+            if pontos: candidatos.append((pontos, original))
+        if candidatos:
+            return max(candidatos, key=lambda x: x[0])[1]
+
+    elif tipo == "codigo_produto":
+        candidatos = []
+        for original, norm in colunas:
+            if not tem_codigo(norm) and not any(x in norm for x in ("sku", "referencia")):
+                continue
+            if any(x in norm for x in ("barra", "ean", "fornecedor", "forn", "cnpj")):
+                continue
+            pontos = 1
+            if "produto" in norm or "prod " in norm: pontos += 5
+            if "interno" in norm or "item" in norm or "sku" in norm: pontos += 3
+            if norm in ("codigo", "cod"): pontos += 2
+            candidatos.append((pontos, original))
+        if candidatos:
+            return max(candidatos, key=lambda x: x[0])[1]
+
     elif tipo == "codigo_barras":
         for original, norm in colunas:
-            if "barra" in norm or "ean" in norm:
+            if any(x in norm for x in ("barra", "ean", "gtin")):
                 return original
+
     elif tipo == "unidade":
         for original, norm in colunas:
             if "unidade" in norm or norm in ("und", "un", "um"):
                 return original
+
     elif tipo == "nome_fornecedor":
+        candidatos = []
         for original, norm in colunas:
-            if ("fornecedor" in norm or norm in ("nome", "razao social", "nome fantasia")) and not any(x in norm for x in ("codigo", "cnpj")):
-                return original
+            if any(x in norm for x in ("codigo", "cod ", "cnpj", "cpf")):
+                continue
+            pontos = 0
+            if "fornecedor" in norm or "forn " in norm: pontos += 5
+            if "razao social" in norm or "nome fantasia" in norm: pontos += 5
+            if "nome" in norm: pontos += 3
+            if norm in ("empresa", "cliente"): pontos += 1
+            if pontos: candidatos.append((pontos, original))
+        if candidatos:
+            return max(candidatos, key=lambda x: x[0])[1]
+
     elif tipo == "codigo_fornecedor":
+        candidatos = []
         for original, norm in colunas:
-            if ("codigo" in norm or norm.startswith("cod ")) and ("fornecedor" in norm or norm in ("codigo", "cod")):
-                return original
+            if not tem_codigo(norm):
+                continue
+            if any(x in norm for x in ("cnpj", "cpf", "barra")):
+                continue
+            pontos = 1
+            if "fornecedor" in norm or "forn" in norm: pontos += 6
+            if norm in ("codigo", "cod"): pontos += 2
+            candidatos.append((pontos, original))
+        if candidatos:
+            return max(candidatos, key=lambda x: x[0])[1]
     return None
+
+
+def _valor_excel_texto(valor):
+    """Converte valores Excel em texto sem 'nan' ou sufixo .0 em códigos."""
+    if valor is None or pd.isna(valor):
+        return ""
+    texto = str(valor).strip()
+    if texto.lower() in ("nan", "none", "nat"):
+        return ""
+    if re.fullmatch(r"\\d+\\.0", texto):
+        texto = texto[:-2]
+    return texto
 
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_produtos_cached():
@@ -1619,12 +1675,12 @@ def carregar_produtos_cached():
             if c_nome is None:
                 continue
             for _, row in df.iterrows():
-                nome = str(row.get(c_nome, "") or "").strip()
+                nome = _valor_excel_texto(row.get(c_nome, ""))
                 if not nome or nome.lower() in ("nan", "none", "produto", "descrição", "descricao"):
                     continue
-                cod = str(row.get(c_cod, "") or "").strip() if c_cod is not None else ""
-                bar = str(row.get(c_bar, "") or "").strip() if c_bar is not None else ""
-                un = str(row.get(c_un, "") or "").strip().upper() if c_un is not None else "KG"
+                cod = _valor_excel_texto(row.get(c_cod, "")) if c_cod is not None else ""
+                bar = _valor_excel_texto(row.get(c_bar, "")) if c_bar is not None else ""
+                un = _valor_excel_texto(row.get(c_un, "")).upper() if c_un is not None else "KG"
                 if cod.lower() == "nan": cod = ""
                 if bar.lower() == "nan": bar = ""
                 if not un or un.lower() == "nan": un = "KG"
