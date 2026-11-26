@@ -1546,7 +1546,7 @@ def carregar_produtos_cached():
     conn, db_type = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY id DESC")
+        cursor.execute("SELECT codigo_produto, codigo_barras, nome, unidade_padrao FROM produtos ORDER BY nome ASC")
         prods = cursor.fetchall()
         return prods
     finally:
@@ -1557,7 +1557,7 @@ def carregar_fornecedores_cached():
     conn, db_type = get_db_connection()
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY id DESC")
+        cursor.execute("SELECT nome, codigo_fornecedor FROM fornecedores ORDER BY nome ASC")
         forns = cursor.fetchall()
         return forns
     finally:
