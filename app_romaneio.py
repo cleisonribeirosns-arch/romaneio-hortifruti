@@ -1610,7 +1610,7 @@ def carregar_produtos_cached():
 
     # Inclui os produtos dos arquivos PRODUTOS.xlsx/PRODUTO ESTOQUE.xlsx
     # versionados no GitHub, mesmo que ainda não tenham sido cadastrados no banco.
-    for nome_arquivo in ("PRODUTOS.xlsx", "PRODUTO ESTOQUE.xlsx", "PRODUTO ESTOQUE.xlsx"):
+    for nome_arquivo in ("PRODUTOS.xlsx", "PRODUTO ESTOQUE.xlsx"):
         for df in _ler_excel_repositorio(nome_arquivo):
             c_nome = _achar_coluna_excel(df, "nome_produto")
             c_cod = _achar_coluna_excel(df, "codigo_produto")
