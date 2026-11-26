@@ -1653,9 +1653,44 @@ def _valor_excel_texto(valor):
         texto = texto[:-2]
     return texto
 
+def _codigo_barras_planilha(valor):
+    """Converte o código de barras do Excel em texto e remove os dois zeros finais."""
+    texto = _valor_excel_texto(valor)
+    if not texto:
+        return ""
+    # Código de barras está na coluna A e termina com dois zeros de preenchimento.
+    if texto.endswith("00"):
+        texto = texto[:-2]
+    # Excel pode devolver código numérico como 12345.0; elimina apenas o .0.
+    if re.fullmatch(r"\\d+\\.0", texto):
+        texto = texto[:-2]
+    return texto.strip()
+
+
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_produtos_cached():
-    produtos = []
+    produtos_excel = []
+    # Colunas fixas informadas na planilha:
+    # A = código de barras; C = código interno; E = descrição completa.
+    for nome_arquivo in ("PRODUTOS.xlsx", "PRODUTO ESTOQUE.xlsx"):
+        for df in _ler_excel_repositorio(nome_arquivo):
+            if len(df.columns) < 5:
+                continue
+            c_bar, c_cod, c_nome = df.columns[0], df.columns[2], df.columns[4]
+            c_un = _achar_coluna_excel(df, "unidade")
+            for _, row in df.iterrows():
+                nome = _valor_excel_texto(row.get(c_nome, ""))
+                if not nome or nome.lower() in ("nan", "none", "produto", "descrição", "descricao"):
+                    continue
+                cod = _valor_excel_texto(row.get(c_cod, ""))
+                bar = _codigo_barras_planilha(row.get(c_bar, ""))
+                un = _valor_excel_texto(row.get(c_un, "")).upper() if c_un is not None else "KG"
+                if not un or un.lower() == "nan":
+                    un = "KG"
+                produtos_excel.append((cod, bar, nome, un))
+
+    # Produtos do Excel são priorizados, pois contêm a descrição e os códigos corretos.
+    produtos = list(produtos_excel)
     conn, db_type = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1664,46 +1699,45 @@ def carregar_produtos_cached():
     finally:
         conn.close()
 
-    # Inclui os produtos dos arquivos PRODUTOS.xlsx/PRODUTO ESTOQUE.xlsx
-    # versionados no GitHub, mesmo que ainda não tenham sido cadastrados no banco.
-    for nome_arquivo in ("PRODUTOS.xlsx", "PRODUTO ESTOQUE.xlsx"):
-        for df in _ler_excel_repositorio(nome_arquivo):
-            c_nome = _achar_coluna_excel(df, "nome_produto")
-            c_cod = _achar_coluna_excel(df, "codigo_produto")
-            c_bar = _achar_coluna_excel(df, "codigo_barras")
-            c_un = _achar_coluna_excel(df, "unidade")
-            if c_nome is None:
-                continue
-            for _, row in df.iterrows():
-                nome = _valor_excel_texto(row.get(c_nome, ""))
-                if not nome or nome.lower() in ("nan", "none", "produto", "descrição", "descricao"):
-                    continue
-                cod = _valor_excel_texto(row.get(c_cod, "")) if c_cod is not None else ""
-                bar = _valor_excel_texto(row.get(c_bar, "")) if c_bar is not None else ""
-                un = _valor_excel_texto(row.get(c_un, "")).upper() if c_un is not None else "KG"
-                if cod.lower() == "nan": cod = ""
-                if bar.lower() == "nan": bar = ""
-                if not un or un.lower() == "nan": un = "KG"
-                produtos.append((cod, bar, nome, un))
-
-    # Deduplica por nome; mantém os dados do banco e completa códigos vazios pelo XLSX.
+    # Deduplica preferencialmente por código interno; complementa campos ausentes.
     unicos = {}
     for p in produtos:
-        chave = _normalizar_cabecalho_excel(p[2])
-        if not chave: continue
+        p = tuple(_valor_excel_texto(v) if i < 3 else (v or "KG") for i, v in enumerate(p))
+        cod, bar, nome, un = p
+        chave = ("cod", str(cod).strip()) if cod else (("bar", str(bar).strip()) if bar else ("nome", _normalizar_cabecalho_excel(nome)))
+        if not chave[-1]:
+            continue
         if chave not in unicos:
-            unicos[chave] = tuple(p)
+            unicos[chave] = (cod, bar, nome, un)
         else:
             atual = list(unicos[chave])
+            # Mantém a descrição do Excel quando disponível e completa códigos/unidade.
             for i in (0, 1, 3):
-                if (not atual[i] or str(atual[i]).lower() == "nan") and p[i]:
+                if not atual[i] and p[i]:
                     atual[i] = p[i]
+            if nome and (not atual[2] or str(atual[2]).isdigit()):
+                atual[2] = nome
             unicos[chave] = tuple(atual)
     return sorted(unicos.values(), key=lambda p: str(p[2]).casefold())
 
+
 @st.cache_data(ttl=300, show_spinner=False)
 def carregar_fornecedores_cached():
-    fornecedores = []
+    fornecedores_excel = []
+    # Colunas fixas informadas: A = código do fornecedor; B = nome completo.
+    for df in _ler_excel_repositorio("FORNECEDORES.xlsx"):
+        if len(df.columns) < 2:
+            continue
+        c_cod, c_nome = df.columns[0], df.columns[1]
+        for _, row in df.iterrows():
+            nome = _valor_excel_texto(row.get(c_nome, ""))
+            cod = _valor_excel_texto(row.get(c_cod, ""))
+            if not nome or nome.lower() in ("nan", "none", "fornecedor", "nome"):
+                continue
+            fornecedores_excel.append((nome, cod))
+
+    # Excel vem primeiro para priorizar o nome/código da planilha.
+    fornecedores = list(fornecedores_excel)
     conn, db_type = get_db_connection()
     try:
         cursor = conn.cursor()
@@ -1712,28 +1746,25 @@ def carregar_fornecedores_cached():
     finally:
         conn.close()
 
-    # Inclui os fornecedores do arquivo FORNECEDORES.xlsx do repositório.
-    for df in _ler_excel_repositorio("FORNECEDORES.xlsx"):
-        c_nome = _achar_coluna_excel(df, "nome_fornecedor")
-        c_cod = _achar_coluna_excel(df, "codigo_fornecedor")
-        if c_nome is None:
-            continue
-        for _, row in df.iterrows():
-            nome = str(row.get(c_nome, "") or "").strip()
-            if not nome or nome.lower() in ("nan", "none", "fornecedor", "nome"):
-                continue
-            cod = str(row.get(c_cod, "") or "").strip() if c_cod is not None else ""
-            if cod.lower() == "nan": cod = ""
-            fornecedores.append((nome, cod))
-
     unicos = {}
     for f in fornecedores:
-        chave = _normalizar_cabecalho_excel(f[0])
-        if not chave: continue
+        nome = _valor_excel_texto(f[0])
+        cod = _valor_excel_texto(f[1])
+        if not nome:
+            continue
+        chave = ("cod", cod) if cod else ("nome", _normalizar_cabecalho_excel(nome))
+        if not chave[-1]:
+            continue
         if chave not in unicos:
-            unicos[chave] = tuple(f)
-        elif not unicos[chave][1] and f[1]:
-            unicos[chave] = (unicos[chave][0], f[1])
+            unicos[chave] = (nome, cod)
+        else:
+            atual = list(unicos[chave])
+            if not atual[1] and cod:
+                atual[1] = cod
+            # Prefere nome completo da planilha, em vez de nome concatenado com CNPJ.
+            if nome and ("." in nome[:12] or nome.isdigit()) and f[0] != nome:
+                pass
+            unicos[chave] = tuple(atual)
     return sorted(unicos.values(), key=lambda f: str(f[0]).casefold())
 
 @st.cache_data(ttl=45, show_spinner=False)
