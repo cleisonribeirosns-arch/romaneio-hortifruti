@@ -2160,6 +2160,7 @@ def init_db():
                     cursor.execute(_sql_troca_mig)
                 except Exception:
                     pass
+            cursor.execute("UPDATE troca_avarias SET status = 'Troca realizada' WHERE status = 'Trocado'")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS troca_avarias_historico (
                     id SERIAL PRIMARY KEY,
@@ -2333,6 +2334,7 @@ def init_db():
                     cursor.execute(_sql_troca_mig)
                 except Exception:
                     pass
+            cursor.execute("UPDATE troca_avarias SET status = 'Troca realizada' WHERE status = 'Trocado'")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS troca_avarias_historico (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3964,10 +3966,6 @@ else:
         if _df_t.empty: st.info("Ainda não há trocas registradas.")
         else:
             _df_t["status"]=_df_t["status"].fillna("Troca pendente").replace("","Troca pendente")
-            _f_t=st.text_input("Buscar por Nº Romaneio, Nº Controle, fornecedor ou loja",key="filtro_consulta_troca")
-            if _f_t.strip():
-                _mask_t=_df_t[["numero_romaneio","numero_controle","fornecedor","setor_loja"]].fillna("").astype(str).apply(lambda c:c.str.contains(_f_t.strip(),case=False,na=False)).any(axis=1)
-                _df_t=_df_t[_mask_t]
             _show_t=_df_t.rename(columns={"numero_romaneio":"Nº Romaneio","numero_controle":"Nº Controle","data_operacao":"Data","setor_loja":"Setor/Loja","fornecedor":"Fornecedor","codigo_fornecedor":"Cód. Fornecedor","conferente":"Responsável","status":"Status"})
             st.dataframe(_show_t[["Nº Romaneio","Nº Controle","Data","Setor/Loja","Fornecedor","Cód. Fornecedor","Responsável","Status"]],use_container_width=True,hide_index=True)
             _opts_t=[(int(r["id"]),f"Romaneio {r['numero_romaneio'] or '—'} | Controle {r['numero_controle']} | {r['fornecedor']} | {r['status']}") for _,r in _df_t.iterrows()]
@@ -3993,7 +3991,7 @@ else:
                 st.markdown("#### Histórico da tratativa")
                 if not _df_h.empty:
                     st.dataframe(_df_h.rename(columns={"status_anterior":"Status anterior","status_novo":"Status atualizado","alterado_por":"Alterado por","data_hora":"Data/Hora","observacao":"Observação"}),use_container_width=True,hide_index=True)
-                _statusopts=["Troca pendente","Trocado"]; _curstatus=str(_rowc["status"] or "Troca pendente")
+                _statusopts=["Troca pendente","Troca realizada"]; _curstatus=str(_rowc["status"] or "Troca pendente")
                 _idxstatus=_statusopts.index(_curstatus) if _curstatus in _statusopts else 0
                 _newstatus=st.selectbox("Status atual no sistema da troca",_statusopts,index=_idxstatus,key=f"status_troca_{_idc}")
                 _obs_status=st.text_input("Observação da atualização (opcional)",key=f"obs_status_troca_{_idc}")
@@ -4016,6 +4014,8 @@ else:
                                 +f"Atualizado por: {user_info['nome']}\nObservação: {_obs_status.strip() or '—'}")
                             _chat_status_ok=enviar_notificacao_google_chat(_msg_status,thread_key=_thread_key)
                             st.cache_data.clear()
+                            if st.session_state.get("notif_desktop_toggle",False):
+                                emitir_notificacao_desktop_web(titulo=f"🔄 Status atualizado — {_rowc['numero_controle']}",mensagem=f"{_curstatus} → {_newstatus}")
                             if _chat_status_ok: st.success("Status e histórico atualizados. Aviso enviado na conversa da tratativa no Google Chat.")
                             else: st.warning("Status e histórico salvos, mas o Google Chat não confirmou o envio. Confira os Logs/Secrets.")
                             st.rerun()
