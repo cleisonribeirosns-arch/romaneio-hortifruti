@@ -16,6 +16,7 @@ import uuid
 import re
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
+from urllib.parse import quote
 
 # ---------------------------------------------------------
 # SISTEMA DE SEGURANÇA E HASH DE SENHAS
@@ -1459,7 +1460,7 @@ def emitir_notificacao_desktop_web(titulo, mensagem):
     """
     components.html(js_code, height=0)
 
-def enviar_notificacao_google_chat(mensagem):
+def enviar_notificacao_google_chat(mensagem, thread_key=None):
     """Envia uma mensagem ao espaço do Google Chat e registra o resultado nos Logs."""
     try:
         webhook_url = st.secrets["google_chat"]["webhook_url"]
@@ -1473,10 +1474,13 @@ def enviar_notificacao_google_chat(mensagem):
             print("GOOGLE CHAT ERRO: endereço do webhook inválido. Verifique os Secrets.")
             return False
 
-        payload = json.dumps(
-            {"text": str(mensagem)},
-            ensure_ascii=False
-        ).encode("utf-8")
+        if thread_key:
+            _thread_key_url = quote(str(thread_key).strip(), safe="")
+            webhook_url += ("&" if "?" in webhook_url else "?") + "threadKey=" + _thread_key_url
+        _chat_payload = {"text": str(mensagem)}
+        if thread_key:
+            _chat_payload["thread"] = {"threadKey": str(thread_key).strip()}
+        payload = json.dumps(_chat_payload, ensure_ascii=False).encode("utf-8")
 
         requisicao = Request(
             webhook_url,
@@ -2147,11 +2151,26 @@ def init_db():
             except Exception:
                 pass
 
-            for _sql_troca_mig in ["ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS codigo_fornecedor VARCHAR(255)", "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Troca pendente'"]:
+            for _sql_troca_mig in [
+                "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS codigo_fornecedor VARCHAR(255)",
+                "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Troca pendente'",
+                "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS numero_romaneio VARCHAR(255)"
+            ]:
                 try:
                     cursor.execute(_sql_troca_mig)
                 except Exception:
                     pass
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS troca_avarias_historico (
+                    id SERIAL PRIMARY KEY,
+                    troca_id INTEGER NOT NULL REFERENCES troca_avarias(id) ON DELETE CASCADE,
+                    status_anterior VARCHAR(100),
+                    status_novo VARCHAR(100) NOT NULL,
+                    alterado_por VARCHAR(255) NOT NULL,
+                    data_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    observacao TEXT
+                )
+            """)
             cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
             usr_adm = cursor.fetchone()
             senha_hash_adm = gerar_hash_senha('0332')
@@ -2305,11 +2324,27 @@ def init_db():
             except Exception:
                 pass
 
-            for _sql_troca_mig in ["ALTER TABLE troca_avarias ADD COLUMN codigo_fornecedor TEXT", "ALTER TABLE troca_avarias ADD COLUMN status TEXT DEFAULT 'Troca pendente'"]:
+            for _sql_troca_mig in [
+                "ALTER TABLE troca_avarias ADD COLUMN codigo_fornecedor TEXT",
+                "ALTER TABLE troca_avarias ADD COLUMN status TEXT DEFAULT 'Troca pendente'",
+                "ALTER TABLE troca_avarias ADD COLUMN numero_romaneio TEXT"
+            ]:
                 try:
                     cursor.execute(_sql_troca_mig)
                 except Exception:
                     pass
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS troca_avarias_historico (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    troca_id INTEGER NOT NULL,
+                    status_anterior TEXT,
+                    status_novo TEXT NOT NULL,
+                    alterado_por TEXT NOT NULL,
+                    data_hora TEXT DEFAULT CURRENT_TIMESTAMP,
+                    observacao TEXT,
+                    FOREIGN KEY (troca_id) REFERENCES troca_avarias(id) ON DELETE CASCADE
+                )
+            """)
             cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
             usr_adm = cursor.fetchone()
             senha_hash_adm = gerar_hash_senha('0332')
@@ -3684,13 +3719,14 @@ else:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
-            "🔎 Consultar Trocas": "Consultar Trocas"
+            "🔎 Consultar Troca por Troca": "Consultar Trocas"
         }
     elif is_auxiliar:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
             "🗂️ Consultar Romaneios": "Consultar Romaneios",
+            "🔎 Consultar Troca por Troca": "Consultar Trocas",
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)"
         }
@@ -3699,6 +3735,7 @@ else:
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
             "🗂️ Consultar Romaneios": "Consultar Romaneios",
+            "🔎 Consultar Troca por Troca": "Consultar Trocas",
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
@@ -3819,6 +3856,7 @@ else:
         sufixo_troca = st.session_state["troca_form_suffix"]
         data_troca = st.date_input("Data da Operação", value=datetime.now().date(), key=f"troca_data_{sufixo_troca}")
         numero_troca = st.text_input("Número do Controle", value=f"AV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}", key=f"troca_num_{sufixo_troca}")
+        numero_romaneio_troca = st.text_input("Número do Romaneio relacionado (opcional)", placeholder="Informe para vincular a tratativa ao romaneio", key=f"troca_rom_{sufixo_troca}")
         setor_troca = st.text_input("Setor / Loja", value=str(loja_atual_usuario or ""), key=f"troca_setor_{sufixo_troca}")
 
         _forns_t = carregar_fornecedores_cached()
@@ -3883,9 +3921,11 @@ else:
                 _conn_t=None
                 try:
                     _conn_t,_db_t=get_db_connection(); _cur_t=_conn_t.cursor()
-                    _sql_t="""INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""" if _db_t=="postgres" else """INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status) VALUES (?,?,?,?,?,?,?,?,?,?)"""
-                    _vals=(_dados["numero"],_dados["data"],_dados["setor"],_forn,_cod_f,user_info["nome"],_obs_t,_sig_r_b64,_sig_f_b64,"Troca pendente")
+                    _sql_t="""INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status,numero_romaneio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""" if _db_t=="postgres" else """INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status,numero_romaneio) VALUES (?,?,?,?,?,?,?,?,?,?,?)"""
+                    _vals=(_dados["numero"],_dados["data"],_dados["setor"],_forn,_cod_f,user_info["nome"],_obs_t,_sig_r_b64,_sig_f_b64,"Troca pendente",numero_romaneio_troca.strip())
                     _cur_t.execute(_sql_t,_vals); _id_t=_cur_t.fetchone()[0] if _db_t=="postgres" else _cur_t.lastrowid
+                    _sql_hist_t="INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (%s,%s,%s,%s,%s)" if _db_t=="postgres" else "INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (?,?,?,?,?)"
+                    _cur_t.execute(_sql_hist_t,(_id_t,None,"Troca pendente",user_info["nome"],"Tratativa criada"))
                     for _it in st.session_state["troca_itens_digitais"]:
                         _sql_i="INSERT INTO troca_avarias_itens (troca_id,codigo_produto,descricao_produto,quantidade,unidade) VALUES (%s,%s,%s,%s,%s)" if _db_t=="postgres" else "INSERT INTO troca_avarias_itens (troca_id,codigo_produto,descricao_produto,quantidade,unidade) VALUES (?,?,?,?,?)"
                         _cur_t.execute(_sql_i,(_id_t,_it["codigo"],_it["descricao"],_it["quantidade"],_it["unidade"]))
@@ -3893,8 +3933,10 @@ else:
                     st.session_state["ultimo_pdf_troca_bytes"]=_pdf_termo_troca(_dados,st.session_state["troca_itens_digitais"],_sig_r_b64,_sig_f_b64)
                     st.session_state["ultimo_num_troca"]=_dados["numero"]
                     _itmsg="\n".join([f"• {it['descricao']} | cód. {it['codigo'] or 'N/A'} | {it['quantidade']:g} {it['unidade']}" for it in st.session_state["troca_itens_digitais"]])
-                    _msg=("🔄 NOVA TROCA POR AVARIA REGISTRADA\n"+f"Controle: {_dados['numero']}\nData: {_dados['data']}\nSetor/Loja: {_dados['setor']}\nFornecedor: {_forn} (cód. {_cod_f or 'N/A'})\nResponsável: {user_info['nome']}\nStatus: Troca pendente\nItens:\n"+_itmsg)
-                    _chat_ok=enviar_notificacao_google_chat(_msg)
+                    _msg=("🔄 NOVA TROCA POR AVARIA REGISTRADA\n"+f"Controle: {_dados['numero']}\nRomaneio: {numero_romaneio_troca.strip() or 'Não informado'}\nData: {_dados['data']}\nSetor/Loja: {_dados['setor']}\nFornecedor: {_forn} (cód. {_cod_f or 'N/A'})\nResponsável: {user_info['nome']}\nStatus: Troca pendente\nItens:\n"+_itmsg)
+                    _thread_ref=numero_romaneio_troca.strip() or _dados["numero"]
+                    _thread_key="horticontrol-troca-"+re.sub(r"[^A-Za-z0-9_-]","-",_thread_ref)[:80]
+                    _chat_ok=enviar_notificacao_google_chat(_msg,thread_key=_thread_key)
                     if st.session_state.get("notif_desktop_toggle",False): emitir_notificacao_desktop_web(titulo=f"🔄 Troca pendente {_dados['numero']}",mensagem=f"Fornecedor: {_forn} | Itens: {len(st.session_state['troca_itens_digitais'])}")
                     st.session_state["troca_itens_digitais"]=[]; st.session_state["troca_form_suffix"]+=1
                     if _chat_ok: st.success(f"Troca {_dados['numero']} registrada e notificada no Google Chat. Status: Troca pendente.")
@@ -4305,13 +4347,14 @@ else:
                     if df_loja_atual.empty:
                         st.info(f"Nenhum romaneio registrado para a {loja_nome}.")
                     else:
+                        # Consulta específica de Troca por Troca fica no menu de tratativas.
+                        df_loja_atual = df_loja_atual[df_loja_atual["tipo_operacao"].str.strip().str.lower() != "troca por troca"].copy()
                         tipos_operacao_map = {
                             "📋 TODOS OS TIPOS": "TODOS OS TIPOS",
                             "🛒 Compra": "Compra",
                             "🎁 Bonificação": "Bonificação",
                             "🚚 Transferência": "Transferência",
-                            "📦 Transferência/Bonificação": "Transferência/Bonificação",
-                            "🔄 Troca por Troca": "Troca por Troca"
+                            "📦 Transferência/Bonificação": "Transferência/Bonificação"
                         }
                         
                         nomes_abas_tipos = []
