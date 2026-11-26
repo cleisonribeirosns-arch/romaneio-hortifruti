@@ -398,6 +398,17 @@ input, textarea,
     font-weight: 600 !important;
 }
 
+/* Menu principal: opções maiores e em negrito */
+[data-testid="stRadio"] > div[role="radiogroup"] label,
+[data-testid="stRadio"] > div[role="radiogroup"] label p,
+[data-testid="stRadio"] > div[role="radiogroup"] label span {
+    font-size: 18px !important;
+    font-weight: 700 !important;
+}
+[data-testid="stRadio"] > div[role="radiogroup"] label {
+    padding: 7px 10px !important;
+}
+
 @media (max-width: 768px) {
     .stApp .main .block-container {
         padding-left: 0.75rem !important;
@@ -3721,14 +3732,14 @@ else:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
-            "🔎 Consultar Troca por Troca": "Consultar Trocas"
+            "🔁 Consultar Troca por Troca": "Consultar Trocas"
         }
     elif is_auxiliar:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
             "🗂️ Consultar Romaneios": "Consultar Romaneios",
-            "🔎 Consultar Troca por Troca": "Consultar Trocas",
+            "🔁 Consultar Troca por Troca": "Consultar Trocas",
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)"
         }
@@ -3737,7 +3748,7 @@ else:
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
             "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
             "🗂️ Consultar Romaneios": "Consultar Romaneios",
-            "🔎 Consultar Troca por Troca": "Consultar Trocas",
+            "🔁 Consultar Troca por Troca": "Consultar Trocas",
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
             "📊 Relatórios & BI": "Relatórios & Gráficos",
@@ -3858,7 +3869,6 @@ else:
         sufixo_troca = st.session_state["troca_form_suffix"]
         data_troca = st.date_input("Data da Operação", value=datetime.now().date(), key=f"troca_data_{sufixo_troca}")
         numero_troca = st.text_input("Número do Controle", value=f"AV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}", key=f"troca_num_{sufixo_troca}")
-        numero_romaneio_troca = st.text_input("Número do Romaneio relacionado (opcional)", placeholder="Informe para vincular a tratativa ao romaneio", key=f"troca_rom_{sufixo_troca}")
         setor_troca = st.text_input("Setor / Loja", value=str(loja_atual_usuario or ""), key=f"troca_setor_{sufixo_troca}")
 
         _forns_t = carregar_fornecedores_cached()
@@ -3924,7 +3934,7 @@ else:
                 try:
                     _conn_t,_db_t=get_db_connection(); _cur_t=_conn_t.cursor()
                     _sql_t="""INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status,numero_romaneio) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""" if _db_t=="postgres" else """INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status,numero_romaneio) VALUES (?,?,?,?,?,?,?,?,?,?,?)"""
-                    _vals=(_dados["numero"],_dados["data"],_dados["setor"],_forn,_cod_f,user_info["nome"],_obs_t,_sig_r_b64,_sig_f_b64,"Troca pendente",numero_romaneio_troca.strip())
+                    _vals=(_dados["numero"],_dados["data"],_dados["setor"],_forn,_cod_f,user_info["nome"],_obs_t,_sig_r_b64,_sig_f_b64,"Troca pendente","")
                     _cur_t.execute(_sql_t,_vals); _id_t=_cur_t.fetchone()[0] if _db_t=="postgres" else _cur_t.lastrowid
                     _sql_hist_t="INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (%s,%s,%s,%s,%s)" if _db_t=="postgres" else "INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (?,?,?,?,?)"
                     _cur_t.execute(_sql_hist_t,(_id_t,None,"Troca pendente",user_info["nome"],"Tratativa criada"))
@@ -3935,8 +3945,8 @@ else:
                     st.session_state["ultimo_pdf_troca_bytes"]=_pdf_termo_troca(_dados,st.session_state["troca_itens_digitais"],_sig_r_b64,_sig_f_b64)
                     st.session_state["ultimo_num_troca"]=_dados["numero"]
                     _itmsg="\n".join([f"• {it['descricao']} | cód. {it['codigo'] or 'N/A'} | {it['quantidade']:g} {it['unidade']}" for it in st.session_state["troca_itens_digitais"]])
-                    _msg=("🔄 NOVA TROCA POR AVARIA REGISTRADA\n"+f"Controle: {_dados['numero']}\nRomaneio: {numero_romaneio_troca.strip() or 'Não informado'}\nData: {_dados['data']}\nSetor/Loja: {_dados['setor']}\nFornecedor: {_forn} (cód. {_cod_f or 'N/A'})\nResponsável: {user_info['nome']}\nStatus: Troca pendente\nItens:\n"+_itmsg)
-                    _thread_ref=numero_romaneio_troca.strip() or _dados["numero"]
+                    _msg=("🔄 NOVA TROCA POR AVARIA REGISTRADA\n"+f"Controle: {_dados['numero']}\nData: {_dados['data']}\nLoja: {_dados['setor']}\nFornecedor: {_forn} (cód. {_cod_f or 'N/A'})\nResponsável: {user_info['nome']}\nStatus: Troca pendente\nItens:\n"+_itmsg)
+                    _thread_ref=_dados["numero"]
                     _thread_key="horticontrol-troca-"+re.sub(r"[^A-Za-z0-9_-]","-",_thread_ref)[:80]
                     _chat_ok=enviar_notificacao_google_chat(_msg,thread_key=_thread_key)
                     if st.session_state.get("notif_desktop_toggle",False): emitir_notificacao_desktop_web(titulo=f"🔄 Troca pendente {_dados['numero']}",mensagem=f"Fornecedor: {_forn} | Itens: {len(st.session_state['troca_itens_digitais'])}")
@@ -3957,25 +3967,31 @@ else:
             st.download_button("📥 Baixar Termo de Troca por Avaria (PDF)",data=st.session_state["ultimo_pdf_troca_bytes"],file_name=f"Termo_Troca_Avaria_{st.session_state.get('ultimo_num_troca','troca')}.pdf",mime="application/pdf",type="primary",key="download_termo_troca")
 
     if menu == "Consultar Trocas":
-        st.title("🔎 Consultar Trocas por Avaria")
-        st.caption("Consulte o registro individual e atualize o status quando a troca for concluída.")
+        st.title("🔁 Consulta de Troca por Troca")
+        st.caption("As trocas ficam organizadas por loja. Selecione a pasta da loja e depois o registro para consultar ou atualizar.")
         _conn_c,_db_c=get_db_connection()
         try:
-            _df_t=pd.read_sql_query("SELECT id,numero_controle,numero_romaneio,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,status FROM troca_avarias ORDER BY id DESC",_conn_c)
+            _df_t=pd.read_sql_query("SELECT id,numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,status FROM troca_avarias ORDER BY id DESC",_conn_c)
         finally: _conn_c.close()
-        if _df_t.empty: st.info("Ainda não há trocas registradas.")
+        if _df_t.empty:
+            st.info("Ainda não há trocas registradas.")
         else:
             _df_t["status"]=_df_t["status"].fillna("Troca pendente").replace("","Troca pendente")
-            _show_t=_df_t.rename(columns={"numero_romaneio":"Nº Romaneio","numero_controle":"Nº Controle","data_operacao":"Data","setor_loja":"Setor/Loja","fornecedor":"Fornecedor","codigo_fornecedor":"Cód. Fornecedor","conferente":"Responsável","status":"Status"})
-            st.dataframe(_show_t[["Nº Romaneio","Nº Controle","Data","Setor/Loja","Fornecedor","Cód. Fornecedor","Responsável","Status"]],use_container_width=True,hide_index=True)
-            _opts_t=[(int(r["id"]),f"Romaneio {r['numero_romaneio'] or '—'} | Controle {r['numero_controle']} | {r['fornecedor']} | {r['status']}") for _,r in _df_t.iterrows()]
-            _sel_t=st.selectbox("Selecione uma troca",_opts_t,format_func=lambda x:x[1],key="consulta_troca_individual")
+            _df_t["setor_loja"]=_df_t["setor_loja"].fillna("Loja não informada").astype(str).str.strip().replace("","Loja não informada")
+            _lojas_t=sorted(_df_t["setor_loja"].unique().tolist(),key=lambda x:x.lower())
+            _loja_sel_t=st.selectbox("📁 Pasta da loja",_lojas_t,key="consulta_troca_pasta_loja")
+            _df_loja_t=_df_t[_df_t["setor_loja"]==_loja_sel_t].copy()
+            st.subheader(f"📂 {_loja_sel_t}")
+            _show_t=_df_loja_t.rename(columns={"numero_controle":"Nº Controle","data_operacao":"Data","setor_loja":"Loja","fornecedor":"Fornecedor","codigo_fornecedor":"Cód. Fornecedor","conferente":"Responsável","status":"Status"})
+            st.dataframe(_show_t[["Nº Controle","Data","Loja","Fornecedor","Cód. Fornecedor","Responsável","Status"]],use_container_width=True,hide_index=True)
+            _opts_t=[(int(r["id"]),f"Controle {r['numero_controle']} | {r['fornecedor']} | {r['data_operacao']} | {r['status']}") for _,r in _df_loja_t.iterrows()]
+            _sel_t=st.selectbox("Selecione uma troca dentro desta loja",_opts_t,format_func=lambda x:x[1],key="consulta_troca_individual")
             if _sel_t:
-                _idc=_sel_t[0]; _rowc=_df_t[_df_t["id"]==_idc].iloc[0]
+                _idc=_sel_t[0]; _rowc=_df_loja_t[_df_loja_t["id"]==_idc].iloc[0]
                 st.markdown(f"### Tratativa — Controle {_rowc['numero_controle']}")
-                st.write(f"**Romaneio relacionado:** {_rowc['numero_romaneio'] or 'Não informado'}")
+                st.write(f"**Loja:** {_rowc['setor_loja']}")
                 st.write(f"**Fornecedor:** {_rowc['fornecedor']} | **Código:** {_rowc['codigo_fornecedor'] or 'N/A'}")
-                st.write(f"**Setor/Loja:** {_rowc['setor_loja']} | **Responsável:** {_rowc['conferente']}")
+                st.write(f"**Responsável:** {_rowc['conferente']}")
                 st.write(f"**Observações:** {_rowc['observacoes'] or '—'}")
                 _conn_i,_=get_db_connection()
                 try:
@@ -4006,16 +4022,15 @@ else:
                             _sql_h="INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (%s,%s,%s,%s,%s)" if _db_s=="postgres" else "INSERT INTO troca_avarias_historico (troca_id,status_anterior,status_novo,alterado_por,observacao) VALUES (?,?,?,?,?)"
                             _cur_s.execute(_sql_h,(_idc,_curstatus,_newstatus,user_info["nome"],_obs_status.strip()))
                             _conn_s.commit()
-                            _thread_ref=str(_rowc["numero_romaneio"] or "").strip() or str(_rowc["numero_controle"])
-                            _thread_key="horticontrol-troca-"+re.sub(r"[^A-Za-z0-9_-]","-",_thread_ref)[:80]
-                            _msg_status=("🔄 ATUALIZAÇÃO DA TRATATIVA DE TROCA POR AVARIA\n"
-                                +f"Romaneio: {_rowc['numero_romaneio'] or 'Não informado'}\nControle: {_rowc['numero_controle']}\n"
+                            _thread_key="horticontrol-troca-"+re.sub(r"[^A-Za-z0-9_-]","-",str(_rowc["numero_controle"]))[:80]
+                            _msg_status=("🔁 ATUALIZAÇÃO DA TRATATIVA DE TROCA POR AVARIA\n"
+                                +f"Controle: {_rowc['numero_controle']}\nLoja: {_rowc['setor_loja']}\n"
                                 +f"Fornecedor: {_rowc['fornecedor']}\nStatus anterior: {_curstatus}\nNovo status: {_newstatus}\n"
                                 +f"Atualizado por: {user_info['nome']}\nObservação: {_obs_status.strip() or '—'}")
                             _chat_status_ok=enviar_notificacao_google_chat(_msg_status,thread_key=_thread_key)
                             st.cache_data.clear()
                             if st.session_state.get("notif_desktop_toggle",False):
-                                emitir_notificacao_desktop_web(titulo=f"🔄 Status atualizado — {_rowc['numero_controle']}",mensagem=f"{_curstatus} → {_newstatus}")
+                                emitir_notificacao_desktop_web(titulo=f"🔁 Status atualizado — {_rowc['numero_controle']}",mensagem=f"{_curstatus} → {_newstatus}")
                             if _chat_status_ok: st.success("Status e histórico atualizados. Aviso enviado na conversa da tratativa no Google Chat.")
                             else: st.warning("Status e histórico salvos, mas o Google Chat não confirmou o envio. Confira os Logs/Secrets.")
                             st.rerun()
