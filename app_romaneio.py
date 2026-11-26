@@ -1649,7 +1649,7 @@ def _valor_excel_texto(valor):
     texto = str(valor).strip()
     if texto.lower() in ("nan", "none", "nat"):
         return ""
-    if re.fullmatch(r"\\d+\\.0", texto):
+    if re.fullmatch(r"\d+\.0", texto):
         texto = texto[:-2]
     return texto
 
