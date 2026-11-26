@@ -707,6 +707,30 @@ def _garantir_schema_postgres(conn):
         nf_baixa_b64 TEXT
     )
     """)
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS troca_avarias (
+                id SERIAL PRIMARY KEY,
+                numero_controle VARCHAR(100) UNIQUE NOT NULL,
+                data_operacao VARCHAR(50) NOT NULL,
+                setor_loja VARCHAR(255) NOT NULL,
+                fornecedor VARCHAR(255) NOT NULL,
+                conferente VARCHAR(255) NOT NULL,
+                observacoes TEXT,
+                assinatura_responsavel_b64 TEXT NOT NULL,
+                assinatura_fornecedor_b64 TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+    """)
+    cursor.execute("""
+            CREATE TABLE IF NOT EXISTS troca_avarias_itens (
+                id SERIAL PRIMARY KEY,
+                troca_id INTEGER NOT NULL REFERENCES troca_avarias(id) ON DELETE CASCADE,
+                codigo_produto VARCHAR(255),
+                descricao_produto VARCHAR(500) NOT NULL,
+                quantidade REAL NOT NULL,
+                unidade VARCHAR(50) NOT NULL
+            )
+    """)
     for alt_sql2 in [
         "ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT",
         "ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT",
@@ -916,6 +940,39 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
                             "INSERT INTO romaneio_itens (romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total) VALUES (%s, %s, %s, %s, %s, %s)",
                             (neon_rom_id, it[0], it[1], it[2], it[3], it[4]),
                         )
+
+            elif tabela == "troca_avarias":
+                cur_sup.execute("""
+                    SELECT numero_controle, data_operacao, setor_loja, fornecedor, conferente,
+                           observacoes, assinatura_responsavel_b64, assinatura_fornecedor_b64
+                    FROM troca_avarias WHERE numero_controle = %s
+                """, (chave_unica,))
+                row_troca = cur_sup.fetchone()
+                if row_troca:
+                    cur_neon.execute("""
+                        INSERT INTO troca_avarias
+                        (numero_controle, data_operacao, setor_loja, fornecedor, conferente, observacoes,
+                         assinatura_responsavel_b64, assinatura_fornecedor_b64)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                        ON CONFLICT (numero_controle) DO UPDATE SET
+                            data_operacao = EXCLUDED.data_operacao,
+                            setor_loja = EXCLUDED.setor_loja,
+                            fornecedor = EXCLUDED.fornecedor,
+                            conferente = EXCLUDED.conferente,
+                            observacoes = EXCLUDED.observacoes,
+                            assinatura_responsavel_b64 = EXCLUDED.assinatura_responsavel_b64,
+                            assinatura_fornecedor_b64 = EXCLUDED.assinatura_fornecedor_b64
+                        RETURNING id
+                    """, row_troca)
+                    neon_troca_id = cur_neon.fetchone()[0]
+                    cur_sup.execute("SELECT codigo_produto, descricao_produto, quantidade, unidade FROM troca_avarias_itens WHERE troca_id = (SELECT id FROM troca_avarias WHERE numero_controle = %s) ORDER BY id", (chave_unica,))
+                    itens_troca_sup = cur_sup.fetchall()
+                    cur_neon.execute("DELETE FROM troca_avarias_itens WHERE troca_id = %s", (neon_troca_id,))
+                    for item_t in itens_troca_sup:
+                        cur_neon.execute("""
+                            INSERT INTO troca_avarias_itens (troca_id, codigo_produto, descricao_produto, quantidade, unidade)
+                            VALUES (%s,%s,%s,%s,%s)
+                        """, (neon_troca_id, item_t[0], item_t[1], item_t[2], item_t[3]))
 
             elif tabela == "bonificacoes":
                 partes = chave_unica.split("||", 2)
@@ -1134,6 +1191,14 @@ class _CursorContingenciaWrapper:
                 r_num = c_tmp.fetchone()
                 if r_num:
                     _registrar_pendencia_contingencia(self._conn_reserva, "romaneios", str(r_num[0]))
+            elif "INTO TROCA_AVARIAS " in sql_up and len(p) >= 1:
+                _registrar_pendencia_contingencia(self._conn_reserva, "troca_avarias", str(p[0]))
+            elif "INTO TROCA_AVARIAS_ITENS " in sql_up and len(p) >= 1:
+                c_tmp = self._conn_reserva.cursor()
+                c_tmp.execute("SELECT numero_controle FROM troca_avarias WHERE id = %s", (p[0],))
+                r_troca = c_tmp.fetchone()
+                if r_troca:
+                    _registrar_pendencia_contingencia(self._conn_reserva, "troca_avarias", str(r_troca[0]))
             elif "INTO BONIFICACOES " in sql_up and len(p) >= 3:
                 chave = f"{p[0]}||{p[1]}||{p[2]}"
                 _registrar_pendencia_contingencia(self._conn_reserva, "bonificacoes", chave)
@@ -1850,6 +1915,30 @@ def init_db():
                 nf_baixa_b64 TEXT
             )
             """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS troca_avarias (
+                id SERIAL PRIMARY KEY,
+                numero_controle VARCHAR(100) UNIQUE NOT NULL,
+                data_operacao VARCHAR(50) NOT NULL,
+                setor_loja VARCHAR(255) NOT NULL,
+                fornecedor VARCHAR(255) NOT NULL,
+                conferente VARCHAR(255) NOT NULL,
+                observacoes TEXT,
+                assinatura_responsavel_b64 TEXT NOT NULL,
+                assinatura_fornecedor_b64 TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS troca_avarias_itens (
+                id SERIAL PRIMARY KEY,
+                troca_id INTEGER NOT NULL REFERENCES troca_avarias(id) ON DELETE CASCADE,
+                codigo_produto VARCHAR(255),
+                descricao_produto VARCHAR(500) NOT NULL,
+                quantidade REAL NOT NULL,
+                unidade VARCHAR(50) NOT NULL
+            )
+            """)
             try:
                 cursor.execute("ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT")
                 cursor.execute("ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT")
@@ -1974,6 +2063,31 @@ def init_db():
                 saldo_restante_nota REAL NOT NULL,
                 saldo_total_disponivel REAL NOT NULL,
                 nf_baixa_b64 TEXT
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS troca_avarias (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                numero_controle TEXT UNIQUE NOT NULL,
+                data_operacao TEXT NOT NULL,
+                setor_loja TEXT NOT NULL,
+                fornecedor TEXT NOT NULL,
+                conferente TEXT NOT NULL,
+                observacoes TEXT,
+                assinatura_responsavel_b64 TEXT NOT NULL,
+                assinatura_fornecedor_b64 TEXT NOT NULL,
+                criado_em TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            cursor.execute("""
+            CREATE TABLE IF NOT EXISTS troca_avarias_itens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                troca_id INTEGER NOT NULL,
+                codigo_produto TEXT,
+                descricao_produto TEXT NOT NULL,
+                quantidade REAL NOT NULL,
+                unidade TEXT NOT NULL,
+                FOREIGN KEY (troca_id) REFERENCES troca_avarias(id) ON DELETE CASCADE
             )
             """)
             try:
@@ -3355,11 +3469,13 @@ else:
 
     if is_conferente:
         opcoes_menu_map = {
-            "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"
+            "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias"
         }
     elif is_auxiliar:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
             "🗂️ Consultar Romaneios": "Consultar Romaneios",
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)"
@@ -3367,6 +3483,7 @@ else:
     else:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
+            "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
             "🗂️ Consultar Romaneios": "Consultar Romaneios",
             "🎁 Controle de Bonificação": "Controle de Bonificação",
             "📉 Baixa de Avarias": "Controle de Baixa de Avarias",
@@ -3391,6 +3508,210 @@ else:
             pass
     st.markdown("---")
     
+
+    # ---------------------------------------------------------
+    # TROCA POR TROCA DE AVARIAS - FORMULÁRIO DIGITAL INDEPENDENTE
+    # ---------------------------------------------------------
+    def _canvas_assinatura_b64(canvas_obj):
+        if canvas_obj is None or getattr(canvas_obj, "image_data", None) is None:
+            return ""
+        arr = canvas_obj.image_data.astype("uint8")
+        # O canvas tem fundo branco; considera assinatura válida se houver pixels escuros.
+        if not (arr[:, :, :3] < 235).any():
+            return ""
+        imagem = Image.fromarray(arr)
+        buff = io.BytesIO()
+        imagem.save(buff, format="PNG")
+        return base64.b64encode(buff.getvalue()).decode("utf-8")
+
+    def _pdf_termo_troca(dados, itens, assinatura_resp_b64, assinatura_forn_b64):
+        buff = io.BytesIO()
+        doc = SimpleDocTemplate(buff, pagesize=letter, rightMargin=34, leftMargin=34, topMargin=28, bottomMargin=28)
+        styles = getSampleStyleSheet()
+        story = [
+            Paragraph("<b>SUPER NOVA CIDADE</b>", styles["Title"]),
+            Paragraph("CNPJ: 34.551.382/0002-44", styles["Normal"]),
+            Spacer(1, 8),
+            Paragraph("<b>TERMO DE FORMALIZAÇÃO DE TROCA POR AVARIA</b>", styles["Heading2"]),
+            Spacer(1, 10),
+            Paragraph(f"<b>Data da Operação:</b> {dados['data']} &nbsp;&nbsp; <b>Número do Controle:</b> {dados['numero']}", styles["Normal"]),
+            Paragraph(f"<b>Setor / Loja:</b> {dados['setor']} &nbsp;&nbsp; <b>Fornecedor:</b> {dados['fornecedor']}", styles["Normal"]),
+            Spacer(1, 10),
+            Paragraph("Pelo presente instrumento, as partes formalizam a substituição de produtos identificados com avarias, conforme listagem detalhada abaixo:", styles["Normal"]),
+            Spacer(1, 8),
+            Paragraph("<b>PRODUTOS TROCADOS</b>", styles["Heading3"])
+        ]
+        tabela_dados = [["CÓDIGO", "DESCRIÇÃO DO PRODUTO", "QUANTIDADE", "UNIDADE"]]
+        for it in itens:
+            tabela_dados.append([it.get("codigo", "") or "-", it["descricao"], f"{it['quantidade']:g}", it["unidade"]])
+        tabela = Table(tabela_dados, colWidths=[90, 260, 85, 70], repeatRows=1)
+        tabela.setStyle(TableStyle([
+            ("GRID", (0,0), (-1,-1), 0.5, colors.grey),
+            ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#E8F0E8")),
+            ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+            ("FONTSIZE", (0,0), (-1,-1), 8),
+            ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING", (0,0), (-1,-1), 6),
+            ("BOTTOMPADDING", (0,0), (-1,-1), 6)
+        ]))
+        story += [tabela, Spacer(1, 12), Paragraph("<b>OBSERVAÇÕES</b>", styles["Normal"]),
+                  Paragraph((dados.get("observacoes") or "—").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"), styles["Normal"]),
+                  Spacer(1, 18)]
+        def assinatura_img(b64):
+            try:
+                raw = base64.b64decode(b64)
+                im = RLImage(io.BytesIO(raw), width=190, height=65)
+                im._restrictSize(190, 65)
+                return im
+            except Exception:
+                return ""
+        sig_resp = assinatura_img(assinatura_resp_b64)
+        sig_forn = assinatura_img(assinatura_forn_b64)
+        assinaturas = Table([
+            [sig_forn, sig_resp],
+            ["________________________________", "________________________________"],
+            ["REPRESENTANTE DO FORNECEDOR", "RESPONSÁVEL PELA AVARIA"]
+        ], colWidths=[270, 270], rowHeights=[70, 20, 25])
+        assinaturas.setStyle(TableStyle([
+            ("ALIGN", (0,0), (-1,-1), "CENTER"),
+            ("VALIGN", (0,0), (-1,-1), "BOTTOM"),
+            ("FONTSIZE", (0,0), (-1,-1), 8),
+            ("TOPPADDING", (0,0), (-1,-1), 4)
+        ]))
+        story += [assinaturas, Spacer(1, 14),
+                  Paragraph("Este documento serve como comprovante de movimentação de estoque para fins de conferência e prestação de contas.", styles["Normal"])]
+        doc.build(story)
+        buff.seek(0)
+        return buff.getvalue()
+
+    if menu == "Troca por Troca de Avarias":
+        st.title("🔄 Troca por Troca de Avarias")
+        st.caption("Registro digital independente do romaneio, disponível para todos os setores.")
+        if "troca_itens_digitais" not in st.session_state:
+            st.session_state["troca_itens_digitais"] = []
+        if "troca_form_suffix" not in st.session_state:
+            st.session_state["troca_form_suffix"] = 0
+        sufixo_troca = st.session_state["troca_form_suffix"]
+        data_troca = st.date_input("Data da Operação", value=datetime.now().date(), key=f"troca_data_{sufixo_troca}")
+        numero_troca = st.text_input("Número do Controle", value=f"AV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}", key=f"troca_num_{sufixo_troca}")
+        setor_troca = st.text_input("Setor / Loja", value=str(loja_atual_usuario or ""), key=f"troca_setor_{sufixo_troca}")
+        fornecedor_troca = st.text_input("Fornecedor", key=f"troca_fornecedor_{sufixo_troca}")
+        st.markdown("### Produtos trocados")
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            codigo_troca = st.text_input("Código do Produto (opcional)", key=f"troca_codigo_{sufixo_troca}")
+        with c2:
+            descricao_troca = st.text_input("Descrição do Produto", key=f"troca_desc_{sufixo_troca}")
+        c3, c4 = st.columns(2)
+        with c3:
+            qtd_troca = st.number_input("Quantidade", min_value=0.001, value=1.0, step=1.0, key=f"troca_qtd_{sufixo_troca}")
+        with c4:
+            unidade_troca = st.selectbox("Unidade", ["UN", "CX", "KG", "PCT", "FD", "SC", "LT", "OUTRA"], key=f"troca_un_{sufixo_troca}")
+        if st.button("➕ Adicionar produto avariado", key=f"troca_add_{sufixo_troca}"):
+            if not descricao_troca.strip():
+                st.warning("Informe a descrição do produto.")
+            else:
+                st.session_state["troca_itens_digitais"].append({
+                    "codigo": codigo_troca.strip(), "descricao": descricao_troca.strip(),
+                    "quantidade": float(qtd_troca), "unidade": unidade_troca
+                })
+                st.rerun()
+        if st.session_state["troca_itens_digitais"]:
+            st.dataframe(pd.DataFrame([{
+                "Código": x["codigo"] or "—", "Produto": x["descricao"],
+                "Quantidade": x["quantidade"], "Unidade": x["unidade"]
+            } for x in st.session_state["troca_itens_digitais"]]), use_container_width=True, hide_index=True)
+            rem_idx = st.selectbox("Produto para remover", range(len(st.session_state["troca_itens_digitais"])),
+                format_func=lambda i: f"{i+1}. {st.session_state['troca_itens_digitais'][i]['descricao']}",
+                key=f"troca_rem_sel_{sufixo_troca}")
+            if st.button("🗑️ Remover produto", key=f"troca_rem_{sufixo_troca}"):
+                st.session_state["troca_itens_digitais"].pop(rem_idx)
+                st.rerun()
+        observacoes_troca = st.text_area("Observações", key=f"troca_obs_{sufixo_troca}")
+        st.markdown("### Assinaturas digitais")
+        ass_col1, ass_col2 = st.columns(2)
+        with ass_col1:
+            st.write("**Responsável pela avaria / Conferente**")
+            canvas_troca_resp = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF",
+                height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"troca_sig_resp_{sufixo_troca}")
+        with ass_col2:
+            st.write("**Representante do fornecedor**")
+            canvas_troca_forn = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF",
+                height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"troca_sig_forn_{sufixo_troca}")
+        if st.button("💾 Registrar Troca por Troca", type="primary", key=f"troca_salvar_{sufixo_troca}"):
+            sig_resp_b64 = _canvas_assinatura_b64(canvas_troca_resp)
+            sig_forn_b64 = _canvas_assinatura_b64(canvas_troca_forn)
+            if not numero_troca.strip():
+                st.error("Informe o número de controle.")
+            elif not setor_troca.strip() or not fornecedor_troca.strip():
+                st.error("Informe o setor/loja e o fornecedor.")
+            elif not st.session_state["troca_itens_digitais"]:
+                st.error("Adicione pelo menos um produto.")
+            elif not sig_resp_b64 or not sig_forn_b64:
+                st.error("As duas assinaturas são obrigatórias: responsável e fornecedor.")
+            else:
+                dados_troca_pdf = {
+                    "numero": numero_troca.strip(), "data": data_troca.strftime("%d/%m/%Y"),
+                    "setor": setor_troca.strip(), "fornecedor": fornecedor_troca.strip(),
+                    "observacoes": observacoes_troca
+                }
+                try:
+                    conn_troca, db_troca = get_db_connection()
+                    cur_troca = conn_troca.cursor()
+                    if db_troca == "postgres":
+                        cur_troca.execute("""
+                            INSERT INTO troca_avarias
+                            (numero_controle, data_operacao, setor_loja, fornecedor, conferente, observacoes,
+                             assinatura_responsavel_b64, assinatura_fornecedor_b64)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
+                        """, (dados_troca_pdf["numero"], dados_troca_pdf["data"], dados_troca_pdf["setor"],
+                              dados_troca_pdf["fornecedor"], user_info["nome"], observacoes_troca, sig_resp_b64, sig_forn_b64))
+                        id_troca_salva = cur_troca.fetchone()[0]
+                    else:
+                        cur_troca.execute("""
+                            INSERT INTO troca_avarias
+                            (numero_controle, data_operacao, setor_loja, fornecedor, conferente, observacoes,
+                             assinatura_responsavel_b64, assinatura_fornecedor_b64)
+                            VALUES (?,?,?,?,?,?,?,?)
+                        """, (dados_troca_pdf["numero"], dados_troca_pdf["data"], dados_troca_pdf["setor"],
+                              dados_troca_pdf["fornecedor"], user_info["nome"], observacoes_troca, sig_resp_b64, sig_forn_b64))
+                        id_troca_salva = cur_troca.lastrowid
+                    for item_t in st.session_state["troca_itens_digitais"]:
+                        sql_item = """
+                            INSERT INTO troca_avarias_itens (troca_id, codigo_produto, descricao_produto, quantidade, unidade)
+                            VALUES (%s,%s,%s,%s,%s)
+                        """ if db_troca == "postgres" else """
+                            INSERT INTO troca_avarias_itens (troca_id, codigo_produto, descricao_produto, quantidade, unidade)
+                            VALUES (?,?,?,?,?)
+                        """
+                        cur_troca.execute(sql_item, (id_troca_salva, item_t["codigo"], item_t["descricao"], item_t["quantidade"], item_t["unidade"]))
+                    conn_troca.commit()
+                    st.cache_data.clear()
+                    pdf_troca_bytes = _pdf_termo_troca(dados_troca_pdf, st.session_state["troca_itens_digitais"], sig_resp_b64, sig_forn_b64)
+                    st.session_state["ultimo_pdf_troca_bytes"] = pdf_troca_bytes
+                    st.session_state["ultimo_num_troca"] = dados_troca_pdf["numero"]
+                    st.session_state["troca_itens_digitais"] = []
+                    st.session_state["troca_form_suffix"] += 1
+                    st.success(f"Termo {dados_troca_pdf['numero']} registrado com sucesso.")
+                    st.rerun()
+                except Exception as e_troca:
+                    try:
+                        conn_troca.rollback()
+                    except Exception:
+                        pass
+                    st.error(f"Não foi possível registrar a troca: {e_troca}")
+                finally:
+                    try:
+                        conn_troca.close()
+                    except Exception:
+                        pass
+        if "ultimo_pdf_troca_bytes" in st.session_state:
+            st.success(f"Termo **{st.session_state.get('ultimo_num_troca', '')}** pronto para download.")
+            st.download_button("📥 Baixar Termo de Troca por Avaria (PDF)",
+                data=st.session_state["ultimo_pdf_troca_bytes"],
+                file_name=f"Termo_Troca_Avaria_{st.session_state.get('ultimo_num_troca','troca')}.pdf",
+                mime="application/pdf", type="primary", key="download_termo_troca")
+
     if menu == "Romaneio de Recebimento - Hortifrúti":
         logo_path_header = buscar_caminho_logo()
         col_tit_logo, col_tit_txt = st.columns([0.1, 3.9], vertical_alignment="center")
