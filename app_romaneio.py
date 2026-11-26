@@ -718,6 +718,8 @@ def _garantir_schema_postgres(conn):
                 observacoes TEXT,
                 assinatura_responsavel_b64 TEXT NOT NULL,
                 assinatura_fornecedor_b64 TEXT NOT NULL,
+                codigo_fornecedor VARCHAR(255),
+                status VARCHAR(50) DEFAULT 'Troca pendente',
                 criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
     """)
@@ -735,6 +737,8 @@ def _garantir_schema_postgres(conn):
         "ALTER TABLE bonificacoes ADD COLUMN IF NOT EXISTS anexo_b64 TEXT",
         "ALTER TABLE romaneios ADD COLUMN IF NOT EXISTS foto_b64 TEXT",
         "ALTER TABLE baixas_avarias ADD COLUMN IF NOT EXISTS nf_baixa_b64 TEXT",
+        "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS codigo_fornecedor VARCHAR(255)",
+        "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Troca pendente'",
     ]:
         try:
             cursor.execute(alt_sql2)
@@ -944,7 +948,8 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
             elif tabela == "troca_avarias":
                 cur_sup.execute("""
                     SELECT numero_controle, data_operacao, setor_loja, fornecedor, conferente,
-                           observacoes, assinatura_responsavel_b64, assinatura_fornecedor_b64
+                           observacoes, assinatura_responsavel_b64, assinatura_fornecedor_b64,
+                           codigo_fornecedor, status
                     FROM troca_avarias WHERE numero_controle = %s
                 """, (chave_unica,))
                 row_troca = cur_sup.fetchone()
@@ -952,8 +957,8 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
                     cur_neon.execute("""
                         INSERT INTO troca_avarias
                         (numero_controle, data_operacao, setor_loja, fornecedor, conferente, observacoes,
-                         assinatura_responsavel_b64, assinatura_fornecedor_b64)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
+                         assinatura_responsavel_b64, assinatura_fornecedor_b64, codigo_fornecedor, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         ON CONFLICT (numero_controle) DO UPDATE SET
                             data_operacao = EXCLUDED.data_operacao,
                             setor_loja = EXCLUDED.setor_loja,
@@ -961,7 +966,9 @@ def _sincronizar_reserva_para_principal(conn_neon, conn_supabase):
                             conferente = EXCLUDED.conferente,
                             observacoes = EXCLUDED.observacoes,
                             assinatura_responsavel_b64 = EXCLUDED.assinatura_responsavel_b64,
-                            assinatura_fornecedor_b64 = EXCLUDED.assinatura_fornecedor_b64
+                            assinatura_fornecedor_b64 = EXCLUDED.assinatura_fornecedor_b64,
+                            codigo_fornecedor = EXCLUDED.codigo_fornecedor,
+                            status = EXCLUDED.status
                         RETURNING id
                     """, row_troca)
                     neon_troca_id = cur_neon.fetchone()[0]
@@ -1946,6 +1953,11 @@ def init_db():
             except Exception:
                 pass
 
+            for _sql_troca_mig in ["ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS codigo_fornecedor VARCHAR(255)", "ALTER TABLE troca_avarias ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Troca pendente'"]:
+                try:
+                    cursor.execute(_sql_troca_mig)
+                except Exception:
+                    pass
             cursor.execute("SELECT * FROM usuarios WHERE login = %s", ('908',))
             usr_adm = cursor.fetchone()
             senha_hash_adm = gerar_hash_senha('0332')
@@ -2076,6 +2088,8 @@ def init_db():
                 observacoes TEXT,
                 assinatura_responsavel_b64 TEXT NOT NULL,
                 assinatura_fornecedor_b64 TEXT NOT NULL,
+                codigo_fornecedor TEXT,
+                status TEXT DEFAULT 'Troca pendente',
                 criado_em TEXT DEFAULT CURRENT_TIMESTAMP
             )
             """)
@@ -2097,6 +2111,11 @@ def init_db():
             except Exception:
                 pass
 
+            for _sql_troca_mig in ["ALTER TABLE troca_avarias ADD COLUMN codigo_fornecedor TEXT", "ALTER TABLE troca_avarias ADD COLUMN status TEXT DEFAULT 'Troca pendente'"]:
+                try:
+                    cursor.execute(_sql_troca_mig)
+                except Exception:
+                    pass
             cursor.execute("SELECT * FROM usuarios WHERE login = '908'")
             usr_adm = cursor.fetchone()
             senha_hash_adm = gerar_hash_senha('0332')
@@ -3470,7 +3489,8 @@ else:
     if is_conferente:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
-            "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias"
+            "🔄 Troca por Troca de Avarias": "Troca por Troca de Avarias",
+            "🔎 Consultar Trocas": "Consultar Trocas"
         }
     elif is_auxiliar:
         opcoes_menu_map = {
@@ -3528,7 +3548,15 @@ else:
         buff = io.BytesIO()
         doc = SimpleDocTemplate(buff, pagesize=letter, rightMargin=34, leftMargin=34, topMargin=28, bottomMargin=28)
         styles = getSampleStyleSheet()
-        story = [
+        story = []
+        _logo_pdf_troca = buscar_caminho_logo()
+        if _logo_pdf_troca and os.path.exists(_logo_pdf_troca):
+            try:
+                story.append(RLImage(_logo_pdf_troca, width=85, height=42))
+                story.append(Spacer(1, 4))
+            except Exception:
+                pass
+        story += [
             Paragraph("<b>SUPER NOVA CIDADE</b>", styles["Title"]),
             Paragraph("CNPJ: 34.551.382/0002-44", styles["Normal"]),
             Spacer(1, 8),
@@ -3585,132 +3613,148 @@ else:
         return buff.getvalue()
 
     if menu == "Troca por Troca de Avarias":
-        st.title("🔄 Troca por Troca de Avarias")
-        st.caption("Registro digital independente do romaneio, disponível para todos os setores.")
-        if "troca_itens_digitais" not in st.session_state:
-            st.session_state["troca_itens_digitais"] = []
-        if "troca_form_suffix" not in st.session_state:
-            st.session_state["troca_form_suffix"] = 0
+        _logo_troca = buscar_caminho_logo()
+        _lc, _tc = st.columns([0.12, 3.88], vertical_alignment="center")
+        with _lc:
+            if _logo_troca and os.path.exists(_logo_troca): st.image(_logo_troca, width=48)
+            else: st.markdown("🔄")
+        with _tc: st.title("Troca por Troca de Avarias")
+        st.caption("Registre a troca e acompanhe o status até a substituição ser concluída.")
+        if "troca_itens_digitais" not in st.session_state: st.session_state["troca_itens_digitais"] = []
+        if "troca_form_suffix" not in st.session_state: st.session_state["troca_form_suffix"] = 0
         sufixo_troca = st.session_state["troca_form_suffix"]
         data_troca = st.date_input("Data da Operação", value=datetime.now().date(), key=f"troca_data_{sufixo_troca}")
         numero_troca = st.text_input("Número do Controle", value=f"AV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}", key=f"troca_num_{sufixo_troca}")
         setor_troca = st.text_input("Setor / Loja", value=str(loja_atual_usuario or ""), key=f"troca_setor_{sufixo_troca}")
-        fornecedor_troca = st.text_input("Fornecedor", key=f"troca_fornecedor_{sufixo_troca}")
-        st.markdown("### Produtos trocados")
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            codigo_troca = st.text_input("Código do Produto (opcional)", key=f"troca_codigo_{sufixo_troca}")
-        with c2:
-            descricao_troca = st.text_input("Descrição do Produto", key=f"troca_desc_{sufixo_troca}")
-        c3, c4 = st.columns(2)
-        with c3:
-            qtd_troca = st.number_input("Quantidade", min_value=0.001, value=1.0, step=1.0, key=f"troca_qtd_{sufixo_troca}")
-        with c4:
-            unidade_troca = st.selectbox("Unidade", ["UN", "CX", "KG", "PCT", "FD", "SC", "LT", "OUTRA"], key=f"troca_un_{sufixo_troca}")
-        if st.button("➕ Adicionar produto avariado", key=f"troca_add_{sufixo_troca}"):
-            if not descricao_troca.strip():
-                st.warning("Informe a descrição do produto.")
+
+        _forns_t = carregar_fornecedores_cached()
+        _kf = f"troca_forn_sel_{sufixo_troca}"; _kfc = f"troca_forn_cod_{sufixo_troca}"
+        def _troca_forn_change():
+            _v = st.session_state.get(_kf); st.session_state[_kfc] = str(_v[1] or "") if _v else ""
+        _forn_sel = st.selectbox("Fornecedor cadastrado", [None] + list(_forns_t),
+            format_func=lambda x: "Selecione o fornecedor..." if x is None else f"{x[0]} (Código: {x[1] or 'S/Cód'})",
+            key=_kf, on_change=_troca_forn_change)
+        if _kfc not in st.session_state: st.session_state[_kfc] = str(_forn_sel[1] or "") if _forn_sel else ""
+        _cf1,_cf2=st.columns([2,1])
+        with _cf1: st.text_input("Fornecedor selecionado", value=_forn_sel[0] if _forn_sel else "", disabled=True, key=f"troca_forn_show_{sufixo_troca}")
+        with _cf2: st.text_input("Código do Fornecedor", key=_kfc, disabled=True)
+
+        st.markdown("### Produtos avariados para troca")
+        _prods_t = carregar_produtos_cached()
+        _kp=f"troca_prod_sel_{sufixo_troca}"; _kpc=f"troca_prod_cod_{sufixo_troca}"; _kpbar=f"troca_prod_bar_{sufixo_troca}"
+        def _troca_prod_change():
+            _v=st.session_state.get(_kp); st.session_state[_kpc]=str(_v[0] or "") if _v else ""; st.session_state[_kpbar]=str(_v[1] or "") if _v else ""
+        _prod_sel=st.selectbox("Produto cadastrado (código / barras / descrição)", [None]+list(_prods_t),
+            format_func=lambda x: "Selecione o produto..." if x is None else f"{x[0] or 'S/Cód'} | Barras: {x[1] or 'S/Barras'} | {x[2]}",
+            key=_kp,on_change=_troca_prod_change)
+        if _kpc not in st.session_state: st.session_state[_kpc]=str(_prod_sel[0] or "") if _prod_sel else ""
+        if _kpbar not in st.session_state: st.session_state[_kpbar]=str(_prod_sel[1] or "") if _prod_sel else ""
+        _cp1,_cp2=st.columns(2)
+        with _cp1: st.text_input("Código do Produto",key=_kpc,disabled=True)
+        with _cp2: st.text_input("Código de Barras",key=_kpbar,disabled=True)
+        _units=["UN","UNID","CX","KG","GRM","PCT","FD","SC","LT","OUTRA"]
+        _unit=str(_prod_sel[3] or "UN").upper() if _prod_sel else "UN"
+        if _unit not in _units: _units.append(_unit)
+        _q1,_q2=st.columns(2)
+        with _q1: _qtd=st.number_input("Quantidade",min_value=0.001,value=1.0,step=1.0,key=f"troca_qtd_{sufixo_troca}")
+        with _q2: _un=st.selectbox("Unidade",_units,index=_units.index(_unit),key=f"troca_un_{sufixo_troca}")
+        if st.button("➕ Adicionar produto avariado",key=f"troca_add_{sufixo_troca}"):
+            if not _prod_sel: st.warning("Selecione um produto cadastrado.")
             else:
-                st.session_state["troca_itens_digitais"].append({
-                    "codigo": codigo_troca.strip(), "descricao": descricao_troca.strip(),
-                    "quantidade": float(qtd_troca), "unidade": unidade_troca
-                })
+                st.session_state["troca_itens_digitais"].append({"codigo":str(_prod_sel[0] or ""),"codigo_barras":str(_prod_sel[1] or ""),"descricao":str(_prod_sel[2]),"quantidade":float(_qtd),"unidade":_un})
                 st.rerun()
         if st.session_state["troca_itens_digitais"]:
-            st.dataframe(pd.DataFrame([{
-                "Código": x["codigo"] or "—", "Produto": x["descricao"],
-                "Quantidade": x["quantidade"], "Unidade": x["unidade"]
-            } for x in st.session_state["troca_itens_digitais"]]), use_container_width=True, hide_index=True)
-            rem_idx = st.selectbox("Produto para remover", range(len(st.session_state["troca_itens_digitais"])),
-                format_func=lambda i: f"{i+1}. {st.session_state['troca_itens_digitais'][i]['descricao']}",
-                key=f"troca_rem_sel_{sufixo_troca}")
-            if st.button("🗑️ Remover produto", key=f"troca_rem_{sufixo_troca}"):
-                st.session_state["troca_itens_digitais"].pop(rem_idx)
-                st.rerun()
-        observacoes_troca = st.text_area("Observações", key=f"troca_obs_{sufixo_troca}")
+            st.dataframe(pd.DataFrame([{"Código":x["codigo"] or "—","Produto":x["descricao"],"Quantidade":x["quantidade"],"Unidade":x["unidade"]} for x in st.session_state["troca_itens_digitais"]]),use_container_width=True,hide_index=True)
+            _ri=st.selectbox("Produto para remover",range(len(st.session_state["troca_itens_digitais"])),format_func=lambda i:f"{i+1}. {st.session_state['troca_itens_digitais'][i]['descricao']}",key=f"troca_rem_sel_{sufixo_troca}")
+            if st.button("🗑️ Remover produto",key=f"troca_rem_{sufixo_troca}"): st.session_state["troca_itens_digitais"].pop(_ri); st.rerun()
+        _obs_t=st.text_area("Observações",key=f"troca_obs_{sufixo_troca}")
         st.markdown("### Assinaturas digitais")
-        ass_col1, ass_col2 = st.columns(2)
-        with ass_col1:
+        _as1,_as2=st.columns(2)
+        with _as1:
             st.write("**Responsável pela avaria / Conferente**")
-            canvas_troca_resp = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF",
-                height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"troca_sig_resp_{sufixo_troca}")
-        with ass_col2:
+            _sig_resp=st_canvas(stroke_width=3,stroke_color="#000000",background_color="#FFFFFF",height=120,width=280,drawing_mode="freedraw",return_image_data=True,key=f"troca_sig_resp_{sufixo_troca}")
+        with _as2:
             st.write("**Representante do fornecedor**")
-            canvas_troca_forn = st_canvas(stroke_width=3, stroke_color="#000000", background_color="#FFFFFF",
-                height=120, width=280, drawing_mode="freedraw", return_image_data=True, key=f"troca_sig_forn_{sufixo_troca}")
-        if st.button("💾 Registrar Troca por Troca", type="primary", key=f"troca_salvar_{sufixo_troca}"):
-            sig_resp_b64 = _canvas_assinatura_b64(canvas_troca_resp)
-            sig_forn_b64 = _canvas_assinatura_b64(canvas_troca_forn)
-            if not numero_troca.strip():
-                st.error("Informe o número de controle.")
-            elif not setor_troca.strip() or not fornecedor_troca.strip():
-                st.error("Informe o setor/loja e o fornecedor.")
-            elif not st.session_state["troca_itens_digitais"]:
-                st.error("Adicione pelo menos um produto.")
-            elif not sig_resp_b64 or not sig_forn_b64:
-                st.error("As duas assinaturas são obrigatórias: responsável e fornecedor.")
+            _sig_forn=st_canvas(stroke_width=3,stroke_color="#000000",background_color="#FFFFFF",height=120,width=280,drawing_mode="freedraw",return_image_data=True,key=f"troca_sig_forn_{sufixo_troca}")
+
+        if st.button("💾 Registrar Troca por Troca",type="primary",key=f"troca_salvar_{sufixo_troca}"):
+            _sig_r_b64=_canvas_assinatura_b64(_sig_resp); _sig_f_b64=_canvas_assinatura_b64(_sig_forn)
+            _forn=_forn_sel[0] if _forn_sel else ""; _cod_f=str(_forn_sel[1] or "") if _forn_sel else ""
+            if not numero_troca.strip(): st.error("Informe o número de controle.")
+            elif not setor_troca.strip() or not _forn: st.error("Selecione o fornecedor cadastrado e informe o setor/loja.")
+            elif not st.session_state["troca_itens_digitais"]: st.error("Adicione pelo menos um produto.")
+            elif not _sig_r_b64 or not _sig_f_b64: st.error("As duas assinaturas são obrigatórias.")
             else:
-                dados_troca_pdf = {
-                    "numero": numero_troca.strip(), "data": data_troca.strftime("%d/%m/%Y"),
-                    "setor": setor_troca.strip(), "fornecedor": fornecedor_troca.strip(),
-                    "observacoes": observacoes_troca
-                }
+                _dados={"numero":numero_troca.strip(),"data":data_troca.strftime("%d/%m/%Y"),"setor":setor_troca.strip(),"fornecedor":_forn,"codigo_fornecedor":_cod_f,"observacoes":_obs_t}
+                _conn_t=None
                 try:
-                    conn_troca, db_troca = get_db_connection()
-                    cur_troca = conn_troca.cursor()
-                    if db_troca == "postgres":
-                        cur_troca.execute("""
-                            INSERT INTO troca_avarias
-                            (numero_controle, data_operacao, setor_loja, fornecedor, conferente, observacoes,
-                             assinatura_responsavel_b64, assinatura_fornecedor_b64)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id
-                        """, (dados_troca_pdf["numero"], dados_troca_pdf["data"], dados_troca_pdf["setor"],
-                              dados_troca_pdf["fornecedor"], user_info["nome"], observacoes_troca, sig_resp_b64, sig_forn_b64))
-                        id_troca_salva = cur_troca.fetchone()[0]
-                    else:
-                        cur_troca.execute("""
-                            INSERT INTO troca_avarias
-                            (numero_controle, data_operacao, setor_loja, fornecedor, conferente, observacoes,
-                             assinatura_responsavel_b64, assinatura_fornecedor_b64)
-                            VALUES (?,?,?,?,?,?,?,?)
-                        """, (dados_troca_pdf["numero"], dados_troca_pdf["data"], dados_troca_pdf["setor"],
-                              dados_troca_pdf["fornecedor"], user_info["nome"], observacoes_troca, sig_resp_b64, sig_forn_b64))
-                        id_troca_salva = cur_troca.lastrowid
-                    for item_t in st.session_state["troca_itens_digitais"]:
-                        sql_item = """
-                            INSERT INTO troca_avarias_itens (troca_id, codigo_produto, descricao_produto, quantidade, unidade)
-                            VALUES (%s,%s,%s,%s,%s)
-                        """ if db_troca == "postgres" else """
-                            INSERT INTO troca_avarias_itens (troca_id, codigo_produto, descricao_produto, quantidade, unidade)
-                            VALUES (?,?,?,?,?)
-                        """
-                        cur_troca.execute(sql_item, (id_troca_salva, item_t["codigo"], item_t["descricao"], item_t["quantidade"], item_t["unidade"]))
-                    conn_troca.commit()
-                    st.cache_data.clear()
-                    pdf_troca_bytes = _pdf_termo_troca(dados_troca_pdf, st.session_state["troca_itens_digitais"], sig_resp_b64, sig_forn_b64)
-                    st.session_state["ultimo_pdf_troca_bytes"] = pdf_troca_bytes
-                    st.session_state["ultimo_num_troca"] = dados_troca_pdf["numero"]
-                    st.session_state["troca_itens_digitais"] = []
-                    st.session_state["troca_form_suffix"] += 1
-                    st.success(f"Termo {dados_troca_pdf['numero']} registrado com sucesso.")
+                    _conn_t,_db_t=get_db_connection(); _cur_t=_conn_t.cursor()
+                    _sql_t="""INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""" if _db_t=="postgres" else """INSERT INTO troca_avarias (numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,assinatura_responsavel_b64,assinatura_fornecedor_b64,status) VALUES (?,?,?,?,?,?,?,?,?,?)"""
+                    _vals=(_dados["numero"],_dados["data"],_dados["setor"],_forn,_cod_f,user_info["nome"],_obs_t,_sig_r_b64,_sig_f_b64,"Troca pendente")
+                    _cur_t.execute(_sql_t,_vals); _id_t=_cur_t.fetchone()[0] if _db_t=="postgres" else _cur_t.lastrowid
+                    for _it in st.session_state["troca_itens_digitais"]:
+                        _sql_i="INSERT INTO troca_avarias_itens (troca_id,codigo_produto,descricao_produto,quantidade,unidade) VALUES (%s,%s,%s,%s,%s)" if _db_t=="postgres" else "INSERT INTO troca_avarias_itens (troca_id,codigo_produto,descricao_produto,quantidade,unidade) VALUES (?,?,?,?,?)"
+                        _cur_t.execute(_sql_i,(_id_t,_it["codigo"],_it["descricao"],_it["quantidade"],_it["unidade"]))
+                    _conn_t.commit(); st.cache_data.clear()
+                    st.session_state["ultimo_pdf_troca_bytes"]=_pdf_termo_troca(_dados,st.session_state["troca_itens_digitais"],_sig_r_b64,_sig_f_b64)
+                    st.session_state["ultimo_num_troca"]=_dados["numero"]
+                    _itmsg="\n".join([f"• {it['descricao']} | cód. {it['codigo'] or 'N/A'} | {it['quantidade']:g} {it['unidade']}" for it in st.session_state["troca_itens_digitais"]])
+                    _msg=("🔄 NOVA TROCA POR AVARIA REGISTRADA\n"+f"Controle: {_dados['numero']}\nData: {_dados['data']}\nSetor/Loja: {_dados['setor']}\nFornecedor: {_forn} (cód. {_cod_f or 'N/A'})\nResponsável: {user_info['nome']}\nStatus: Troca pendente\nItens:\n"+_itmsg)
+                    _chat_ok=enviar_notificacao_google_chat(_msg)
+                    if st.session_state.get("notif_desktop_toggle",False): emitir_notificacao_desktop_web(titulo=f"🔄 Troca pendente {_dados['numero']}",mensagem=f"Fornecedor: {_forn} | Itens: {len(st.session_state['troca_itens_digitais'])}")
+                    st.session_state["troca_itens_digitais"]=[]; st.session_state["troca_form_suffix"]+=1
+                    if _chat_ok: st.success(f"Troca {_dados['numero']} registrada e notificada no Google Chat. Status: Troca pendente.")
+                    else: st.warning(f"Troca {_dados['numero']} registrada, mas o aviso no Google Chat não foi confirmado. Confira os Logs/Secrets.")
                     st.rerun()
-                except Exception as e_troca:
-                    try:
-                        conn_troca.rollback()
-                    except Exception:
-                        pass
-                    st.error(f"Não foi possível registrar a troca: {e_troca}")
+                except Exception as _e_t:
+                    try: _conn_t.rollback()
+                    except Exception: pass
+                    st.error(f"Não foi possível registrar a troca: {_e_t}")
                 finally:
                     try:
-                        conn_troca.close()
-                    except Exception:
-                        pass
+                        if _conn_t: _conn_t.close()
+                    except Exception: pass
         if "ultimo_pdf_troca_bytes" in st.session_state:
-            st.success(f"Termo **{st.session_state.get('ultimo_num_troca', '')}** pronto para download.")
-            st.download_button("📥 Baixar Termo de Troca por Avaria (PDF)",
-                data=st.session_state["ultimo_pdf_troca_bytes"],
-                file_name=f"Termo_Troca_Avaria_{st.session_state.get('ultimo_num_troca','troca')}.pdf",
-                mime="application/pdf", type="primary", key="download_termo_troca")
+            st.success(f"Termo **{st.session_state.get('ultimo_num_troca','')}** pronto para download.")
+            st.download_button("📥 Baixar Termo de Troca por Avaria (PDF)",data=st.session_state["ultimo_pdf_troca_bytes"],file_name=f"Termo_Troca_Avaria_{st.session_state.get('ultimo_num_troca','troca')}.pdf",mime="application/pdf",type="primary",key="download_termo_troca")
+
+    if menu == "Consultar Trocas":
+        st.title("🔎 Consultar Trocas por Avaria")
+        st.caption("Consulte o registro individual e atualize o status quando a troca for concluída.")
+        _conn_c,_db_c=get_db_connection()
+        try:
+            _df_t=pd.read_sql_query("SELECT id,numero_controle,data_operacao,setor_loja,fornecedor,codigo_fornecedor,conferente,observacoes,status FROM troca_avarias ORDER BY id DESC",_conn_c)
+        finally: _conn_c.close()
+        if _df_t.empty: st.info("Ainda não há trocas registradas.")
+        else:
+            _df_t["status"]=_df_t["status"].fillna("Troca pendente").replace("","Troca pendente")
+            _show_t=_df_t.rename(columns={"numero_controle":"Nº Controle","data_operacao":"Data","setor_loja":"Setor/Loja","fornecedor":"Fornecedor","codigo_fornecedor":"Cód. Fornecedor","conferente":"Responsável","status":"Status"})
+            st.dataframe(_show_t[["Nº Controle","Data","Setor/Loja","Fornecedor","Cód. Fornecedor","Responsável","Status"]],use_container_width=True,hide_index=True)
+            _opts_t=[(int(r["id"]),f"{r['numero_controle']} | {r['fornecedor']} | {r['data_operacao']} | {r['status']}") for _,r in _df_t.iterrows()]
+            _sel_t=st.selectbox("Selecione uma troca",_opts_t,format_func=lambda x:x[1],key="consulta_troca_individual")
+            if _sel_t:
+                _idc=_sel_t[0]; _rowc=_df_t[_df_t["id"]==_idc].iloc[0]
+                st.markdown(f"### Controle {_rowc['numero_controle']}")
+                st.write(f"**Fornecedor:** {_rowc['fornecedor']} | **Código:** {_rowc['codigo_fornecedor'] or 'N/A'}")
+                st.write(f"**Setor/Loja:** {_rowc['setor_loja']} | **Responsável:** {_rowc['conferente']}")
+                st.write(f"**Observações:** {_rowc['observacoes'] or '—'}")
+                _conn_i,_=get_db_connection()
+                try:
+                    _q_i="SELECT codigo_produto,descricao_produto,quantidade,unidade FROM troca_avarias_itens WHERE troca_id = %s ORDER BY id" if _db_c=="postgres" else "SELECT codigo_produto,descricao_produto,quantidade,unidade FROM troca_avarias_itens WHERE troca_id = ? ORDER BY id"
+                    _df_i=pd.read_sql_query(_q_i,_conn_i,params=(_idc,))
+                finally: _conn_i.close()
+                if not _df_i.empty: st.dataframe(_df_i.rename(columns={"codigo_produto":"Código","descricao_produto":"Produto","quantidade":"Quantidade","unidade":"Unidade"}),use_container_width=True,hide_index=True)
+                _statusopts=["Troca pendente","Trocado"]; _curstatus=str(_rowc["status"] or "Troca pendente")
+                _idxstatus=_statusopts.index(_curstatus) if _curstatus in _statusopts else 0
+                _newstatus=st.selectbox("Status",_statusopts,index=_idxstatus,key=f"status_troca_{_idc}")
+                if st.button("💾 Salvar status da troca",key=f"salvar_status_troca_{_idc}"):
+                    _conn_s,_db_s=get_db_connection()
+                    try:
+                        _cur_s=_conn_s.cursor(); _cur_s.execute("UPDATE troca_avarias SET status = %s WHERE id = %s" if _db_s=="postgres" else "UPDATE troca_avarias SET status = ? WHERE id = ?",(_newstatus,int(_idc) if _db_s=="postgres" else _idc))
+                        _conn_s.commit(); st.cache_data.clear(); st.success("Status atualizado."); st.rerun()
+                    except Exception as _e_s:
+                        _conn_s.rollback(); st.error(f"Erro ao atualizar status: {_e_s}")
+                    finally: _conn_s.close()
 
     if menu == "Romaneio de Recebimento - Hortifrúti":
         logo_path_header = buscar_caminho_logo()
