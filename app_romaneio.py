@@ -1658,11 +1658,11 @@ def _codigo_barras_planilha(valor):
     texto = _valor_excel_texto(valor)
     if not texto:
         return ""
-    # Código de barras está na coluna A e termina com dois zeros de preenchimento.
-    if texto.endswith("00"):
+    # Excel pode devolver código numérico como 12345.0; elimina primeiro o .0.
+    if re.fullmatch(r"\d+\.0", texto):
         texto = texto[:-2]
-    # Excel pode devolver código numérico como 12345.0; elimina apenas o .0.
-    if re.fullmatch(r"\\d+\\.0", texto):
+    # A coluna A contém dois zeros finais de preenchimento que devem ser removidos.
+    if texto.endswith("00"):
         texto = texto[:-2]
     return texto.strip()
 
@@ -1761,9 +1761,6 @@ def carregar_fornecedores_cached():
             atual = list(unicos[chave])
             if not atual[1] and cod:
                 atual[1] = cod
-            # Prefere nome completo da planilha, em vez de nome concatenado com CNPJ.
-            if nome and ("." in nome[:12] or nome.isdigit()) and f[0] != nome:
-                pass
             unicos[chave] = tuple(atual)
     return sorted(unicos.values(), key=lambda f: str(f[0]).casefold())
 
