@@ -1487,7 +1487,7 @@ def enviar_notificacao_google_chat(mensagem, thread_key=None):
 
         if thread_key:
             _thread_key_url = quote(str(thread_key).strip(), safe="")
-            webhook_url += ("&" if "?" in webhook_url else "?") + "threadKey=" + _thread_key_url
+            webhook_url += ("&" if "?" in webhook_url else "?") + "threadKey=" + _thread_key_url + "&messageReplyOption=REPLY_MESSAGE_OR_FAIL
         _chat_payload = {"text": str(mensagem)}
         if thread_key:
             _chat_payload["thread"] = {"threadKey": str(thread_key).strip()}
