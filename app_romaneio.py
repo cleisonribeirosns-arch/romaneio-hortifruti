@@ -630,6 +630,7 @@ def _garantir_schema_postgres(conn):
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'",
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0",
         "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS custom_bg_b64 TEXT",
+        "ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS loja_atribuida VARCHAR(255) DEFAULT ''",
     ]:
         try:
             cursor.execute(alt_sql)
@@ -2031,7 +2032,8 @@ def init_db():
                 perfil VARCHAR(255) NOT NULL,
                 tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova',
                 notif_desktop INTEGER DEFAULT 0,
-                custom_bg_b64 TEXT
+                custom_bg_b64 TEXT,
+                loja_atribuida VARCHAR(255) DEFAULT ''
             )
             """)
             cursor.execute("""
@@ -2045,6 +2047,7 @@ def init_db():
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova'")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS custom_bg_b64 TEXT")
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS loja_atribuida VARCHAR(255) DEFAULT ''")
             except Exception:
                 pass
 
@@ -2201,7 +2204,8 @@ def init_db():
                 perfil TEXT NOT NULL,
                 tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova',
                 notif_desktop INTEGER DEFAULT 0,
-                custom_bg_b64 TEXT
+                custom_bg_b64 TEXT,
+                loja_atribuida VARCHAR(255) DEFAULT ''
             )
             """)
             cursor.execute("""
@@ -2215,6 +2219,7 @@ def init_db():
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova'")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN notif_desktop INTEGER DEFAULT 0")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN custom_bg_b64 TEXT")
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN loja_atribuida TEXT DEFAULT ''")
             except Exception:
                 pass
 
@@ -2399,12 +2404,12 @@ def fazer_login(login_ou_nome, senha):
         cursor = conn.cursor()
         if db_type == "postgres":
             cursor.execute(
-                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios WHERE login = %s OR LOWER(nome) = LOWER(%s)",
+                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64, loja_atribuida FROM usuarios WHERE login = %s OR LOWER(nome) = LOWER(%s)",
                 (login_ou_nome.strip(), login_ou_nome.strip()),
             )
         else:
             cursor.execute(
-                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64 FROM usuarios WHERE login = ? OR nome COLLATE NOCASE = ?",
+                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64, loja_atribuida FROM usuarios WHERE login = ? OR nome COLLATE NOCASE = ?",
                 (login_ou_nome.strip(), login_ou_nome.strip()),
             )
         usr = cursor.fetchone()
@@ -2419,7 +2424,7 @@ def fazer_login(login_ou_nome, senha):
                     )
                     conn.commit()
                     st.cache_data.clear()
-                return (usr[0], usr[1], usr[2], usr[3], usr[5], usr[6], usr[7])
+                return (usr[0], usr[1], usr[2], usr[3], usr[5], usr[6], usr[7], usr[8])
         return None
     finally:
         conn.close()
