@@ -5815,15 +5815,16 @@ else:
                 with u_col2: login_usr = st.text_input("Login / Usuário *", placeholder="", key=f"cu_login_{uf_suf}")
                 with u_col3: senha_usr = st.text_input("Senha *", type="password", placeholder="", key=f"cu_senha_{uf_suf}")
                 with u_col4: perfil_usr = st.selectbox("Perfil de Acesso", ["Conferente", "Auxiliar", "Gestor"], index=0, key=f"cu_perfil_{uf_suf}")
+                loja_usr = st.selectbox("Loja de Atuação do Usuário *", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], key=f"cu_loja_{uf_suf}")
                 if st.form_submit_button("✅ Criar Usuário", type="primary"):
-                    if not nome_usr.strip() or not login_usr.strip() or not senha_usr.strip(): st.error("Preencha todos os campos.")
+                    if not nome_usr.strip() or not login_usr.strip() or not senha_usr.strip() or (perfil_usr == "Conferente" and not loja_usr): st.error("Preencha todos os campos e selecione a loja do conferente.")
                     else:
                         with spinner_supernova("Criando usuário..."):
                             conn, db_type = get_db_connection()
                             try:
                                 cursor = conn.cursor()
                                 senha_hash = gerar_hash_senha(senha_usr.strip())
-                                cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil) VALUES (?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr))
+                                cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil, loja_atribuida) VALUES (%s, %s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil, loja_atribuida) VALUES (?, ?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr, loja_usr.strip()))
                                 conn.commit()
                                 st.cache_data.clear()
                                 st.session_state["usr_form_suf"] += 1
@@ -5837,13 +5838,13 @@ else:
         st.markdown("---")
         conn, db_type = get_db_connection()
         try:
-            df_users = pd.read_sql_query("SELECT id, nome, login, perfil FROM usuarios ORDER BY id ASC", conn)
+            df_users = pd.read_sql_query("SELECT id, nome, login, perfil, loja_atribuida FROM usuarios ORDER BY id ASC", conn)
         finally:
             conn.close()
         if not df_users.empty:
             df_users_show = df_users.copy()
             df_users_show["ID"] = range(1, len(df_users_show) + 1)
-            st.dataframe(df_users_show[["ID", "nome", "login", "perfil"]].rename(columns={"nome": "Nome", "login": "Login", "perfil": "Perfil"}), use_container_width=True, hide_index=True, height=250)
+            st.dataframe(df_users_show[["ID", "nome", "login", "perfil", "loja_atribuida"]].rename(columns={"nome": "Nome", "login": "Login", "perfil": "Perfil", "loja_atribuida": "Loja de Atuação"}), use_container_width=True, hide_index=True, height=250)
 
             st.markdown("### ✏️ Editar ou Excluir Usuário")
             opcoes_edit_usr = [(row["id"], f"{row['nome']} (Login: {row['login']} | Perfil: {row['perfil']})") for _, row in df_users.iterrows()]
@@ -5859,6 +5860,10 @@ else:
                     perfis_disponiveis = ["Conferente", "Auxiliar", "Gestor"]
                     idx_perf = perfis_disponiveis.index(dados_u_atual["perfil"]) if dados_u_atual["perfil"] in perfis_disponiveis else 0
                     eu_perfil = st.selectbox("Perfil de Acesso", perfis_disponiveis, index=idx_perf)
+                    lojas_edit_usr = ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"]
+                    loja_atual_usr = str(dados_u_atual.get("loja_atribuida", "") or "")
+                    idx_loja_usr = lojas_edit_usr.index(loja_atual_usr) if loja_atual_usr in lojas_edit_usr else 0
+                    eu_loja = st.selectbox("Loja de Atuação", lojas_edit_usr, index=idx_loja_usr)
                     col_bu1, col_bu2 = st.columns(2)
                     with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
                     with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Usuário", type="secondary")
@@ -5869,16 +5874,18 @@ else:
                             try:
                                 cur_upu = conn_up_u.cursor()
                                 r_id_upu = int(id_u_ed) if db_tuu == "postgres" else id_u_ed
-                                if eu_senha.strip():
+                                if eu_perfil == "Conferente" and not eu_loja:
+                                    st.error("Selecione a loja de atuação do conferente.")
+                                elif eu_senha.strip():
                                     hash_nova_s = gerar_hash_senha(eu_senha.strip())
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ? WHERE id = ?",
-                                        (eu_nome.strip(), eu_login.strip(), hash_nova_s, eu_perfil, r_id_upu)
+                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s, loja_atribuida = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ?, loja_atribuida = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), hash_nova_s, eu_perfil, eu_loja, r_id_upu)
                                     )
                                 else:
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ? WHERE id = ?",
-                                        (eu_nome.strip(), eu_login.strip(), eu_perfil, r_id_upu)
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s, loja_atribuida = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?, loja_atribuida = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), eu_perfil, eu_loja, r_id_upu)
                                     )
                                 conn_up_u.commit()
                                 st.cache_data.clear()
