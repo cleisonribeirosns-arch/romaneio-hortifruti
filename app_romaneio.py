@@ -5385,7 +5385,7 @@ else:
                 df_full = df_itens.merge(df_roms, left_on='romaneio_id', right_on='id', suffixes=('_item', '_romaneio'))
 
                 st.markdown("### 🔍 Filtros da Análise Gerencial (Período Livre)")
-                col_f0, col_f1, col_f2, col_f3, col_f4 = st.columns([1.2, 1, 1, 1, 1])
+                col_f0, col_f1, col_f2, col_f3, col_f4, col_f5, col_f6 = st.columns([1.2, 1, 1, 1, 1, 1, 1])
                 with col_f0:
                     lista_tipos_op_bi = ["TODOS OS TIPOS", "Compra", "Bonificação", "Transferência", "Transferência/Bonificação", "Troca por Troca"]
                     tipo_op_bi_sel = st.selectbox("Tipo de Operação", options=lista_tipos_op_bi, index=0, key="rel_filter_tipo_op")
@@ -5397,6 +5397,12 @@ else:
                 with col_f4:
                     dt_max = df_roms['data_dt'].max() if not df_roms['data_dt'].isna().all() else datetime.now(ZoneInfo("America/Manaus"))
                     dt_fim = seletor_data_unificado("Data Fim", "bi_fim")
+                with col_f5:
+                    fornecedores_bi = ["TODOS OS FORNECEDORES"] + sorted(df_roms["fornecedor"].fillna("").astype(str).loc[lambda x: x.str.strip() != ""].unique().tolist())
+                    fornecedor_bi_sel = st.selectbox("Fornecedor", fornecedores_bi, key="rel_filter_fornecedor")
+                with col_f6:
+                    conferentes_bi = ["TODOS OS CONFERENTES"] + sorted(df_roms["conferente"].fillna("").astype(str).loc[lambda x: x.str.strip() != ""].unique().tolist())
+                    conferente_bi_sel = st.selectbox("Conferente", conferentes_bi, key="rel_filter_conferente")
 
                 df_filtrado = df_full.copy()
                 if tipo_op_bi_sel != "TODOS OS TIPOS":
@@ -5405,6 +5411,10 @@ else:
                     df_filtrado = df_filtrado[df_filtrado["loja"].str.contains(loja_sel, case=False, na=False) | df_filtrado.get("loja_destino", pd.Series(dtype=str)).str.contains(loja_sel, case=False, na=False)]
                 if prod_sel != "TODOS OS PRODUTOS":
                     df_filtrado = df_filtrado[df_filtrado["produto"] == prod_sel]
+                if fornecedor_bi_sel != "TODOS OS FORNECEDORES":
+                    df_filtrado = df_filtrado[df_filtrado["fornecedor"].fillna("").astype(str) == fornecedor_bi_sel]
+                if conferente_bi_sel != "TODOS OS CONFERENTES":
+                    df_filtrado = df_filtrado[df_filtrado["conferente"].fillna("").astype(str) == conferente_bi_sel]
                 if dt_inicio and dt_fim:
                     df_filtrado = df_filtrado[(df_filtrado["data_dt"] >= pd.to_datetime(dt_inicio)) & (df_filtrado["data_dt"] <= pd.to_datetime(dt_fim))]
 
@@ -5417,6 +5427,9 @@ else:
                     num_roms = df_filtrado['numero_romaneio'].nunique()
                     val_troca = float(df_filtrado[df_filtrado['tipo_operacao'].str.contains("Troca por Troca", case=False, na=False)]['valor_total'].sum())
                     val_transf = float(df_filtrado[df_filtrado['tipo_operacao'].str.contains("Transferência", case=False, na=False)]['valor_total'].sum())
+                    qtd_total_bi = float(df_filtrado["quantidade"].sum())
+                    valor_medio_rom_bi = float(df_filtrado.groupby("numero_romaneio")["valor_total"].sum().mean()) if num_roms else 0.0
+                    rom_pendentes_bi = int(df_filtrado[df_filtrado["status_nota"].fillna("").astype(str).str.contains("pendente", case=False)]["numero_romaneio"].nunique())
 
                     df_bx_periodo = df_baixas_rel.copy()
                     if not df_bx_periodo.empty:
@@ -5429,12 +5442,15 @@ else:
                             df_bx_periodo = df_bx_periodo[(df_bx_periodo['data_dt'] >= pd.to_datetime(dt_inicio)) & (df_bx_periodo['data_dt'] <= pd.to_datetime(dt_fim))]
                     val_perdas_evitadas = float(df_bx_periodo['valor_total_avaria'].sum()) if not df_bx_periodo.empty else 0.0
 
-                    kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
+                    kpi1, kpi2, kpi3, kpi4, kpi5, kpi6, kpi7 = st.columns(7)
                     kpi1.metric("Valor Total Recebido", f"R$ {fmt_ptbr(tot_recebido, 2)}")
                     kpi2.metric("Entradas no Período", f"{num_roms} romaneios")
                     kpi3.metric("Total Transferências", f"R$ {fmt_ptbr(val_transf, 2)}")
                     kpi4.metric("Total Troca por Troca", f"R$ {fmt_ptbr(val_troca, 2)}")
                     kpi5.metric("Perdas Evitadas", f"R$ {fmt_ptbr(val_perdas_evitadas, 2)}", delta="Economia", delta_color="normal")
+                    kpi6.metric("Quantidade / Peso", fmt_ptbr(qtd_total_bi, 2))
+                    kpi7.metric("Romaneios Pendentes", str(rom_pendentes_bi))
+                    st.caption(f"Valor médio por romaneio no filtro: R$ {fmt_ptbr(valor_medio_rom_bi, 2)}")
 
                     st.markdown("---")
                     col_g1, col_g2 = st.columns(2)
@@ -5476,6 +5492,9 @@ else:
                         st.plotly_chart(fig_perdas, use_container_width=True)
 
                     st.markdown("---")
+                    st.subheader("📑 Consolidação por Loja, Operação e Fornecedor")
+                    resumo_bi = df_filtrado.groupby(["loja", "tipo_operacao", "fornecedor", "conferente"], dropna=False).agg(Romaneios=("numero_romaneio", "nunique"), Quantidade=("quantidade", "sum"), Valor=("valor_total", "sum")).reset_index().sort_values("Valor", ascending=False)
+                    st.dataframe(resumo_bi, use_container_width=True, hide_index=True)
                     st.download_button(
                         label="📥 Descarregar Relatório Consolidado (Excel / CSV)",
                         data=df_filtrado.to_csv(index=False, sep=';').encode('utf-8-sig'),
