@@ -3480,7 +3480,11 @@ if st.session_state["usuario_logado"] is None:
                 else:
                     with spinner_supernova("Validando acesso no Supernova..."):
                         usuario = fazer_login(login_input, senha_input)
-                        if usuario:
+                        if usuario and str(usuario[2]).strip().lower() == "conferente" and not str(usuario[7] or "").strip():
+                            st.error("Este conferente ainda não possui uma loja de atuação cadastrada. Solicite ao administrador que atualize seu cadastro.")
+                        elif usuario and str(usuario[2]).strip().lower() == "conferente" and str(usuario[7]).strip().upper() != loja_login_sel.strip().upper():
+                            st.error(f"Acesso bloqueado: este usuário está vinculado à {usuario[7]}. Se foi transferido, solicite a atualização do cadastro.")
+                        elif usuario:
                             st.session_state["usuario_logado"] = {
                                 "id": usuario[0],
                                 "nome": usuario[1],
