@@ -3730,7 +3730,7 @@ else:
         }
 
     _menus_user = user_info.get("menus_permitidos") or []
-    if not is_admin and _menus_user:
+    if str(user_info.get("login", "")).strip() != "908" and _menus_user:
         opcoes_menu_map = {label: destino for label, destino in opcoes_menu_map.items() if destino in _menus_user}
     if not opcoes_menu_map:
         opcoes_menu_map = {"📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"}
@@ -4035,11 +4035,13 @@ else:
             fornecedores_lista = carregar_fornecedores_cached()
 
         prod_dict = {}
+        prod_bar_dict = {}
         for p in produtos_lista:
             c_prod = p[0] if p[0] and str(p[0]).strip() else "S/Cód"
             c_bar = p[1] if p[1] and str(p[1]).strip() else "S/Barras"
             label = f"{c_prod} | Barras: {c_bar} | {p[2]}"
             prod_dict[label] = (p[2], p[3] if p[3] else "KG")
+            prod_bar_dict[label] = str(p[1] or "").strip()
         prod_nomes_keys = list(prod_dict.keys())
 
         forn_por_nome = {}
@@ -4129,7 +4131,7 @@ else:
             def _selecionar_por_codigo_barras():
                 _codigo_lido = "".join(ch for ch in str(st.session_state.get(_barcode_key, "")) if ch.isalnum()).casefold()
                 if _codigo_lido:
-                    _encontrado = next((lab for lab, vals in prod_dict.items() if "".join(ch for ch in str(next((p[1] for p in produtos_lista if p[2] == vals[0]), "")) if ch.isalnum()).casefold() == _codigo_lido), None)
+                    _encontrado = next((lab for lab, bar in prod_bar_dict.items() if "".join(ch for ch in bar if ch.isalnum()).casefold() == _codigo_lido), None)
                     if _encontrado:
                         st.session_state[_prod_widget_key] = _encontrado
             st.text_input("Código de barras (bipe com o coletor)", key=_barcode_key, placeholder="Bipe o código e pressione Enter", on_change=_selecionar_por_codigo_barras)
