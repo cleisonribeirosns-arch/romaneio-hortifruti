@@ -437,75 +437,22 @@ input, textarea,
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-/* Transição suave apenas nos textos, rótulos e campos de preenchimento */
-p, label, h1, h2, h3, h4,
-[data-testid="stMarkdownContainer"] p,
-[data-testid="stWidgetLabel"] label,
-[data-testid="stWidgetLabel"] p,
-input, textarea, select, [data-baseweb="select"] > div {
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+/* Respeita as variáveis do tema ativo do Streamlit (claro/escuro do próprio app). */
+.stApp input, .stApp textarea,
+.stApp [data-baseweb="select"] > div,
+.stApp [data-baseweb="popover"] [role="option"] {
+    background-color: var(--secondary-background-color) !important;
+    color: var(--text-color) !important;
+    -webkit-text-fill-color: var(--text-color) !important;
+    border-color: rgba(128, 128, 128, 0.45) !important;
 }
-
-/* ================= MODO ESCURO DO APARELHO ================= */
-@media (prefers-color-scheme: dark) {
-    :root {
-        color-scheme: dark;
-    }
-
-    p, label, h1, h2, h3, h4,
-    [data-testid="stMarkdownContainer"] p,
-    [data-testid="stWidgetLabel"] label,
-    [data-testid="stWidgetLabel"] p {
-        color: #f9fafb !important;
-    }
-
-    input, textarea, select, [data-baseweb="select"] > div {
-        background-color: #1e222b !important;
-        color: #f9fafb !important;
-        -webkit-text-fill-color: #f9fafb !important;
-        border-color: #4b5563 !important;
-    }
-
-    input::placeholder, textarea::placeholder {
-        color: #9ca3af !important;
-        -webkit-text-fill-color: #9ca3af !important;
-        opacity: 1 !important;
-    }
+.stApp input::placeholder, .stApp textarea::placeholder {
+    color: var(--text-color) !important;
+    opacity: 0.62 !important;
+    -webkit-text-fill-color: var(--text-color) !important;
 }
-
-/* ================= MODO CLARO DO APARELHO ================= */
-@media (prefers-color-scheme: light) {
-    :root {
-        color-scheme: light;
-    }
-
-    p, label, h1, h2, h3, h4,
-    [data-testid="stMarkdownContainer"] p,
-    [data-testid="stWidgetLabel"] label,
-    [data-testid="stWidgetLabel"] p {
-        color: #111827 !important;
-    }
-
-    input, textarea, select, [data-baseweb="select"] > div {
-        background-color: #ffffff !important;
-        color: #111827 !important;
-        -webkit-text-fill-color: #111827 !important;
-        border-color: #cbd5e1 !important;
-    }
-
-    input::placeholder, textarea::placeholder {
-        color: #64748b !important;
-        -webkit-text-fill-color: #64748b !important;
-        opacity: 1 !important;
-    }
-}
-
-/* ================= AJUSTE PARA CELULAR / TABLET / COLETOR ================= */
-@media (max-width: 768px) {
-    input, textarea, select, [data-baseweb="select"] > div {
-        min-height: 44px !important;
-        font-size: 16px !important;
-    }
+.stApp [data-baseweb="select"] input {
+    background-color: transparent !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -4137,11 +4084,13 @@ else:
                     idx_loja_login = lista_lojas_opc.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_opc else 0
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, placeholder="Selecione a loja...", key=f"loja_{k_suffix}")
             with col3:
+                _busca_forn = st.text_input("Pesquisar fornecedor por código ou nome", key=f"busca_forn_{k_suffix}", placeholder="Digite para filtrar...")
+                _forns_filtrados = [n for n in forn_nomes_keys if not _busca_forn.strip() or _busca_forn.casefold() in n.casefold() or _busca_forn.casefold() in forn_por_nome.get(n, "").casefold()][:50]
                 idx_sel = 0
                 atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
                 if atual_sel in forn_nomes_keys:
                     idx_sel = forn_nomes_keys.index(atual_sel) + 1
-                fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + forn_nomes_keys, index=idx_sel, placeholder="Selecione o fornecedor...", key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
+                fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + _forns_filtrados, index=(idx_sel if atual_sel in _forns_filtrados else 0), placeholder="Digite acima para filtrar e selecione...", key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
                 if f"in_cod_forn_{k_suffix}" not in st.session_state:
                     st.session_state[f"in_cod_forn_{k_suffix}"] = st.session_state[f"val_cod_forn_{k_suffix}"]
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"in_cod_forn_{k_suffix}", disabled=True)
@@ -4173,18 +4122,27 @@ else:
         st.subheader("2. Itens do Recebimento")
         if "itens_romaneio" not in st.session_state: st.session_state["itens_romaneio"] = []
 
-        col_p1, col_p2, col_p3, col_p4, col_p5 = st.columns([2.5, 1.2, 1.2, 1.2, 1])
+        col_p1, col_p2, col_p3, col_p4 = st.columns([2.5, 1.2, 1.2, 1.2])
         with col_p1:
-            prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + prod_nomes_keys, index=0, placeholder="Selecione o produto...", key=f"prod_sel_{k_suffix}_{i_suffix}")
+            _barcode_key = f"rom_barcode_{k_suffix}_{i_suffix}"
+            _prod_widget_key = f"prod_sel_{k_suffix}_{i_suffix}"
+            def _selecionar_por_codigo_barras():
+                _codigo_lido = "".join(ch for ch in str(st.session_state.get(_barcode_key, "")) if ch.isalnum()).casefold()
+                if _codigo_lido:
+                    _encontrado = next((lab for lab, vals in prod_dict.items() if "".join(ch for ch in str(next((p[1] for p in produtos_lista if p[2] == vals[0]), "")) if ch.isalnum()).casefold() == _codigo_lido), None)
+                    if _encontrado:
+                        st.session_state[_prod_widget_key] = _encontrado
+            st.text_input("Código de barras (bipe com o coletor)", key=_barcode_key, placeholder="Bipe o código e pressione Enter", on_change=_selecionar_por_codigo_barras)
+            _busca_prod = st.text_input("Pesquisar produto por código ou nome", key=f"busca_prod_{k_suffix}_{i_suffix}", placeholder="Digite para filtrar...")
+            _prods_filtrados = [lab for lab in prod_nomes_keys if not _busca_prod.strip() or _busca_prod.casefold() in lab.casefold()][:50]
+            prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + _prods_filtrados, index=0, placeholder="Digite acima para filtrar...", key=_prod_widget_key)
             prod_nome_real = prod_dict[prod_label_sel][0] if prod_label_sel and prod_label_sel != "" and prod_dict else ""
+            und_sel = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
         with col_p2:
-            und_padrao = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
-            und_sel = st.selectbox("UND", ["KG", "UNID", "GRM", "CX"], index=(["KG", "UNID", "GRM", "CX"].index(und_padrao) if und_padrao in ["KG", "UNID", "GRM", "CX"] else 0), key=f"und_sel_{k_suffix}_{i_suffix}")
-        with col_p3:
             qtd_str_input = st.text_input("Qtd / Peso", placeholder="", key=f"qtd_{k_suffix}_{i_suffix}")
-        with col_p4:
+        with col_p3:
             val_unit_str_input = st.text_input("Valor Unit. (R$)", placeholder="", key=f"vunit_{k_suffix}_{i_suffix}")
-        with col_p5:
+        with col_p4:
             st.write("")
             st.write("")
             if st.button("➕ Add", type="primary", key=f"btn_add_{k_suffix}_{i_suffix}"):
@@ -5611,7 +5569,7 @@ else:
                     with col_cp1: cod_prod_input = st.text_input("Código do Produto", placeholder="", key=f"cp_cod_{pf_suf}")
                     with col_cp2: cod_bar_input = st.text_input("Código de Barras", placeholder="", key=f"cp_bar_{pf_suf}")
                     with col_cp3: nome_p = st.text_input("Nome do Produto *", placeholder="", key=f"cp_nome_{pf_suf}")
-                    with col_cp4: und_p = st.selectbox("Unidade", ["KG", "UNID", "GRM", "CX"], index=0, key=f"cp_und_{pf_suf}")
+                    
                     if st.form_submit_button("➕ Cadastrar Produto", type="primary"):
                         if not nome_p.strip(): st.error("O Nome é obrigatório.")
                         else:
@@ -5619,7 +5577,7 @@ else:
                                 conn, db_type = get_db_connection()
                                 try:
                                     cursor = conn.cursor()
-                                    cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), und_p))
+                                    cursor.execute("INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (%s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO produtos (codigo_barras, codigo_produto, nome, unidade_padrao) VALUES (?, ?, ?, ?)", (cod_bar_input.strip() if cod_bar_input else None, cod_prod_input.strip() if cod_prod_input else None, nome_p.strip().upper(), "KG"))
                                     conn.commit()
                                     st.cache_data.clear()
                                     carregar_produtos_cached.clear()
@@ -5682,9 +5640,7 @@ else:
                             ep_cod_bar = st.text_input("Código de Barras", value=dados_p_atual[0] or "")
                             ep_cod_prod = st.text_input("Código do Produto", value=dados_p_atual[1] or "")
                             ep_nome = st.text_input("Nome do Produto", value=dados_p_atual[2] or "")
-                            lista_unds = ["KG", "UNID", "GRM", "CX"]
-                            idx_u = lista_unds.index(dados_p_atual[3]) if dados_p_atual[3] in lista_unds else 0
-                            ep_und = st.selectbox("Unidade", lista_unds, index=idx_u)
+
                             col_bp1, col_bp2 = st.columns(2)
                             with col_bp1: btn_salvar_prod = st.form_submit_button("💾 Salvar Alterações", type="primary")
                             with col_bp2: btn_excluir_prod = st.form_submit_button("🗑️ Excluir Produto", type="secondary")
@@ -5696,8 +5652,8 @@ else:
                                         cur_upp = conn_up_p.cursor()
                                         r_id_upp = int(id_p_ed) if db_tup == "postgres" else id_p_ed
                                         cur_upp.execute(
-                                            "UPDATE produtos SET codigo_barras = %s, codigo_produto = %s, nome = %s, unidade_padrao = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?, nome = ?, unidade_padrao = ? WHERE id = ?",
-                                            (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), ep_und, r_id_upp)
+                                            "UPDATE produtos SET codigo_barras = %s, codigo_produto = %s, nome = %s WHERE id = %s" if db_tup == "postgres" else "UPDATE produtos SET codigo_barras = ?, codigo_produto = ?, nome = ? WHERE id = ?",
+                                            (ep_cod_bar.strip(), ep_cod_prod.strip(), ep_nome.strip().upper(), r_id_upp)
                                         )
                                         conn_up_p.commit()
                                         st.cache_data.clear()
