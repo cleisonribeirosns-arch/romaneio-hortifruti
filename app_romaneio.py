@@ -3873,12 +3873,9 @@ else:
         _cp1,_cp2=st.columns(2)
         with _cp1: st.text_input("Código do Produto",key=_kpc,disabled=True)
         with _cp2: st.text_input("Código de Barras",key=_kpbar,disabled=True)
-        _units=["UN","UNID","CX","KG","GRM","PCT","FD","SC","LT","OUTRA"]
         _unit=str(_prod_sel[3] or "UN").upper() if _prod_sel else "UN"
-        if _unit not in _units: _units.append(_unit)
-        _q1,_q2=st.columns(2)
-        with _q1: _qtd=st.number_input("Quantidade",min_value=0.001,value=1.0,step=1.0,key=f"troca_qtd_{sufixo_troca}")
-        with _q2: _un=st.selectbox("Unidade",_units,index=_units.index(_unit),key=f"troca_un_{sufixo_troca}")
+        _un=_unit
+        _qtd=st.number_input("Quantidade",min_value=0.001,value=1.0,step=1.0,key=f"troca_qtd_{sufixo_troca}")
         if st.button("➕ Adicionar produto avariado",key=f"troca_add_{sufixo_troca}"):
             if not _prod_sel: st.warning("Selecione um produto cadastrado.")
             else:
@@ -4135,6 +4132,41 @@ else:
                     if _encontrado:
                         st.session_state[_prod_widget_key] = _encontrado
             st.text_input("Código de barras (bipe com o coletor)", key=_barcode_key, placeholder="Bipe o código e pressione Enter", on_change=_selecionar_por_codigo_barras)
+            components.html("""
+            <div style="font-family: sans-serif; padding: 4px 0;">
+              <button id="hc-camera-start" style="padding:9px 12px;border:0;border-radius:8px;background:#2e7d32;color:white;font-weight:600;">📷 Ler código pela câmera</button>
+              <span id="hc-camera-status" style="margin-left:8px;font-size:13px;">Aponte a câmera para o código de barras.</span>
+              <video id="hc-camera-video" playsinline style="display:none;width:100%;max-height:180px;margin-top:8px;border-radius:8px;"></video>
+            </div>
+            <script>
+            (function(){
+              const btn=document.getElementById("hc-camera-start");
+              const status=document.getElementById("hc-camera-status");
+              const video=document.getElementById("hc-camera-video");
+              let stream=null, timer=null;
+              btn.addEventListener("click",async function(){
+                try{
+                  if(!("BarcodeDetector" in window)){status.textContent="Este navegador não oferece leitura de código pela câmera. Use o coletor ou digite o código.";return;}
+                  const detector=new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf","qr_code"]});
+                  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+                  video.srcObject=stream;video.style.display="block";await video.play();status.textContent="Câmera ativa. Posicione o código dentro da imagem.";
+                  timer=setInterval(async()=>{
+                    try{
+                      const codes=await detector.detect(video);
+                      if(codes.length&&codes[0].rawValue){
+                        const value=codes[0].rawValue;
+                        const doc=window.parent.document;
+                        const input=doc.querySelector('input[aria-label="Código de barras (bipe com o coletor)"]');
+                        if(input){const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,"value").set;setter.call(input,value);input.dispatchEvent(new window.parent.Event("input",{bubbles:true}));input.dispatchEvent(new window.parent.Event("change",{bubbles:true}));status.textContent="Código lido: "+value;}
+                        clearInterval(timer);timer=null;stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;video.style.display="none";
+                      }
+                    }catch(e){}
+                  },250);
+                }catch(e){status.textContent="Não foi possível abrir a câmera. Verifique a permissão do navegador ou use o coletor.";}
+              });
+            })();
+            </script>
+            """, height=75)
             _busca_prod = st.text_input("Pesquisar produto por código ou nome", key=f"busca_prod_{k_suffix}_{i_suffix}", placeholder="Digite para filtrar...")
             _prods_filtrados = [lab for lab in prod_nomes_keys if not _busca_prod.strip() or _busca_prod.casefold() in lab.casefold()][:50]
             prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + _prods_filtrados, index=0, placeholder="Digite acima para filtrar...", key=_prod_widget_key)
