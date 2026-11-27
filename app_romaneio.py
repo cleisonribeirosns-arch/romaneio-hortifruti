@@ -402,11 +402,11 @@ input, textarea,
 [data-testid="stRadio"] > div[role="radiogroup"] label,
 [data-testid="stRadio"] > div[role="radiogroup"] label p,
 [data-testid="stRadio"] > div[role="radiogroup"] label span {
-    font-size: 18px !important;
+    font-size: 21px !important;
     font-weight: 700 !important;
 }
 [data-testid="stRadio"] > div[role="radiogroup"] label {
-    padding: 7px 10px !important;
+    padding: 9px 12px !important;
 }
 
 @media (max-width: 768px) {
@@ -437,23 +437,20 @@ input, textarea,
 # ---------------------------------------------------------
 st.markdown("""
 <style>
-/* Respeita as variáveis do tema ativo do Streamlit (claro/escuro do próprio app). */
-.stApp input, .stApp textarea,
-.stApp [data-baseweb="select"] > div,
-.stApp [data-baseweb="popover"] [role="option"] {
-    background-color: var(--secondary-background-color) !important;
-    color: var(--text-color) !important;
-    -webkit-text-fill-color: var(--text-color) !important;
-    border-color: rgba(128, 128, 128, 0.45) !important;
+html[data-theme="dark"] .stApp input, html[data-theme="dark"] .stApp textarea,
+html[data-theme="dark"] .stApp [data-baseweb="select"] > div,
+[data-theme="dark"] .stApp input, [data-theme="dark"] .stApp textarea,
+[data-theme="dark"] .stApp [data-baseweb="select"] > div {
+ background-color:#343a40 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border-color:#687078 !important;
 }
-.stApp input::placeholder, .stApp textarea::placeholder {
-    color: var(--text-color) !important;
-    opacity: 0.62 !important;
-    -webkit-text-fill-color: var(--text-color) !important;
+html[data-theme="light"] .stApp input, html[data-theme="light"] .stApp textarea,
+html[data-theme="light"] .stApp [data-baseweb="select"] > div,
+[data-theme="light"] .stApp input, [data-theme="light"] .stApp textarea,
+[data-theme="light"] .stApp [data-baseweb="select"] > div {
+ background-color:#fff !important;color:#202124 !important;-webkit-text-fill-color:#202124 !important;border-color:#aeb4ba !important;
 }
-.stApp [data-baseweb="select"] input {
-    background-color: transparent !important;
-}
+.stApp input::placeholder,.stApp textarea::placeholder{color:inherit !important;opacity:.65 !important;-webkit-text-fill-color:inherit !important}
+.stApp [data-baseweb="select"] input{background-color:transparent !important}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1757,8 +1754,8 @@ def _carregar_baixas_avarias_cached():
 def _carregar_dados_bi_cached():
     conn, _ = get_db_connection()
     try:
-        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_destino, data_recebimento, tipo_operacao FROM romaneios ORDER BY id DESC", conn)
-        df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, valor_total FROM romaneio_itens", conn)
+        df_roms = pd.read_sql_query("SELECT id, numero_romaneio, loja, loja_origem, loja_destino, data_recebimento, fornecedor, codigo_fornecedor, conferente, pagamento_a_vista, data_pagamento, status_nota, tipo_operacao, observacoes FROM romaneios ORDER BY id DESC", conn)
+        df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens", conn)
         df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn)
         df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id DESC", conn)
         return df_roms, df_itens, df_bonf_rel, df_baixas_rel
@@ -3844,7 +3841,7 @@ else:
         if "troca_itens_digitais" not in st.session_state: st.session_state["troca_itens_digitais"] = []
         if "troca_form_suffix" not in st.session_state: st.session_state["troca_form_suffix"] = 0
         sufixo_troca = st.session_state["troca_form_suffix"]
-        data_troca = st.date_input("Data da Operação", value=datetime.now().date(), key=f"troca_data_{sufixo_troca}")
+        data_troca = st.date_input("Data da Operação", value=datetime.now().date(), format="DD/MM/YYYY", key=f"troca_data_{sufixo_troca}")
         numero_troca = st.text_input("Número do Controle", value=f"AV-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}", key=f"troca_num_{sufixo_troca}")
         setor_troca = st.text_input("Setor / Loja", value=str(loja_atual_usuario or ""), key=f"troca_setor_{sufixo_troca}")
 
@@ -4125,13 +4122,6 @@ else:
         with col_p1:
             _barcode_key = f"rom_barcode_{k_suffix}_{i_suffix}"
             _prod_widget_key = f"prod_sel_{k_suffix}_{i_suffix}"
-            def _selecionar_por_codigo_barras():
-                _codigo_lido = "".join(ch for ch in str(st.session_state.get(_barcode_key, "")) if ch.isalnum()).casefold()
-                if _codigo_lido:
-                    _encontrado = next((lab for lab, bar in prod_bar_dict.items() if "".join(ch for ch in bar if ch.isalnum()).casefold() == _codigo_lido), None)
-                    if _encontrado:
-                        st.session_state[_prod_widget_key] = _encontrado
-            st.text_input("Código de barras (bipe com o coletor)", key=_barcode_key, placeholder="Bipe o código e pressione Enter", on_change=_selecionar_por_codigo_barras)
             components.html("""
             <div style="font-family: sans-serif; padding: 4px 0;">
               <button id="hc-camera-start" style="padding:9px 12px;border:0;border-radius:8px;background:#2e7d32;color:white;font-weight:600;">📷 Ler código pela câmera</button>
@@ -4156,7 +4146,7 @@ else:
                       if(codes.length&&codes[0].rawValue){
                         const value=codes[0].rawValue;
                         const doc=window.parent.document;
-                        const input=doc.querySelector('input[aria-label="Código de barras (bipe com o coletor)"]');
+                        const input=doc.querySelector('input[aria-label="Produto / Código / Barras"]');
                         if(input){const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,"value").set;setter.call(input,value);input.dispatchEvent(new window.parent.Event("input",{bubbles:true}));input.dispatchEvent(new window.parent.Event("change",{bubbles:true}));status.textContent="Código lido: "+value;}
                         clearInterval(timer);timer=null;stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;video.style.display="none";
                       }
@@ -4167,9 +4157,7 @@ else:
             })();
             </script>
             """, height=75)
-            _busca_prod = st.text_input("Pesquisar produto por código ou nome", key=f"busca_prod_{k_suffix}_{i_suffix}", placeholder="Digite para filtrar...")
-            _prods_filtrados = [lab for lab in prod_nomes_keys if not _busca_prod.strip() or _busca_prod.casefold() in lab.casefold()][:50]
-            prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + _prods_filtrados, index=0, placeholder="Digite acima para filtrar...", key=_prod_widget_key)
+            prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + prod_nomes_keys, index=0, placeholder="Digite código/nome ou bipe com o coletor...", key=_prod_widget_key)
             prod_nome_real = prod_dict[prod_label_sel][0] if prod_label_sel and prod_label_sel != "" and prod_dict else ""
             und_sel = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
         with col_p2:
