@@ -2033,7 +2033,8 @@ def init_db():
                 tema_bg VARCHAR(255) DEFAULT 'Logomarca Oficial Supernova',
                 notif_desktop INTEGER DEFAULT 0,
                 custom_bg_b64 TEXT,
-                loja_atribuida VARCHAR(255) DEFAULT ''
+                loja_atribuida VARCHAR(255) DEFAULT '',
+                menus_permitidos TEXT DEFAULT ''
             )
             """)
             cursor.execute("""
@@ -2048,6 +2049,7 @@ def init_db():
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS notif_desktop INTEGER DEFAULT 0")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS custom_bg_b64 TEXT")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS loja_atribuida VARCHAR(255) DEFAULT ''")
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS menus_permitidos TEXT DEFAULT ''")
             except Exception:
                 pass
 
@@ -2205,7 +2207,8 @@ def init_db():
                 tema_bg TEXT DEFAULT 'Logomarca Oficial Supernova',
                 notif_desktop INTEGER DEFAULT 0,
                 custom_bg_b64 TEXT,
-                loja_atribuida VARCHAR(255) DEFAULT ''
+                loja_atribuida VARCHAR(255) DEFAULT '',
+                menus_permitidos TEXT DEFAULT ''
             )
             """)
             cursor.execute("""
@@ -2220,6 +2223,7 @@ def init_db():
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN notif_desktop INTEGER DEFAULT 0")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN custom_bg_b64 TEXT")
                 cursor.execute("ALTER TABLE usuarios ADD COLUMN loja_atribuida TEXT DEFAULT ''")
+                cursor.execute("ALTER TABLE usuarios ADD COLUMN menus_permitidos TEXT DEFAULT ''")
             except Exception:
                 pass
 
@@ -2404,12 +2408,12 @@ def fazer_login(login_ou_nome, senha):
         cursor = conn.cursor()
         if db_type == "postgres":
             cursor.execute(
-                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64, loja_atribuida FROM usuarios WHERE login = %s OR LOWER(nome) = LOWER(%s)",
+                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64, loja_atribuida, menus_permitidos FROM usuarios WHERE login = %s OR LOWER(nome) = LOWER(%s)",
                 (login_ou_nome.strip(), login_ou_nome.strip()),
             )
         else:
             cursor.execute(
-                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64, loja_atribuida FROM usuarios WHERE login = ? OR nome COLLATE NOCASE = ?",
+                "SELECT id, nome, perfil, login, senha, tema_bg, notif_desktop, custom_bg_b64, loja_atribuida, menus_permitidos FROM usuarios WHERE login = ? OR nome COLLATE NOCASE = ?",
                 (login_ou_nome.strip(), login_ou_nome.strip()),
             )
         usr = cursor.fetchone()
@@ -2424,7 +2428,7 @@ def fazer_login(login_ou_nome, senha):
                     )
                     conn.commit()
                     st.cache_data.clear()
-                return (usr[0], usr[1], usr[2], usr[3], usr[5], usr[6], usr[7], usr[8])
+                return (usr[0], usr[1], usr[2], usr[3], usr[5], usr[6], usr[7], usr[8], usr[9])
         return None
     finally:
         conn.close()
@@ -3490,7 +3494,8 @@ if st.session_state["usuario_logado"] is None:
                                 "nome": usuario[1],
                                 "perfil": usuario[2],
                                 "login": usuario[3],
-                                "loja_atual": loja_login_sel
+                                "loja_atual": loja_login_sel,
+                                "menus_permitidos": json.loads(usuario[8]) if usuario[8] else []
                             }
                             tema_usr_db = usuario[4] if usuario[4] else "Logomarca Oficial Supernova"
                             st.session_state["tema_bg_selecionado"] = tema_usr_db
@@ -3737,6 +3742,18 @@ else:
                         finally:
                             conn_cfg.close()
 
+    MENU_PERMISSOES_DISPONIVEIS = {
+        "Romaneio de Recebimento - Hortifrúti": "📋 Romaneio de Recebimento",
+        "Troca por Troca de Avarias": "🔄 Troca por Troca de Avarias",
+        "Consultar Romaneios": "🗂️ Consultar Romaneios",
+        "Consultar Trocas": "🔁 Consultar Troca por Troca",
+        "Controle de Bonificação": "🎁 Controle de Bonificação",
+        "Controle de Baixa de Avarias": "📉 Baixa de Avarias",
+        "Relatórios & Gráficos": "📊 Relatórios & BI",
+        "Gerenciar Cadastros (Produtos)": "🛒 Cadastros",
+        "Gerenciar Usuários & Permissões": "👥 Usuários"
+    }
+
     if is_conferente:
         opcoes_menu_map = {
             "📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti",
@@ -3764,6 +3781,12 @@ else:
             "🛒 Cadastros": "Gerenciar Cadastros (Produtos)",
             "👥 Usuários": "Gerenciar Usuários & Permissões"
         }
+
+    _menus_user = user_info.get("menus_permitidos") or []
+    if not is_admin and _menus_user:
+        opcoes_menu_map = {label: destino for label, destino in opcoes_menu_map.items() if destino in _menus_user}
+    if not opcoes_menu_map:
+        opcoes_menu_map = {"📋 Romaneio de Recebimento": "Romaneio de Recebimento - Hortifrúti"}
 
     menu_selecionado_label = st.radio(
         "Menu de Navegação Principal",
@@ -5825,15 +5848,16 @@ else:
                 with u_col3: senha_usr = st.text_input("Senha *", type="password", placeholder="", key=f"cu_senha_{uf_suf}")
                 with u_col4: perfil_usr = st.selectbox("Perfil de Acesso", ["Conferente", "Auxiliar", "Gestor"], index=0, key=f"cu_perfil_{uf_suf}")
                 loja_usr = st.selectbox("Loja de Atuação do Usuário *", ["", "LOJA 02 NOVA CIDADE", "LOJA 03 TERRA NOVA", "LOJA 04 MANOA", "LOJA 05 ZUMBI", "LOJA 06 OSWALDO FROTA", "LOJA 07 MOSAICO"], key=f"cu_loja_{uf_suf}")
+                menus_usr = st.multiselect("Menus que este usuário poderá acessar", options=list(MENU_PERMISSOES_DISPONIVEIS.keys()), format_func=lambda x: MENU_PERMISSOES_DISPONIVEIS[x], default=list(MENU_PERMISSOES_DISPONIVEIS.keys()), key=f"cu_menus_{uf_suf}")
                 if st.form_submit_button("✅ Criar Usuário", type="primary"):
-                    if not nome_usr.strip() or not login_usr.strip() or not senha_usr.strip() or (perfil_usr == "Conferente" and not loja_usr): st.error("Preencha todos os campos e selecione a loja do conferente.")
+                    if not nome_usr.strip() or not login_usr.strip() or not senha_usr.strip() or not menus_usr or (perfil_usr == "Conferente" and not loja_usr): st.error("Preencha os campos obrigatórios, selecione a loja do conferente e pelo menos um menu.")
                     else:
                         with spinner_supernova("Criando usuário..."):
                             conn, db_type = get_db_connection()
                             try:
                                 cursor = conn.cursor()
                                 senha_hash = gerar_hash_senha(senha_usr.strip())
-                                cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil, loja_atribuida) VALUES (%s, %s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil, loja_atribuida) VALUES (?, ?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr, loja_usr.strip()))
+                                cursor.execute("INSERT INTO usuarios (nome, login, senha, perfil, loja_atribuida, menus_permitidos) VALUES (%s, %s, %s, %s, %s, %s)" if db_type == "postgres" else "INSERT INTO usuarios (nome, login, senha, perfil, loja_atribuida, menus_permitidos) VALUES (?, ?, ?, ?, ?, ?)", (nome_usr.strip(), login_usr.strip(), senha_hash, perfil_usr, loja_usr.strip(), json.dumps(menus_usr, ensure_ascii=False)))
                                 conn.commit()
                                 st.cache_data.clear()
                                 st.session_state["usr_form_suf"] += 1
@@ -5847,7 +5871,7 @@ else:
         st.markdown("---")
         conn, db_type = get_db_connection()
         try:
-            df_users = pd.read_sql_query("SELECT id, nome, login, perfil, loja_atribuida FROM usuarios ORDER BY id ASC", conn)
+            df_users = pd.read_sql_query("SELECT id, nome, login, perfil, loja_atribuida, menus_permitidos FROM usuarios ORDER BY id ASC", conn)
         finally:
             conn.close()
         if not df_users.empty:
@@ -5873,6 +5897,11 @@ else:
                     loja_atual_usr = str(dados_u_atual.get("loja_atribuida", "") or "")
                     idx_loja_usr = lojas_edit_usr.index(loja_atual_usr) if loja_atual_usr in lojas_edit_usr else 0
                     eu_loja = st.selectbox("Loja de Atuação", lojas_edit_usr, index=idx_loja_usr)
+                    try:
+                        menus_usr_atual = json.loads(str(dados_u_atual.get("menus_permitidos", "") or "[]"))
+                    except Exception:
+                        menus_usr_atual = []
+                    menus_usr_edit = st.multiselect("Menus que este usuário poderá acessar", options=list(MENU_PERMISSOES_DISPONIVEIS.keys()), format_func=lambda x: MENU_PERMISSOES_DISPONIVEIS[x], default=[x for x in menus_usr_atual if x in MENU_PERMISSOES_DISPONIVEIS], key=f"edit_menus_usr_{id_u_ed}")
                     col_bu1, col_bu2 = st.columns(2)
                     with col_bu1: btn_salvar_usr = st.form_submit_button("💾 Salvar Alterações", type="primary")
                     with col_bu2: btn_excluir_usr = st.form_submit_button("🗑️ Excluir Usuário", type="secondary")
@@ -5885,16 +5914,18 @@ else:
                                 r_id_upu = int(id_u_ed) if db_tuu == "postgres" else id_u_ed
                                 if eu_perfil == "Conferente" and not eu_loja:
                                     st.error("Selecione a loja de atuação do conferente.")
+                                elif not menus_usr_edit:
+                                    st.error("Selecione pelo menos um menu para o usuário.")
                                 elif eu_senha.strip():
                                     hash_nova_s = gerar_hash_senha(eu_senha.strip())
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s, loja_atribuida = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ?, loja_atribuida = ? WHERE id = ?",
-                                        (eu_nome.strip(), eu_login.strip(), hash_nova_s, eu_perfil, eu_loja, r_id_upu)
+                                        "UPDATE usuarios SET nome = %s, login = %s, senha = %s, perfil = %s, loja_atribuida = %s, menus_permitidos = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, senha = ?, perfil = ?, loja_atribuida = ?, menus_permitidos = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), hash_nova_s, eu_perfil, eu_loja, json.dumps(menus_usr_edit, ensure_ascii=False), r_id_upu)
                                     )
                                 else:
                                     cur_upu.execute(
-                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s, loja_atribuida = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?, loja_atribuida = ? WHERE id = ?",
-                                        (eu_nome.strip(), eu_login.strip(), eu_perfil, eu_loja, r_id_upu)
+                                        "UPDATE usuarios SET nome = %s, login = %s, perfil = %s, loja_atribuida = %s, menus_permitidos = %s WHERE id = %s" if db_tuu == "postgres" else "UPDATE usuarios SET nome = ?, login = ?, perfil = ?, loja_atribuida = ?, menus_permitidos = ? WHERE id = ?",
+                                        (eu_nome.strip(), eu_login.strip(), eu_perfil, eu_loja, json.dumps(menus_usr_edit, ensure_ascii=False), r_id_upu)
                                     )
                                 conn_up_u.commit()
                                 st.cache_data.clear()
