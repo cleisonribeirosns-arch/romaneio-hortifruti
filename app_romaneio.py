@@ -4390,9 +4390,13 @@ else:
                 prefixo_sino = "🔔 " if tem_pendente_loja else ""
                 nomes_abas_lojas.append(f"{prefixo_sino}🏪 {l}")
 
-            tabs_lojas = st.tabs(nomes_abas_lojas)
-            for idx_l, loja_nome in enumerate(lojas_para_exibir):
-                with tabs_lojas[idx_l]:
+            loja_nome = st.selectbox(
+                "📁 Selecione a loja para consultar",
+                options=lojas_para_exibir,
+                format_func=lambda loja: nomes_abas_lojas[lojas_para_exibir.index(loja)],
+                key="consulta_romaneios_loja_ativa"
+            )
+            if True:
                     st.markdown(f"### 📋 Romaneios - {loja_nome}")
                     df_loja_atual = df_rom[
                         df_rom["loja"].str.contains(loja_nome, case=False, na=False) |
@@ -4428,9 +4432,13 @@ else:
                             sino_tp = "🔔 " if tem_pendente_tp else ""
                             nomes_abas_tipos.append(f"{sino_tp}{label_tp}")
 
-                        subtabs_tipo = st.tabs(nomes_abas_tipos)
-                        for idx_t, (label_aba, tipo_op_val) in enumerate(tipos_operacao_map.items()):
-                            with subtabs_tipo[idx_t]:
+                        label_aba_sel = st.selectbox(
+                            "📂 Categoria de romaneio",
+                            options=nomes_abas_tipos,
+                            key=f"consulta_romaneios_categoria_{loja_nome}"
+                        )
+                        tipo_op_val = list(tipos_operacao_map.values())[nomes_abas_tipos.index(label_aba_sel)]
+                        if True:
                                 if tipo_op_val == "TODOS OS TIPOS":
                                     df_tipo_atual = df_loja_atual.copy()
                                 else:
