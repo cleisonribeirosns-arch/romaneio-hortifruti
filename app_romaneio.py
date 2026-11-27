@@ -438,12 +438,16 @@ input, textarea,
 st.markdown("""
 <style>
 html[data-theme="dark"] .stApp input, html[data-theme="dark"] .stApp textarea,
+.stApp[data-theme="dark"] input, .stApp[data-theme="dark"] textarea,
+body[data-theme="dark"] .stApp input, body[data-theme="dark"] .stApp textarea,
 html[data-theme="dark"] .stApp [data-baseweb="select"] > div,
 [data-theme="dark"] .stApp input, [data-theme="dark"] .stApp textarea,
 [data-theme="dark"] .stApp [data-baseweb="select"] > div {
  background-color:#343a40 !important;color:#fff !important;-webkit-text-fill-color:#fff !important;border-color:#687078 !important;
 }
 html[data-theme="light"] .stApp input, html[data-theme="light"] .stApp textarea,
+.stApp[data-theme="light"] input, .stApp[data-theme="light"] textarea,
+body[data-theme="light"] .stApp input, body[data-theme="light"] .stApp textarea,
 html[data-theme="light"] .stApp [data-baseweb="select"] > div,
 [data-theme="light"] .stApp input, [data-theme="light"] .stApp textarea,
 [data-theme="light"] .stApp [data-baseweb="select"] > div {
@@ -4147,7 +4151,7 @@ else:
                         const value=codes[0].rawValue;
                         const doc=window.parent.document;
                         const input=doc.querySelector('input[aria-label="Produto / Código / Barras"]');
-                        if(input){const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,"value").set;setter.call(input,value);input.dispatchEvent(new window.parent.Event("input",{bubbles:true}));input.dispatchEvent(new window.parent.Event("change",{bubbles:true}));status.textContent="Código lido: "+value;}
+                        if(input){const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,"value").set;setter.call(input,value);input.dispatchEvent(new window.parent.Event("input",{bubbles:true}));input.dispatchEvent(new window.parent.Event("change",{bubbles:true}));input.focus();input.dispatchEvent(new window.parent.KeyboardEvent("keydown",{key:"Enter",code:"Enter",bubbles:true}));status.textContent="Código lido: "+value;}
                         clearInterval(timer);timer=null;stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;video.style.display="none";
                       }
                     }catch(e){}
@@ -4156,7 +4160,7 @@ else:
               });
             })();
             </script>
-            """, height=75)
+            """, height=260)
             prod_label_sel = st.selectbox("Produto / Código / Barras", options=[""] + prod_nomes_keys, index=0, placeholder="Digite código/nome ou bipe com o coletor...", key=_prod_widget_key)
             prod_nome_real = prod_dict[prod_label_sel][0] if prod_label_sel and prod_label_sel != "" and prod_dict else ""
             und_sel = prod_dict[prod_label_sel][1] if prod_label_sel and prod_label_sel != "" and prod_dict else "KG"
