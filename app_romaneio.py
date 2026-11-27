@@ -459,6 +459,40 @@ html[data-theme="light"] .stApp [data-baseweb="select"] > div,
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
+# CONTRASTE DOS CAMPOS NO CELULAR — PADRÃO CINZA-ESCURO
+# ---------------------------------------------------------
+st.markdown("""
+<style>
+@media (max-width: 768px) {
+  .stApp input:not([type="checkbox"]):not([type="radio"]),
+  .stApp textarea,
+  .stApp [data-baseweb="select"] > div,
+  .stApp [data-baseweb="input"] > div,
+  .stApp [data-baseweb="textarea"] > div {
+    background-color: #343a40 !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+    border-color: #687078 !important;
+    box-shadow: none !important;
+  }
+  .stApp [data-baseweb="select"] input,
+  .stApp [data-baseweb="input"] input,
+  .stApp [data-baseweb="textarea"] textarea {
+    background-color: transparent !important;
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+  .stApp input::placeholder, .stApp textarea::placeholder {
+    color: #d0d4d8 !important;
+    -webkit-text-fill-color: #d0d4d8 !important;
+    opacity: 1 !important;
+  }
+  .stApp [data-baseweb="select"] svg { fill: #ffffff !important; }
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------------------------------------------------------
 # CONFIGURAÇÃO DE PWA (USANDO icone_app.jpg)
 # ---------------------------------------------------------
 icone_b64, icone_mime = obter_arquivo_b64_e_mime(icone_path_global)
@@ -1762,7 +1796,9 @@ def _carregar_dados_bi_cached():
         df_itens = pd.read_sql_query("SELECT romaneio_id, produto, quantidade, unidade, valor_unitario, valor_total FROM romaneio_itens", conn)
         df_bonf_rel = pd.read_sql_query("SELECT id, loja, data_entrada, valor_bonificacao, status, produto_hortifruti, tipo_bonificacao FROM bonificacoes ORDER BY id DESC", conn)
         df_baixas_rel = pd.read_sql_query("SELECT id, loja_baixa, data_baixa, produto_hortifruti, quantidade_kg_cx, valor_total_avaria FROM baixas_avarias ORDER BY id DESC", conn)
-        return df_roms, df_itens, df_bonf_rel, df_baixas_rel
+        df_trocas_rel = pd.read_sql_query("SELECT id, numero_controle, data_operacao, setor_loja, fornecedor, codigo_fornecedor, conferente, observacoes, status, criado_em FROM troca_avarias ORDER BY id DESC", conn)
+        df_troca_itens_rel = pd.read_sql_query("SELECT troca_id, codigo_produto, descricao_produto, quantidade, unidade FROM troca_avarias_itens", conn)
+        return df_roms, df_itens, df_bonf_rel, df_baixas_rel, df_trocas_rel, df_troca_itens_rel
     finally:
         conn.close()
 
@@ -5371,11 +5407,12 @@ else:
     elif menu == "Relatórios & Gráficos" and is_admin:
         with spinner_supernova("Carregando relatórios e BI..."):
             st.title("📊 Relatórios & Business Intelligence (BI) Executive")
-        tab_bi_receb, tab_bi_bonf_avaria = st.tabs([
+        tab_bi_receb, tab_bi_bonf_avaria, tab_bi_trocas = st.tabs([
             "📋 BI de Recebimento de Cargas",
-            "📈 BI Bonificações, Transferências & Prevenção de Perdas"
+            "📈 BI Bonificações, Transferências & Prevenção de Perdas",
+            "🔄 BI Troca por Troca"
         ])
-        df_roms, df_itens, df_bonf_rel, df_baixas_rel = _carregar_dados_bi_cached()
+        df_roms, df_itens, df_bonf_rel, df_baixas_rel, df_trocas_rel, df_troca_itens_rel = _carregar_dados_bi_cached()
         df_roms = df_roms.copy()
         df_itens = df_itens.copy()
         df_bonf_rel = df_bonf_rel.copy()
@@ -5599,6 +5636,80 @@ else:
                     file_name=f"Relatorio_Executivo_Lideranca_HortiControl_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d_%H%M')}.pdf",
                     mime="application/pdf", type="primary", key="btn_download_executivo_bi"
                 )
+
+        with tab_bi_trocas:
+            st.subheader("🔄 Análise Gerencial — Troca por Troca de Avarias")
+            if df_trocas_rel.empty:
+                st.info("Ainda não existem registros de Troca por Troca para analisar.")
+            else:
+                df_trocas_bi = df_trocas_rel.copy()
+                df_trocas_bi["data_dt"] = pd.to_datetime(df_trocas_bi["data_operacao"], format="%d/%m/%Y", errors="coerce")
+                df_troca_full_bi = df_troca_itens_rel.merge(df_trocas_bi, left_on="troca_id", right_on="id", how="inner") if not df_troca_itens_rel.empty else pd.DataFrame()
+                _troca_lojas = ["TODAS AS LOJAS"] + sorted(df_trocas_bi["setor_loja"].fillna("").astype(str).loc[lambda x: x.str.strip() != ""].unique().tolist())
+                _troca_forns = ["TODOS OS FORNECEDORES"] + sorted(df_trocas_bi["fornecedor"].fillna("").astype(str).loc[lambda x: x.str.strip() != ""].unique().tolist())
+                _troca_status = ["TODOS OS STATUS"] + sorted(df_trocas_bi["status"].fillna("Troca pendente").astype(str).unique().tolist())
+                _tf1, _tf2, _tf3, _tf4 = st.columns(4)
+                with _tf1: _t_loja_sel = st.selectbox("Loja / Setor", _troca_lojas, key="bi_troca_loja")
+                with _tf2: _t_forn_sel = st.selectbox("Fornecedor", _troca_forns, key="bi_troca_forn")
+                with _tf3: _t_status_sel = st.selectbox("Status da Troca", _troca_status, key="bi_troca_status")
+                with _tf4: _t_periodo_sel = st.selectbox("Período", ["Todo o histórico", "Últimos 30 dias", "Últimos 90 dias", "Ano atual"], key="bi_troca_periodo")
+                if _t_loja_sel != "TODAS AS LOJAS": df_trocas_bi = df_trocas_bi[df_trocas_bi["setor_loja"] == _t_loja_sel]
+                if _t_forn_sel != "TODOS OS FORNECEDORES": df_trocas_bi = df_trocas_bi[df_trocas_bi["fornecedor"] == _t_forn_sel]
+                if _t_status_sel != "TODOS OS STATUS": df_trocas_bi = df_trocas_bi[df_trocas_bi["status"].fillna("Troca pendente") == _t_status_sel]
+                _hoje_tbi = pd.Timestamp(datetime.now(ZoneInfo("America/Manaus")).date())
+                if _t_periodo_sel == "Últimos 30 dias": df_trocas_bi = df_trocas_bi[df_trocas_bi["data_dt"] >= _hoje_tbi - pd.Timedelta(days=30)]
+                elif _t_periodo_sel == "Últimos 90 dias": df_trocas_bi = df_trocas_bi[df_trocas_bi["data_dt"] >= _hoje_tbi - pd.Timedelta(days=90)]
+                elif _t_periodo_sel == "Ano atual": df_trocas_bi = df_trocas_bi[df_trocas_bi["data_dt"].dt.year == _hoje_tbi.year]
+                if df_trocas_bi.empty:
+                    st.info("Nenhuma troca encontrada com os filtros selecionados.")
+                else:
+                    _troca_ids_bi = df_trocas_bi["id"].tolist()
+                    _troca_itens_filtrados = df_troca_full_bi[df_troca_full_bi["id"].isin(_troca_ids_bi)].copy() if not df_troca_full_bi.empty else pd.DataFrame()
+                    _qtd_troca_bi = float(_troca_itens_filtrados["quantidade"].sum()) if not _troca_itens_filtrados.empty else 0.0
+                    _num_troca_bi = int(df_trocas_bi["id"].nunique())
+                    _forn_troca_bi = int(df_trocas_bi["fornecedor"].nunique())
+                    _pend_troca_bi = int(df_trocas_bi["status"].fillna("Troca pendente").str.contains("pendente", case=False).sum())
+                    _km1, _km2, _km3, _km4 = st.columns(4)
+                    _km1.metric("Trocas registradas", _num_troca_bi)
+                    _km2.metric("Produtos / Quantidade", fmt_ptbr(_qtd_troca_bi, 2))
+                    _km3.metric("Fornecedores envolvidos", _forn_troca_bi)
+                    _km4.metric("Trocas pendentes", _pend_troca_bi)
+                    st.markdown("---")
+                    _tg1, _tg2 = st.columns(2)
+                    with _tg1:
+                        st.markdown("#### Evolução mensal das trocas")
+                        _tm = df_trocas_bi.dropna(subset=["data_dt"]).copy()
+                        if not _tm.empty:
+                            _tm["Mês"] = _tm["data_dt"].dt.to_period("M").astype(str)
+                            _tm_count = _tm.groupby("Mês")["id"].nunique().reset_index(name="Trocas")
+                            st.plotly_chart(px.line(_tm_count, x="Mês", y="Trocas", markers=True, title="Quantidade de controles por mês"), use_container_width=True)
+                    with _tg2:
+                        st.markdown("#### Distribuição por status")
+                        _ts = df_trocas_bi.assign(Status=df_trocas_bi["status"].fillna("Troca pendente")).groupby("Status")["id"].nunique().reset_index(name="Registros")
+                        st.plotly_chart(px.pie(_ts, names="Status", values="Registros", hole=0.42), use_container_width=True)
+                    _tg3, _tg4 = st.columns(2)
+                    with _tg3:
+                        st.markdown("#### Trocas por loja / setor")
+                        _tl = df_trocas_bi.groupby("setor_loja")["id"].nunique().reset_index(name="Trocas").sort_values("Trocas", ascending=False)
+                        st.plotly_chart(px.bar(_tl, x="setor_loja", y="Trocas", text_auto=True), use_container_width=True)
+                    with _tg4:
+                        st.markdown("#### Fornecedores com mais trocas")
+                        _tf = df_trocas_bi.groupby("fornecedor")["id"].nunique().reset_index(name="Trocas").sort_values("Trocas", ascending=False).head(10)
+                        st.plotly_chart(px.bar(_tf, x="fornecedor", y="Trocas", text_auto=True), use_container_width=True)
+                    if not _troca_itens_filtrados.empty:
+                        _tg5, _tg6 = st.columns(2)
+                        with _tg5:
+                            st.markdown("#### Produtos mais trocados por quantidade")
+                            _tp = _troca_itens_filtrados.groupby("descricao_produto")["quantidade"].sum().reset_index().sort_values("quantidade", ascending=False).head(10)
+                            st.plotly_chart(px.bar(_tp, x="descricao_produto", y="quantidade", text_auto=".2f"), use_container_width=True)
+                        with _tg6:
+                            st.markdown("#### Quantidade por unidade")
+                            _tu = _troca_itens_filtrados.groupby("unidade")["quantidade"].sum().reset_index()
+                            st.plotly_chart(px.pie(_tu, names="unidade", values="quantidade", hole=0.4), use_container_width=True)
+                    st.markdown("#### Relação de controles de Troca por Troca")
+                    _troca_tabela_bi = df_trocas_bi[["numero_controle", "data_operacao", "setor_loja", "fornecedor", "conferente", "status"]].rename(columns={"numero_controle":"Controle", "data_operacao":"Data", "setor_loja":"Loja / Setor", "fornecedor":"Fornecedor", "conferente":"Responsável", "status":"Status"})
+                    st.dataframe(_troca_tabela_bi, use_container_width=True, hide_index=True)
+                    st.download_button("📥 Exportar análise de Troca por Troca (CSV)", data=df_trocas_bi.to_csv(index=False, sep=";").encode("utf-8-sig"), file_name=f"BI_Troca_por_Troca_{datetime.now(ZoneInfo('America/Manaus')).strftime('%Y%m%d')}.csv", mime="text/csv", key="bi_export_trocas")
 
     elif menu == "Gerenciar Cadastros (Produtos)" and is_admin:
         with spinner_supernova("Carregando cadastros..."):
