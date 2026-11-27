@@ -275,7 +275,7 @@ components.html(f"""
         parentDoc.body.appendChild(ov);
         setTimeout(() => {{
             if (ov && ov.parentNode) ov.remove();
-        }}, 550);
+        }}, 120);
     }}
 
     parentDoc.addEventListener('click', function(e) {{
@@ -3777,8 +3777,6 @@ else:
         st.session_state["ultimo_menu_ativo"] = menu
     elif st.session_state["ultimo_menu_ativo"] != menu:
         st.session_state["ultimo_menu_ativo"] = menu
-        with spinner_supernova(f"Abrindo {menu_selecionado_label}..."):
-            pass
     st.markdown("---")
     
 
@@ -4037,7 +4035,6 @@ else:
                                 +f"Fornecedor: {_rowc['fornecedor']}\nStatus anterior: {_curstatus}\nNovo status: {_newstatus}\n"
                                 +f"Atualizado por: {user_info['nome']}\nObservação: {_obs_status.strip() or '—'}")
                             _chat_status_ok=enviar_notificacao_google_chat(_msg_status,thread_key=_thread_key)
-                            st.cache_data.clear()
                             if st.session_state.get("notif_desktop_toggle",False):
                                 emitir_notificacao_desktop_web(titulo=f"🔁 Status atualizado — {_rowc['numero_controle']}",mensagem=f"{_curstatus} → {_newstatus}")
                             if _chat_status_ok: st.success("Status e histórico atualizados. Aviso enviado na conversa da tratativa no Google Chat.")
