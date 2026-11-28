@@ -3982,7 +3982,7 @@ else:
                     for _it in st.session_state["troca_itens_digitais"]:
                         _sql_i="INSERT INTO troca_avarias_itens (troca_id,codigo_produto,descricao_produto,quantidade,unidade) VALUES (%s,%s,%s,%s,%s)" if _db_t=="postgres" else "INSERT INTO troca_avarias_itens (troca_id,codigo_produto,descricao_produto,quantidade,unidade) VALUES (?,?,?,?,?)"
                         _cur_t.execute(_sql_i,(_id_t,_it["codigo"],_it["descricao"],_it["quantidade"],_it["unidade"]))
-                    _conn_t.commit(); st.cache_data.clear()
+                    _conn_t.commit(); _carregar_dados_bi_cached.clear()
                     st.session_state["ultimo_pdf_troca_bytes"]=_pdf_termo_troca(_dados,st.session_state["troca_itens_digitais"],_sig_r_b64,_sig_f_b64)
                     st.session_state["ultimo_num_troca"]=_dados["numero"]
                     _itmsg="\n".join([f"• {it['descricao']} | cód. {it['codigo'] or 'N/A'} | {it['quantidade']:g} {it['unidade']}" for it in st.session_state["troca_itens_digitais"]])
