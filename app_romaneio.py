@@ -239,9 +239,16 @@ header {{visibility: hidden;}}
     font-family: sans-serif;
 }}
 .supernova-logo-pulse {{
+    display: block;
     width: 120px;
-    height: auto;
-    margin-bottom: 20px;
+    height: 120px;
+    max-width: 90vw;
+    max-height: 22vh;
+    object-fit: contain;
+    object-position: center;
+    border-radius: 0 !important;
+    overflow: visible;
+    margin: 0 auto 20px;
     animation: pulseLogo 1.2s infinite ease-in-out;
     filter: drop-shadow(0px 15px 25px rgba(0,0,0,0.85)) drop-shadow(0px 5px 10px rgba(0,200,0,0.35));
 }}
@@ -3902,8 +3909,31 @@ else:
         _kp=f"troca_prod_sel_{sufixo_troca}"; _kpc=f"troca_prod_cod_{sufixo_troca}"; _kpbar=f"troca_prod_bar_{sufixo_troca}"
         def _troca_prod_change():
             _v=st.session_state.get(_kp); st.session_state[_kpc]=str(_v[0] or "") if _v else ""; st.session_state[_kpbar]=str(_v[1] or "") if _v else ""
+        # Scanner do coletor/câmera envia o código para o mesmo seletor pesquisável.
+        components.html("""
+        <div style="display:flex;align-items:center;gap:6px;font-family:sans-serif;">
+          <button id="hc-troca-camera" style="padding:7px 10px;border:1px solid #687078;border-radius:7px;background:#343a40;color:white;font-size:13px;">📷 Ler código de barras</button>
+          <span id="hc-troca-camera-status" style="font-size:12px;color:#9ca3af;">Use o coletor ou a câmera do celular.</span>
+          <video id="hc-troca-camera-video" playsinline style="display:none;width:100%;max-height:140px;margin-top:6px;border-radius:8px;"></video>
+        </div>
+        <script>
+        (function(){
+          const btn=document.getElementById("hc-troca-camera"),status=document.getElementById("hc-troca-camera-status"),video=document.getElementById("hc-troca-camera-video");
+          let stream=null,timer=null;
+          btn.addEventListener("click",async()=>{
+            try{
+              if(!("BarcodeDetector" in window)){status.textContent="Câmera não suportada neste navegador; use o coletor ou digite no campo.";return;}
+              const detector=new BarcodeDetector({formats:["ean_13","ean_8","upc_a","upc_e","code_128","code_39","itf"]});
+              stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false});
+              video.srcObject=stream;video.style.display="block";await video.play();status.textContent="Aponte para o código de barras.";
+              timer=setInterval(async()=>{try{const found=await detector.detect(video);if(found.length&&found[0].rawValue){const value=found[0].rawValue,doc=window.parent.document;const input=doc.querySelector('input[aria-label="Produto cadastrado (código / barras / descrição)"]');if(input){input.focus();const setter=Object.getOwnPropertyDescriptor(window.parent.HTMLInputElement.prototype,"value").set;setter.call(input,value);input.dispatchEvent(new window.parent.Event("input",{bubbles:true}));input.dispatchEvent(new window.parent.Event("change",{bubbles:true}));input.dispatchEvent(new window.parent.KeyboardEvent("keydown",{key:"Enter",code:"Enter",bubbles:true}));status.textContent="Código lido: "+value;}clearInterval(timer);timer=null;stream.getTracks().forEach(t=>t.stop());stream=null;video.srcObject=null;video.style.display="none";}}catch(e){}},250);
+            }catch(e){status.textContent="Não foi possível abrir a câmera. Verifique a permissão."}
+          });
+        })();
+        </script>
+        """, height=62)
         _prod_sel=st.selectbox("Produto cadastrado (código / barras / descrição)", [None]+list(_prods_t),
-            format_func=lambda x: "Selecione o produto..." if x is None else f"{x[2]} | Código de barras: {x[1] or 'Não informado'} | Código interno: {x[0] or 'Não informado'}",
+            format_func=lambda x: "Digite descrição, código interno ou código de barras..." if x is None else f"{x[2]} | Código: {x[0] or '—'} | Barras: {x[1] or '—'}",
             key=_kp,on_change=_troca_prod_change)
         if _kpc not in st.session_state: st.session_state[_kpc]=str(_prod_sel[0] or "") if _prod_sel else ""
         if _kpbar not in st.session_state: st.session_state[_kpbar]=str(_prod_sel[1] or "") if _prod_sel else ""
@@ -4064,9 +4094,10 @@ else:
         k_suffix = st.session_state["form_key_suffix"]
         i_suffix = st.session_state["item_key_suffix"]
 
-        with spinner_supernova("Carregando produtos e fornecedores..."):
-            produtos_lista = carregar_produtos_cached()
-            fornecedores_lista = carregar_fornecedores_cached()
+        # Os cadastros já usam cache TTL; evitar overlay/modal em todo rerun
+        # reduz o tempo percebido ao digitar quantidades e pesquisar itens.
+        produtos_lista = carregar_produtos_cached()
+        fornecedores_lista = carregar_fornecedores_cached()
 
         prod_dict = {}
         prod_bar_dict = {}
@@ -4120,13 +4151,19 @@ else:
                     idx_loja_login = lista_lojas_opc.index(loja_atual_usuario) if loja_atual_usuario in lista_lojas_opc else 0
                     loja = st.selectbox("Loja", lista_lojas_opc, index=idx_loja_login, placeholder="Selecione a loja...", key=f"loja_{k_suffix}")
             with col3:
-                _busca_forn = st.text_input("Pesquisar fornecedor por código ou nome", key=f"busca_forn_{k_suffix}", placeholder="Digite para filtrar...")
-                _forns_filtrados = [n for n in forn_nomes_keys if not _busca_forn.strip() or _busca_forn.casefold() in n.casefold() or _busca_forn.casefold() in forn_por_nome.get(n, "").casefold()][:50]
-                idx_sel = 0
-                atual_sel = st.session_state[f"val_sel_forn_{k_suffix}"]
-                if atual_sel in forn_nomes_keys:
-                    idx_sel = forn_nomes_keys.index(atual_sel) + 1
-                fornecedor_sel = st.selectbox("Fornecedor / Entregador Cadastrado", options=[""] + _forns_filtrados, index=(idx_sel if atual_sel in _forns_filtrados else 0), placeholder="Digite acima para filtrar e selecione...", key=f"sel_forn_{k_suffix}", on_change=atualizar_por_select)
+                # Um único seletor pesquisável; o texto exibido contém nome e código,
+                # permitindo localizar o fornecedor sem campo de pesquisa duplicado.
+                _forns_opcoes = [""] + forn_nomes_keys
+                _forn_atual = st.session_state.get(f"val_sel_forn_{k_suffix}", "")
+                _idx_forn = _forns_opcoes.index(_forn_atual) if _forn_atual in _forns_opcoes else 0
+                fornecedor_sel = st.selectbox(
+                    "Fornecedor / Entregador Cadastrado",
+                    options=_forns_opcoes,
+                    index=_idx_forn,
+                    format_func=lambda n: "Digite o nome ou código do fornecedor..." if not n else f"{n} | Código: {forn_por_nome.get(n, '')}",
+                    key=f"sel_forn_{k_suffix}",
+                    on_change=atualizar_por_select
+                )
                 if f"in_cod_forn_{k_suffix}" not in st.session_state:
                     st.session_state[f"in_cod_forn_{k_suffix}"] = st.session_state[f"val_cod_forn_{k_suffix}"]
                 cod_fornecedor = st.text_input("Código do Fornecedor", key=f"in_cod_forn_{k_suffix}", disabled=True)
