@@ -3931,7 +3931,7 @@ else:
           });
         })();
         </script>
-        """, height=62)
+        """, height=220)
         _prod_sel=st.selectbox("Produto cadastrado (código / barras / descrição)", [None]+list(_prods_t),
             format_func=lambda x: "Digite descrição, código interno ou código de barras..." if x is None else f"{x[2]} | Código: {x[0] or '—'} | Barras: {x[1] or '—'}",
             key=_kp,on_change=_troca_prod_change)
